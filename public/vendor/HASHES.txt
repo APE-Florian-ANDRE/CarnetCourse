@@ -1,0 +1,4 @@
+# supabase-js 2.45.4 (npm, MIT) : empreinte du tarball vérifiée contre le registre au moment de la copie
+npm-integrity: sha512-E5p8/zOLaQ3a462MZnmnz03CrduA5ySH9hZyL03Y+QZLIOO4/Gs8Rdy4ZCKDHsN7x0xdanVEWWFN3pJFQr9/hg==
+supabase-2.45.4.js sha256: 8596965fe918e656600a1b568d3a168f5c0d3d22a600886bb6f44a6555db01e7
+591.supabase.js sha256: 9c305b77dab63dd79eb96efab9069366fb2255bd8731d6b862287558d2560406

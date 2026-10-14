@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://yunidhwvpusrsgxqdzpb.supabase.co; manifest-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'; worker-src 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Plan de course à pied, allures et calories de chaque jour, calculés à partir de ton profil. Gratuit, sans publicité, tes données restent chez toi.">
+<title>Carnet de course</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+
+<div class="wrap">
+  <div class="apptop"><button class="linkbtn" type="button" data-act="home"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7M6 10v10h12V10"/></svg>Accueil</button><button class="av js-av" type="button" data-act="acct" aria-haspopup="dialog" aria-label="Compte"><span class="av-i" aria-hidden="true"></span><svg class="av-p" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c1-4 4-6 7.5-6s6.5 2 7.5 6"/></svg><span class="av-d" aria-hidden="true"></span></button></div>
+  <header class="top">
+    <div>
+      <h1>Carnet de course</h1>
+      <p class="sub">Tes séances de la semaine, les allures et les calories de chaque jour. Ton objectif et tes données sont dans l'onglet Profil.</p>
+    </div>
+    <p class="store" id="store" role="status" aria-live="polite">Sauvegarde : en cours de connexion…</p>
+  </header>
+  <div class="example" id="exampleBanner" hidden>
+    <span id="exampleTxt">Ce sont des données d'exemple. Remplis l'onglet « Profil » avec les tiennes pour que le plan et les calories soient justes.</span>
+    <button class="btn" type="button" id="goProfile">Remplir mon profil</button>
+  </div>
+
+
+  <nav class="tabs" aria-label="Sections"><div class="segc" role="tablist" aria-label="Sections">
+    <button role="tab" type="button" id="tab-semaine" aria-controls="p-semaine" aria-selected="true" tabindex="0">Semaine</button>
+    <button role="tab" type="button" id="tab-plan" aria-controls="p-plan" aria-selected="false" tabindex="-1">Plan</button>
+    <button role="tab" type="button" id="tab-suivi" aria-controls="p-suivi" aria-selected="false" tabindex="-1">Suivi</button>
+    <button role="tab" type="button" id="tab-profil" aria-controls="p-profil" aria-selected="false" tabindex="-1">Profil</button>
+    <button role="tab" type="button" id="tab-reperes" aria-controls="p-reperes" aria-selected="false" tabindex="-1">Repères</button>
+    <button role="tab" type="button" id="tab-coach" aria-controls="p-coach" aria-selected="false" tabindex="-1" hidden>Coach</button>
+  </div></nav>
+
+  <!-- SEMAINE -->
+  <section class="panel" id="p-semaine" role="tabpanel" aria-labelledby="tab-semaine">
+    <div class="nextc" id="nextCard" hidden></div>
+    <div class="weekbar">
+      <div>
+        <div class="wtitle"><h2 id="weekTitle">Semaine 1</h2><span class="ring" id="weekRing" hidden></span></div>
+        <p class="muted" id="weekSub" aria-live="polite"></p>
+      </div>
+      <div class="ctrl">
+        <button class="btn ghost" type="button" id="prevW" aria-label="Semaine précédente">‹</button>
+        <select id="weekSel" aria-label="Choisir la semaine" ></select>
+        <button class="btn ghost" type="button" id="nextW" aria-label="Semaine suivante">›</button>
+        <button class="btn ghost txt" type="button" id="todayW" hidden>Aujourd'hui</button>
+      </div>
+    </div>
+    <div class="wacts" role="group" aria-label="Actions de la semaine">
+      <button class="btn sm" type="button" id="icsW" aria-haspopup="dialog" hidden><svg class="ico" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Exporter vers Calendrier</button>
+      <button class="btn ghost sm" type="button" id="copyW">Copier la semaine</button>
+      <button class="btn ghost sm" type="button" id="foldAll" aria-controls="days">Tout déplier</button>
+    </div>
+    <div class="alerts" id="weekAlerts"></div>
+    <div class="days" id="days"></div>
+    <div class="balance" id="balance"></div>
+  </section>
+
+  <!-- PLAN -->
+  <section class="panel" id="p-plan" role="tabpanel" aria-labelledby="tab-plan" hidden>
+    <h2 id="planTitle">Plan sur 12 semaines</h2>
+    <p class="lead" id="planLong" hidden></p>
+    <p class="lead" id="planLead">Trois semaines de montée, une semaine allégée. Le volume monte doucement et la sortie longue ne dépasse jamais de plus de 10 % la plus longue déjà faite. Pour une course, les deux dernières semaines sont un affûtage : moins de kilomètres, même intensité, et seulement le déficit fixe. Touche une semaine pour l'ouvrir.</p>
+    <div class="alerts" id="planAlerts"></div>
+    <div class="tablewrap has-m"><table id="planTable"></table></div>
+    <ul class="mlist" id="planList" aria-label="Semaines du plan"></ul>
+  </section>
+
+  <!-- SUIVI -->
+  <section class="panel" id="p-suivi" role="tabpanel" aria-labelledby="tab-suivi" hidden>
+    <h2>Suivi</h2>
+    <p class="lead">Une fois par semaine, note ta moyenne de poids (pèse-toi 3 matins ou plus, au réveil) et ton ressenti. L'outil compare la vitesse de perte au rythme prévu et te propose d'ajuster les calories ou d'alléger la semaine.</p>
+    <form class="logform" id="logForm">
+      <div class="field"><label for="lgDate">Date</label><input type="date" id="lgDate" required aria-describedby="lgDateHint"><span class="hint" id="lgDateHint">Aujourd'hui ou une date passée.</span></div>
+      <div class="field"><label for="lgPoids">Poids moyen (kg)</label><input type="text" inputmode="decimal" id="lgPoids" required placeholder="ex. 81,4" aria-describedby="lgPoidsHint"><span class="hint" id="lgPoidsHint">Entre 35 et 250 kg.</span></div>
+      <div class="field"><label for="lgSommeil">Sommeil moyen (h)</label><input type="number" id="lgSommeil" step="0.5" min="3" max="12" value="7.5"></div>
+      <div class="field"><label for="lgFatigue">Fatigue (1 à 5)</label><select id="lgFatigue"><option value="1">1 · en pleine forme</option><option value="2" selected>2 · normale</option><option value="3">3 · un peu lourd</option><option value="4">4 · fatigué</option><option value="5">5 · épuisé</option></select></div>
+      <div class="field"><label for="lgFaites">Séances faites</label><input type="number" id="lgFaites" min="0" max="7" value="4" inputmode="numeric"></div>
+      <div class="field"><label for="lgPrevues">Séances prévues</label><input type="number" id="lgPrevues" min="1" max="7" value="4" inputmode="numeric"></div>
+      <div class="field"><label for="lgDouleur">Douleur qui dure</label><select id="lgDouleur"><option value="non">Non</option><option value="oui">Oui</option></select></div>
+      <button class="btn" type="submit">Ajouter la semaine</button>
+    </form>
+    <div class="alerts logmsg" id="logMsg" role="status" aria-live="polite"></div>
+    <div class="card reg mt16" id="regCard"></div>
+    <div class="card feelc stk" id="feelCard"></div>
+    <div class="card impc stk" id="impCard"></div>
+    <div class="chart" id="chart"></div>
+    <div class="alerts" id="advice"></div>
+    <div class="tablewrap has-m"><table id="logTable"></table></div>
+    <ul class="mlist" id="logList" aria-label="Semaines notées"></ul>
+  </section>
+
+  <!-- PROFIL -->
+  <section class="panel" id="p-profil" role="tabpanel" aria-labelledby="tab-profil" hidden>
+    <h2>Mon profil</h2>
+    <p class="lead">Tout se recalcule dès que tu modifies un champ. Ouvre une section pour la modifier : son résumé reste visible quand elle est repliée.</p>
+    <form class="form" id="profileForm">
+      <details class="psec" id="ps-sum" open>
+        <summary><span class="pt">Mon bilan</span><span class="ps" id="psl-sum"></span></summary>
+        <div class="pbody"><div class="summary" id="summary" aria-live="polite"></div></div>
+      </details>
+      <details class="psec" id="ps-obj" open>
+        <summary><span class="pt">Mon objectif</span><span class="ps" id="psl-obj"></span></summary>
+        <div class="pbody">
+        <div class="field"><label for="sport">Sport principal</label>
+          <select id="sport" name="sport" aria-describedby="sportHint"><option value="course">Course à pied</option><option value="trail">Trail</option><option value="vtt">VTT</option><option value="force">Haltérophilie et force</option><option value="forme">Remise en forme générale</option></select>
+          <span class="hint" id="sportHint" aria-live="polite"></span></div>
+        <div class="field" data-sp="vtt force" hidden><label for="sObj" id="sObjL">Orientation de l'entraînement</label><select id="sObj" name="sObj"></select></div>
+        <div class="field"><span class="lbl" id="lbl-niveau">Niveau</span>
+          <div class="seg" role="radiogroup" aria-labelledby="lbl-niveau" aria-describedby="niveauHint"><label><input type="radio" name="niveau" value="deb"><span>Débutant</span></label><label><input type="radio" name="niveau" value="int"><span>Inter&shy;médiaire</span></label><label><input type="radio" name="niveau" value="conf"><span>Confirmé</span></label></div>
+          <span class="hint" id="niveauHint">Débutant : moins de 3 mois de pratique régulière. Confirmé : 3 séances et plus par semaine depuis plus d'un an.</span></div>
+        <div class="field" data-sp="course trail"><label for="objectif">Objectif</label>
+          <select id="objectif" name="objectif"><option value="forme">Forme et perte de poids</option><option value="5">5 km</option><option value="10">10 km</option><option value="21">Semi-marathon</option><option value="42">Marathon</option></select></div>
+        <div class="field" id="raceDateField"><label for="raceDate" id="raceDateL">Date de ta course · optionnel</label><input id="raceDate" name="raceDate" type="date" aria-describedby="raceHint">
+          <span class="hint" id="raceHint" aria-live="polite">Le plan se cale dessus : la dernière semaine est celle de ta course, et le début du plan est calculé pour toi (4 semaines à un an).</span></div>
+        <div class="field"><label for="start">Début du plan</label><input id="start" name="start" type="date" aria-describedby="startHint"><span class="hint" id="startHint" aria-live="polite" hidden></span></div>
+        <div class="field"><label for="cible">Poids visé (kg)</label><input id="cible" name="cible" type="text" inputmode="decimal" placeholder="optionnel" aria-describedby="cibleHint"><span class="hint bad" id="cibleHint" aria-live="polite" hidden></span></div>
+        </div>
+      </details>
+      <details class="psec" id="ps-me" open>
+        <summary><span class="pt">Mes données</span><span class="ps" id="psl-me"></span></summary>
+        <div class="pbody">
+        <div class="field"><span class="lbl" id="lbl-sexe">Sexe</span>
+          <div class="seg" role="radiogroup" aria-labelledby="lbl-sexe"><label><input type="radio" name="sexe" value="H"><span>Homme</span></label><label><input type="radio" name="sexe" value="F"><span>Femme</span></label></div></div>
+        <div class="row2">
+          <div class="field"><label for="age">Âge</label><input id="age" name="age" type="number" min="15" max="90"></div>
+          <div class="field"><label for="taille">Taille (cm)</label><input id="taille" name="taille" type="number" min="130" max="220"></div>
+        </div>
+        <div class="field"><label for="poids">Poids (kg)</label><input id="poids" name="poids" type="text" inputmode="decimal" placeholder="ex. 81,5"></div>
+        <div class="field"><label for="mg">Masse grasse (%) · optionnel</label><input id="mg" name="mg" type="text" inputmode="decimal" placeholder="estimée si vide" aria-describedby="mgHint"><span class="hint" id="mgHint" aria-live="polite">Sert à vérifier que tu manges assez pour ta masse maigre.</span></div>
+        <div class="field"><label for="activite">Activité hors sport</label>
+          <select id="activite" name="activite"><option value="1.25">Assis la plupart du temps</option><option value="1.4">Un peu actif (marche, debout par moments)</option><option value="1.55">Métier physique ou très actif</option></select></div>
+        <div class="field" data-sp="course trail vtt forme"><label for="fcmax">FC max (bpm) · optionnel</label><input id="fcmax" name="fcmax" type="number" min="140" max="220" placeholder="ex. 188" aria-describedby="fcmaxHint"><span class="hint" id="fcmaxHint">Mesurée sur un effort maximal de préférence, les formules par l'âge se trompent souvent de 10 bpm.</span></div>
+        <div class="field" data-sp="vtt forme" hidden><label for="hSem">Heures de sport par semaine aujourd'hui</label><input id="hSem" name="hSem" type="number" min="0" max="25" step="0.5" inputmode="decimal" placeholder="ex. 4" aria-describedby="hSemHint"><span class="hint" id="hSemHint">Vide ou 0 : le plan démarre prudemment selon ton niveau, puis monte de 6 % par semaine au plus.</span></div>
+        <div class="row2" data-sp="course trail">
+          <div class="field"><label for="volume">Km par semaine aujourd'hui</label><input id="volume" name="volume" type="number" min="0" max="200"></div>
+          <div class="field"><label for="longest">Plus longue sortie du mois (km)</label><input id="longest" name="longest" type="number" step="0.5" min="0" max="60"></div>
+        </div>
+        <div class="field" data-sp="course trail"><label for="ref">Ta référence de vitesse · optionnel</label>
+          <div class="row2"><select id="ref" name="ref" aria-describedby="vmaHint"><option value="none">Aucune</option><option value="vma">VMA connue (km/h)</option><option value="5">Chrono 5 km (mm:ss)</option><option value="10">Chrono 10 km (mm:ss ou h:mm:ss)</option></select>
+          <input id="refVal" name="refVal" placeholder="choisis d'abord" aria-label="Valeur de la référence" aria-describedby="vmaHint" disabled></div>
+          <span class="hint" id="vmaHint" aria-live="polite"></span></div>
+        </div>
+      </details>
+      <details class="psec" id="ps-trn">
+        <summary><span class="pt">Mes entraînements</span><span class="ps" id="psl-trn"></span></summary>
+        <div class="pbody">
+        <div class="field" data-sp="course trail"><span class="lbl" id="lbl-lieu">Où tu cours</span>
+          <div class="seg" role="radiogroup" aria-labelledby="lbl-lieu" aria-describedby="lieuHint"><label><input type="radio" name="lieu" value="dehors"><span>Dehors</span></label><label><input type="radio" name="lieu" value="tapis"><span>Tapis</span></label><label><input type="radio" name="lieu" value="mixte"><span>Mixte</span></label></div>
+          <span class="hint" id="lieuHint">Mixte : footings et sortie longue dehors, séances de qualité sur tapis. Sur tapis, l'outil donne les vitesses en km/h et une pente de 1 %.</span></div>
+        <div class="field" data-sp="course trail"><span class="lbl" id="lbl-types">Séances que tu veux faire</span>
+          <div class="checks" id="types" role="group" aria-labelledby="lbl-types" aria-describedby="typesHint">
+            <label><input type="checkbox" name="types" value="seuil"><span>Seuil</span></label>
+            <label><input type="checkbox" name="types" value="vma"><span>Fractionné VMA</span></label>
+            <label><input type="checkbox" name="types" value="cotes"><span>Côtes</span></label>
+            <label><input type="checkbox" name="types" value="fartlek"><span>Fartlek</span></label>
+            <label><input type="checkbox" name="types" value="ld"><span>Lignes droites</span></label>
+          </div>
+          <span class="hint" id="typesHint">Une séance décochée est remplacée par la plus proche que tu as gardée. Tout décoché : uniquement du footing. Les séances à allure course restent si tu prépares une course.</span></div>
+        <div class="field" data-sp="course trail"><label for="cross">Remplacer un footing par du cardio sans impact</label>
+          <select id="cross" name="cross" aria-describedby="crossHint"><option value="non">Non</option><option value="velo">Vélo ou home-trainer</option><option value="elliptique">Elliptique</option><option value="rameur">Rameur</option><option value="natation">Natation</option></select>
+          <span class="hint" id="crossHint">Garde le travail du cœur en ménageant les articulations. Utile en reprise, après une blessure ou quand la course secoue encore beaucoup les articulations. La séance prend la place d'un footing, le reste du plan ne change pas.</span></div>
+        <div class="field"><span class="lbl" id="lbl-equip">Matériel pour le renforcement</span>
+          <div class="seg" role="radiogroup" aria-labelledby="lbl-equip"><label><input type="radio" name="equip" value="salle"><span>Salle</span></label><label><input type="radio" name="equip" value="maison"><span>Haltères</span></label><label><input type="radio" name="equip" value="aucun"><span>Aucun</span></label></div></div>
+        <div class="field"><span class="lbl" id="lbl-seances">Séances de course par semaine</span>
+          <div class="seg" id="segSeances" role="radiogroup" aria-labelledby="lbl-seances" aria-describedby="seancesHint"><label><input type="radio" name="seances" value="3"><span>3</span></label><label><input type="radio" name="seances" value="4"><span>4</span></label><label><input type="radio" name="seances" value="5"><span>5</span></label><label><input type="radio" name="seances" value="6"><span>6</span></label></div>
+          <span class="hint" id="seancesHint" aria-live="polite" hidden></span></div>
+        <div class="field" data-sp="course trail vtt forme"><span class="lbl" id="lbl-renfo">Séances de renforcement</span>
+          <div class="seg" role="radiogroup" aria-labelledby="lbl-renfo" aria-describedby="renfoHint"><label><input type="radio" name="renfo" value="0"><span>0</span></label><label><input type="radio" name="renfo" value="1"><span>1</span></label><label><input type="radio" name="renfo" value="2"><span>2</span></label></div>
+          <span class="hint" id="renfoHint">2 recommandées : le renforcement divise le risque de blessure par environ 3.</span></div>
+        <div class="field" data-sp="course trail vtt forme"><span class="lbl" id="lbl-longDay">Jour de sortie longue</span>
+          <div class="seg" id="segLongDay" role="radiogroup" aria-labelledby="lbl-longDay" aria-describedby="longDayHint"><label><input type="radio" name="longDay" value="6"><span>Dimanche</span></label><label><input type="radio" name="longDay" value="5"><span>Samedi</span></label></div>
+          <span class="hint" id="longDayHint" aria-live="polite" hidden></span></div>
+        </div>
+      </details>
+      <details class="psec" id="ps-nut">
+        <summary><span class="pt">Ma nutrition</span><span class="ps" id="psl-nut"></span></summary>
+        <div class="pbody">
+        <div class="field"><label for="deficit">Déficit fixe (kcal/jour)</label><input id="deficit" name="deficit" type="number" step="25" min="0" max="500" aria-describedby="deficitHint">
+          <span class="hint" id="deficitHint">Appliqué tous les jours, y compris les jours de séance dure et de sortie longue. 0 = maintien. Plafonné à 500.</span></div>
+        <div class="field"><label for="bonus">Supplément les jours de repos et de footing (kcal)</label><input id="bonus" name="bonus" type="number" step="25" min="0" max="200" aria-describedby="bonusHint">
+          <span class="hint" id="bonusHint">S'ajoute au déficit fixe les jours faciles. Pas de supplément pendant l'affûtage, et le jour de la course est à l'équilibre. L'outil te prévient si l'ensemble devient trop bas pour ta masse maigre.</span></div>
+        <div class="field"><label for="adj">Ajustement manuel (kcal/jour)</label><input id="adj" name="adj" type="number" step="50" min="-300" max="500" aria-describedby="adjHint"><span class="hint" id="adjHint">Rempli par l'onglet Suivi quand tu acceptes une proposition.</span></div>
+        </div>
+      </details>
+    </form>
+    <div class="resetrow">
+      <button class="btn ghost" type="button" id="resetEx">Revenir aux données d'exemple</button>
+      <span class="note" id="resetConfirm" role="alert" hidden>Tes données de profil et ton suivi seront effacés. <button class="btn" type="button" id="resetYes">Confirmer</button> <button class="btn ghost" type="button" id="resetNo">Annuler</button></span>
+    </div>
+  </section>
+
+  <!-- COACH (affiché seulement si CHAT_WEBHOOK_URL est configuré dans config.js) -->
+  <section class="panel" id="p-coach" role="tabpanel" aria-labelledby="tab-coach" hidden>
+    <h2>Coach</h2>
+    <div class="alert warn" id="coachNote"><b>Une aide générale, pas un avis médical.</b> Le coach ne pose pas de diagnostic et ne remplace ni ton médecin ni un diététicien. Douleur forte, malaise, difficultés avec l'alimentation : consulte un professionnel de santé.</div>
+    <p class="alert ok" id="coachSos" role="note"><b>En cas de détresse : 3114</b> (24 h/24) · <b>urgence : 15 / 112</b></p>
+    <p class="muted" id="coachCfgTxt"></p>
+    <p class="alert warn" id="coachGate" hidden></p>
+    <div class="cchat" id="coachLog" role="log" aria-label="Conversation avec le coach" aria-live="polite" tabindex="0"></div>
+    <form id="coachForm" autocomplete="off">
+      <label for="coachIn" class="sr-only">Ton message au coach</label>
+      <textarea id="coachIn" maxlength="1000" rows="3" placeholder="Ex. Comment gérer ma sortie longue de dimanche ?"></textarea>
+      <div class="cform-row"><button class="btn" type="submit" id="coachSend">Envoyer</button><button class="btn ghost" type="button" id="coachCancel" hidden>Annuler</button><span class="coach-wait" id="coachWait" hidden><i aria-hidden="true"></i>Le coach réfléchit…</span><span class="muted" id="coachCount" aria-hidden="true">0 / 1000</span></div>
+    </form>
+    <div class="ctools" id="coachTools"><button class="btn ghost sm" type="button" id="coachCfg">Ce qui est envoyé</button><button class="btn ghost sm" type="button" id="coachClear">Effacer la conversation</button></div>
+    <p class="sr-only" id="coachLive" role="status" aria-live="polite"></p>
+  </section>
+
+  <!-- REPÈRES -->
+  <section class="panel" id="p-reperes" role="tabpanel" aria-labelledby="tab-reperes" hidden>
+    <h2>Repères</h2>
+    <p class="lead"><button class="linkbtn" type="button" data-news>Quoi de neuf dans le carnet ?</button></p>
+    <p class="lead">Les règles derrière le plan, avec leur niveau de preuve : <span class="ev s">Solide</span> méta-analyses ou grandes études, <span class="ev m">Modéré</span> études isolées, <span class="ev p">Pratique</span> consensus d'entraîneurs. Elles s'appuient sur des méthodes d'entraînement reconnues et sur les recommandations de nutrition du sport.</p>
+    <div class="tablewrap has-m"><table class="zonetab" id="zoneTable"></table></div>
+    <ul class="mlist" id="zoneList" aria-label="Allures"></ul>
+    <div class="cols">
+      <div class="card" data-run-only><h3>Entraînement</h3><ul>
+        <li>Environ 80 % du temps en facile, où tu peux tenir une conversation. Ralentir ses footings est le conseil le plus utile. <span class="ev s">Solide</span></li>
+        <li>Attention : la « zone 2 » d'une montre à 5 zones correspond à la zone facile (Z1) ici. <span class="ev s">Solide</span></li>
+        <li>Une séance au seuil « retenu » par semaine (méthode norvégienne adaptée) : 5 × 6 min ou 10 × 3 min, 1 min de récup. <span class="ev m">Modéré</span></li>
+        <li>Lignes droites et sprints en côte courts : foulée et puissance, à faible risque. <span class="ev m">Modéré</span></li>
+        <li>Cycles de 3 semaines de montée + 1 semaine allégée (−20 à −30 %). <span class="ev p">Pratique</span></li>
+        <li>Débutant : alternance course et marche, pas d'intensité avant 6 à 8 semaines de régularité. Les tendons s'adaptent plus lentement que le cœur. <span class="ev p">Pratique</span></li>
+      </ul></div>
+      <div class="card" data-run-only><h3>Blessures</h3><ul>
+        <li>Le signal d'alerte n°1 : une sortie plus longue que la plus longue des 30 derniers jours. +10 à 30 % : risque +64 %. Le plan plafonne à +10 %. <span class="ev s">Solide</span></li>
+        <li>Renforcement : risque de blessure divisé par environ 3. Proprioception : par 2. Étirements : aucun effet préventif. <span class="ev s">Solide</span></li>
+        <li>Muscu lourde (≥ 80 % du max, 4 à 8 reps) + pliométrie : la combinaison qui améliore le plus l'économie de course. Les séries longues à charge légère, non. <span class="ev s">Solide</span></li>
+        <li>Muscu le jour d'une séance dure (idéalement 3 h après), jamais la veille de la sortie longue. <span class="ev p">Pratique</span></li>
+        <li>Monter sa cadence de 5 à 10 %, pas forcément jusqu'à 180. <span class="ev m">Modéré</span></li>
+        <li>Moins de 7 h de sommeil : risque de blessure × 1,78. <span class="ev m">Modéré</span></li>
+        <li>Ne change pas de chaussures en pleine préparation. <span class="ev p">Pratique</span></li>
+      </ul></div>
+      <div class="card" id="sportCard" hidden></div>
+      <div class="card"><h3>Déficit calorique et course</h3><ul>
+        <li>Perte visée : 0,25 à 0,5 % du poids par semaine ; l'outil plafonne à 0,75 % et te prévient au-delà. Plus lent préserve le muscle et la performance. <span class="ev m">Modéré</span></li>
+        <li>Un déficit fixe tous les jours, augmenté les jours de repos et de footing. Les jours de séance dure et de sortie longue gardent le déficit fixe, sans supplément. <span class="ev p">Pratique</span></li>
+        <li>Pendant l'affûtage, pas de supplément. Le jour de la course est à l'équilibre. <span class="ev p">Pratique</span></li>
+        <li>Repère de sécurité : garder au moins 30 kcal par kg de masse maigre une fois la dépense sportive retirée (l'outil prévient en dessous de 30 et bloque en dessous de 25). En dessous, risque de fatigue chronique, blessures osseuses et troubles hormonaux (déficit énergétique relatif, RED-S). <span class="ev m">Modéré</span></li>
+        <li>Protéines : environ 2 g/kg/jour, réparties en 4 prises de 20 à 40 g. Avec un IMC au-dessus de 30, le calcul se fait sur le poids visé (ou le poids à IMC 25). <span class="ev m">Modéré</span></li>
+        <li>Glucides : autour des séances dures. Ne fais pas tes séances de qualité à jeun. <span class="ev s">Solide</span></li>
+        <li>Fatigue qui s'installe, sommeil qui se dégrade, séances ratées, règles qui s'arrêtent : remonte les calories et allège la semaine. <span class="ev m">Modéré</span></li>
+      </ul></div>
+    </div>
+  </section>
+
+  <footer>Les calories sont des estimations (formule de Mifflin-St Jeor, environ 0,9 kcal par kg et par km de course ; pour les autres sports, une dépense par heure d'après les valeurs MET du Compendium des activités physiques). Elles servent de point de départ : c'est la courbe de poids de l'onglet Suivi qui dit s'il faut ajuster. Si tu as un antécédent médical, un trouble alimentaire ou une douleur qui dure, demande l'avis d'un médecin ou d'un diététicien du sport. <button class="linkbtn" type="button" data-news>Quoi de neuf</button>
+  <nav class="legalnav" aria-label="Informations légales"><a href="cgu.html" target="_blank" rel="noopener">CGU</a><a href="confidentialite.html" target="_blank" rel="noopener">Confidentialité</a><a href="cookies.html" target="_blank" rel="noopener">Stockage local</a><a href="mentions-legales.html" target="_blank" rel="noopener">Mentions légales</a><a href="contact.html" target="_blank" rel="noopener">Tes droits RGPD</a></nav></footer>
+</div>
+<main class="home" id="home" aria-labelledby="homeT" hidden>
+  <div class="htop">
+    <span class="brand"><i aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="14" cy="4" r="2"/><path d="M8 21l3-6 3 2v5M6 12l3-4 4 1 3 4h3M11 15l-1-5"/></svg></i>Carnet de course</span>
+    <span class="hbar"><button class="btn ghost sm" type="button" data-act="open">Ouvrir l'appli</button><button class="av js-av" type="button" data-act="acct" aria-haspopup="dialog" aria-label="Compte"><span class="av-i" aria-hidden="true"></span><svg class="av-p" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c1-4 4-6 7.5-6s6.5 2 7.5 6"/></svg><span class="av-d" aria-hidden="true"></span></button></span>
+  </div>
+  <section class="hero">
+    <h1 id="homeT" tabindex="-1">Ton plan de course, calé sur ta vie</h1>
+    <p class="promise">Réponds à quelques questions : tu reçois un plan de 4 à 52 semaines, des séances aux bonnes allures et les calories de chaque jour, avec un déficit prudent.</p>
+    <div class="cta" id="homeCta"></div>
+    <p class="hstat" id="homeSt" role="status" data-st="pending">Connexion à ton compte en cours…</p>
+  </section>
+  <section class="sec" aria-labelledby="homeB">
+    <h2 id="homeB">Ce que tu trouves dans le carnet</h2>
+    <ul class="bgrid">
+      <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></span><h3>Un plan sur mesure</h3><p>De 4 à 52 semaines, calé sur ta date de course : montée progressive, semaines allégées, affûtage.</p></li>
+      <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span><h3>Un déficit calorique sûr</h3><p>Planchers de sécurité, aucun déficit avant 18 ans ni sous un IMC de 18,5, macros pour chaque jour.</p></li>
+      <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M12 13v5M9.5 15.5h5"/></svg></span><h3>Calendrier Apple</h3><p>Exporte tes séances d'un geste, toute la semaine ou une seule, avec l'heure et le rappel de ton choix.</p></li>
+      <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg></span><h3>Glisser-déposer</h3><p>Une séance tombe mal ? Fais-la glisser sur un autre jour : l'outil te prévient si deux séances dures se suivent.</p></li>
+      <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg></span><h3>Minuteur guidé</h3><p>Chaque bloc et chaque répétition à l'écran, avec vibration et écran gardé allumé.</p></li>
+      <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg></span><h3>Un suivi qui t'ajuste</h3><p>Note ton poids chaque semaine : la courbe te dit s'il faut ajuster les calories ou alléger la semaine.</p></li>
+      <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17l4-8h5l3 8M10 9L8 6h3"/></svg></span><h3>Course, trail, VTT, force</h3><p>Choisis ton sport : le plan, les séances, le minuteur et les calories s'adaptent. Haltérophilie, VTT, trail ou remise en forme.</p></li>
+      <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M3 9v6M6 7v10M18 7v10M21 9v6"/></svg></span><h3>Ressenti après séance</h3><p>Effort perçu, forme, douleur : le carnet repère la fatigue et te conseille du repos quand il le faut.</p></li>
+      <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14"/></svg></span><h3>Import Santé et Polar</h3><p>Importe tes séances et tes pesées depuis un fichier d'Apple Santé ou de Polar Flow. Tout est lu sur ton appareil.</p></li>
+    </ul>
+  </section>
+  <section class="sec" aria-labelledby="homeH">
+    <h2 id="homeH">Comment ça marche</h2>
+    <ol class="steps">
+      <li><b>Réponds à quelques questions</b><span>Toi, ton niveau, ton objectif, ta semaine type. Compte 2 minutes.</span></li>
+      <li><b>Reçois ton plan</b><span>Semaine par semaine : séances, allures, renforcement et calories de chaque jour.</span></li>
+      <li><b>Avance et ajuste</b><span>Coche tes séances, déplace-les, note ton poids : le plan reste à jour.</span></li>
+    </ol>
+  </section>
+  <section class="sec trust" aria-labelledby="homeS">
+    <h2 id="homeS">Tes données, ta santé</h2>
+    <ul class="tgrid">
+      <li><b>Données privées</b><span>Elles restent sur ton appareil. Si tu te connectes, elles sont aussi enregistrées dans ton compte, protégées par des règles d'accès : toi seul peux les lire.</span></li>
+      <li><b>Ni pub, ni suivi</b><span>Aucune publicité, aucun traceur, aucune statistique. Sans connexion à un compte, rien ne quitte ton appareil. Tu peux exporter ou effacer tes données à tout moment.</span></li>
+      <li><b>Pas un avis médical</b><span>Les calories sont des estimations. Au moindre doute, une douleur qui dure ou un trouble alimentaire, demande l'avis d'un médecin.</span></li>
+    </ul>
+    <div class="cta cta2" id="homeCta2"></div>
+  </section>
+  <footer class="hfoot"><nav class="legalnav" aria-label="Informations légales"><a href="cgu.html" target="_blank" rel="noopener">CGU</a><a href="confidentialite.html" target="_blank" rel="noopener">Confidentialité</a><a href="cookies.html" target="_blank" rel="noopener">Stockage local</a><a href="mentions-legales.html" target="_blank" rel="noopener">Mentions légales</a><a href="contact.html" target="_blank" rel="noopener">Tes droits RGPD</a></nav></footer>
+</main>
+<div class="wiz" id="wiz" role="dialog" aria-modal="true" aria-labelledby="wzT1" hidden>
+  <div class="wz-top">
+    <button class="btn ghost sm" type="button" id="wzBack" aria-label="Étape précédente">‹ Retour</button>
+    <div class="wz-prog" id="wzProg" role="progressbar" aria-label="Progression de l'assistant" aria-valuemin="1" aria-valuemax="5" aria-valuenow="1"><i></i></div>
+    <button class="btn ghost sm" type="button" id="wzQuit">Quitter</button>
+  </div>
+  <form class="wz-body" id="wzForm" novalidate>
+    <section class="wz-step" data-s="1">
+      <p class="wz-k">Étape 1 sur 5</p><h2 id="wzT1" tabindex="-1">Parlons de toi</h2>
+      <p class="lead">Ces informations servent à calculer ta dépense en calories. Rien n'est enregistré avant la dernière étape.</p>
+      <div class="field"><span class="lbl" id="wz-l-sexe">Sexe</span><div class="seg" role="radiogroup" aria-labelledby="wz-l-sexe"><label><input type="radio" name="wz_sexe" value="H"><span>Homme</span></label><label><input type="radio" name="wz_sexe" value="F"><span>Femme</span></label></div></div>
+      <div class="row2"><div class="field"><label for="wzAge">Âge</label><input id="wzAge" type="number" inputmode="numeric" min="15" max="90" autocomplete="off"></div><div class="field"><label for="wzTaille">Taille (cm)</label><input id="wzTaille" type="number" inputmode="numeric" min="130" max="220" autocomplete="off"></div></div>
+      <div class="row2"><div class="field"><label for="wzPoids">Poids (kg)</label><input id="wzPoids" type="text" inputmode="decimal" placeholder="ex. 81,5" autocomplete="off"></div><div class="field"><label for="wzCible">Poids visé (kg)</label><input id="wzCible" type="text" inputmode="decimal" placeholder="optionnel" autocomplete="off"></div></div>
+      <div class="alert bad" id="wzMinor" hidden><b>Avant 18 ans</b>, l'outil ne met aucun déficit calorique : tu manges à hauteur de ta dépense. Parles-en à un médecin et à tes parents avant de te lancer dans un plan d'entraînement.</div>
+    </section>
+    <section class="wz-step" data-s="2" hidden>
+      <p class="wz-k">Étape 2 sur 5</p><h2 id="wzT2" tabindex="-1">Ton niveau et ton objectif</h2>
+      <div class="field"><span class="lbl" id="wz-l-niveau">Niveau</span><div class="seg" role="radiogroup" aria-labelledby="wz-l-niveau" aria-describedby="wzNivH"><label><input type="radio" name="wz_niveau" value="deb"><span>Débutant</span></label><label><input type="radio" name="wz_niveau" value="int"><span>Inter&shy;médiaire</span></label><label><input type="radio" name="wz_niveau" value="conf"><span>Confirmé</span></label></div><span class="hint" id="wzNivH">Débutant : moins de 3 mois de pratique régulière. Confirmé : 3 séances et plus par semaine depuis plus d'un an.</span></div>
+      <div class="field"><label for="wzSport">Ton sport principal</label><select id="wzSport" aria-describedby="wzSpH"><option value="course">Course à pied</option><option value="trail">Trail</option><option value="vtt">VTT</option><option value="force">Haltérophilie et force</option><option value="forme">Remise en forme générale</option></select><span class="hint" id="wzSpH" aria-live="polite"></span></div>
+      <div class="field" data-sp="course trail"><label for="wzObjectif">Objectif</label><select id="wzObjectif"><option value="forme">Forme et perte de poids</option><option value="5">5 km</option><option value="10">10 km</option><option value="21">Semi-marathon</option><option value="42">Marathon</option></select></div>
+      <div class="field" data-sp="vtt force" hidden><label for="wzSObj" id="wzSObjL">Orientation de l'entraînement</label><select id="wzSObj"></select></div>
+      <div class="field" id="wzRaceF"><label for="wzRace" id="wzRaceL">Date de ta course · optionnel</label><input id="wzRace" type="date" aria-describedby="wzRaceH"><span class="hint" id="wzRaceH">Le plan se cale dessus : la dernière semaine est celle de ta course.</span></div>
+      <div class="row2" data-sp="course trail"><div class="field"><label for="wzVolume">Km par semaine aujourd'hui</label><input id="wzVolume" type="number" inputmode="numeric" min="0" max="200" aria-describedby="wzVolH" autocomplete="off"></div><div class="field"><label for="wzLongest">Plus longue sortie du mois (km)</label><input id="wzLongest" type="number" inputmode="decimal" step="0.5" min="0" max="60" autocomplete="off"></div></div>
+      <span class="hint" id="wzVolH" data-sp="course trail">Mets 0 si tu ne cours pas encore.</span>
+      <div class="field" data-sp="vtt forme" hidden><label for="wzHSem">Heures de sport par semaine aujourd'hui</label><input id="wzHSem" type="number" inputmode="decimal" min="0" max="25" step="0.5" placeholder="ex. 4" autocomplete="off"><span class="hint">Laisse vide si tu ne sais pas : le plan démarre prudemment.</span></div>
+    </section>
+    <section class="wz-step" data-s="3" hidden>
+      <p class="wz-k">Étape 3 sur 5</p><h2 id="wzT3" tabindex="-1">Ta semaine type</h2>
+      <div class="field"><span class="lbl" id="wz-l-seances">Séances de course par semaine</span><div class="seg" role="radiogroup" aria-labelledby="wz-l-seances" aria-describedby="wzSeH"><label><input type="radio" name="wz_seances" value="3"><span>3</span></label><label><input type="radio" name="wz_seances" value="4"><span>4</span></label><label><input type="radio" name="wz_seances" value="5"><span>5</span></label><label><input type="radio" name="wz_seances" value="6"><span>6</span></label></div><span class="hint" id="wzSeH" aria-live="polite"></span></div>
+      <div class="field" data-sp="course trail vtt forme"><span class="lbl" id="wz-l-renfo">Séances de renforcement</span><div class="seg" role="radiogroup" aria-labelledby="wz-l-renfo" aria-describedby="wzReH"><label><input type="radio" name="wz_renfo" value="0"><span>0</span></label><label><input type="radio" name="wz_renfo" value="1"><span>1</span></label><label><input type="radio" name="wz_renfo" value="2"><span>2</span></label></div><span class="hint" id="wzReH">2 recommandées : le renforcement divise le risque de blessure par environ 3.</span></div>
+      <div class="field" data-sp="course trail"><span class="lbl" id="wz-l-lieu">Où tu cours</span><div class="seg" role="radiogroup" aria-labelledby="wz-l-lieu"><label><input type="radio" name="wz_lieu" value="dehors"><span>Dehors</span></label><label><input type="radio" name="wz_lieu" value="tapis"><span>Tapis</span></label><label><input type="radio" name="wz_lieu" value="mixte"><span>Mixte</span></label></div></div>
+      <div class="field"><span class="lbl" id="wz-l-equip">Matériel pour le renforcement</span><div class="seg" role="radiogroup" aria-labelledby="wz-l-equip"><label><input type="radio" name="wz_equip" value="salle"><span>Salle</span></label><label><input type="radio" name="wz_equip" value="maison"><span>Haltères</span></label><label><input type="radio" name="wz_equip" value="aucun"><span>Aucun</span></label></div></div>
+      <div class="field"><span class="lbl" id="wz-l-act">Ton quotidien hors sport</span><div class="seg" role="radiogroup" aria-labelledby="wz-l-act"><label><input type="radio" name="wz_act" value="1.25"><span>Assis</span></label><label><input type="radio" name="wz_act" value="1.4"><span>Un peu actif</span></label><label><input type="radio" name="wz_act" value="1.55"><span>Très actif</span></label></div><span class="hint">Assis la plupart du temps, un peu actif (marche, debout), ou métier physique.</span></div>
+      <div class="field" data-sp="course trail vtt forme"><span class="lbl" id="wz-l-long">Jour de sortie longue</span><div class="seg" role="radiogroup" aria-labelledby="wz-l-long" aria-describedby="wzLoH"><label><input type="radio" name="wz_longDay" value="6"><span>Dimanche</span></label><label><input type="radio" name="wz_longDay" value="5"><span>Samedi</span></label></div><span class="hint" id="wzLoH" aria-live="polite"></span></div>
+    </section>
+    <section class="wz-step" data-s="4" hidden>
+      <p class="wz-k">Étape 4 sur 5</p><h2 id="wzT4" tabindex="-1">Un déficit prudent</h2>
+      <p class="lead">Un petit déficit chaque jour fait perdre du poids sans casser l'énergie des séances. Tu pourras le régler plus finement dans l'onglet Profil.</p>
+      <div class="field"><span class="lbl" id="wz-l-def">Déficit fixe par jour</span><div class="seg" role="radiogroup" aria-labelledby="wz-l-def" aria-describedby="wzDefH"><label><input type="radio" name="wz_def" value="0"><span>0 · maintien</span></label><label><input type="radio" name="wz_def" value="200"><span>200 · doux</span></label><label><input type="radio" name="wz_def" value="300"><span>300 · conseillé</span></label><label><input type="radio" name="wz_def" value="400"><span>400 · ferme</span></label><label id="wzDefKeep" hidden><input type="radio" name="wz_def" value="-1"><span></span></label></div><span class="hint" id="wzDefH" aria-live="polite">kcal par jour, appliqué tous les jours. L'outil le réduit tout seul si ta masse maigre ou ta perte par semaine l'exigent.</span></div>
+      <div class="alert warn" id="wzDefW" hidden></div>
+      <div class="alert warn"><b>Rappel santé.</b> Ces calories sont des estimations, pas un avis médical. Demande l'avis d'un médecin avant de commencer si tu as une maladie, un antécédent de trouble alimentaire, ou une douleur qui dure.</div>
+      <label class="ack"><input type="checkbox" id="wzAck"><span>J'ai compris : ce plan n'est pas un avis médical.</span></label>
+      <p class="hint">Ces informations restent sur cet appareil, sauf si tu te connectes ensuite à un compte. <a href="confidentialite.html" target="_blank" rel="noopener">Confidentialité</a> · <a href="cgu.html" target="_blank" rel="noopener">CGU</a></p>
+    </section>
+    <section class="wz-step" data-s="5" hidden>
+      <p class="wz-k">Étape 5 sur 5</p><h2 id="wzT5" tabindex="-1">Ton résumé</h2>
+      <p class="lead">Vérifie, puis crée ton plan. Tu pourras tout modifier dans l'onglet Profil.</p>
+      <dl class="wz-sum" id="wzSum"></dl>
+      <div class="alert ok" id="wzPlan"></div>
+      <div class="alert warn" id="wzRepl" hidden>Ton profil actuel sera remplacé. Ton suivi, tes séances cochées et déplacées sont conservés.</div>
+    </section>
+    <div class="alert bad" id="wzErr" role="alert" hidden></div>
+  </form>
+  <div class="wz-foot"><button class="btn" type="button" id="wzNext">Continuer</button></div>
+</div>
+<div id="toasts" aria-live="polite"></div>
+<p class="sr-only" id="srLive" aria-live="polite"></p>
+
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="app.js"></script>
+<script src="coach.js"></script>
+</body>
+</html>

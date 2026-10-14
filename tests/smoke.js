@@ -1,0 +1,11 @@
+const {chromium}=require("playwright"); const L=require("./lib");
+(async()=>{ const S=await L.serve(); const b=await chromium.launch(); const E=[];
+ const ctx=await b.newContext({viewport:{width:390,height:844}}); const p=await ctx.newPage();
+ p.on("pageerror",e=>E.push("PE "+e.message)); p.on("console",m=>{ if(m.type()==="error"||m.type()==="warning") E.push(m.type()+" "+m.text().slice(0,200)); });
+ await p.addInitScript(()=>{ window.__csp=[]; document.addEventListener("securitypolicyviolation",e=>window.__csp.push(e.violatedDirective+" "+e.blockedURI)); });
+ await p.goto(S.url+"/"); await p.waitForTimeout(800);
+ console.log("home visible",await p.evaluate(()=>!document.querySelector("#home").hidden),"focus",await p.evaluate(()=>document.activeElement.id));
+ await p.click("#homeCta [data-act=example], #homeCta [data-act=wizard]").catch(e=>console.log("noclick",e.message.slice(0,60)));
+ await p.waitForTimeout(500);
+ console.log("csp",await p.evaluate(()=>window.__csp),"errors",E);
+ await b.close(); S.close(); })();
