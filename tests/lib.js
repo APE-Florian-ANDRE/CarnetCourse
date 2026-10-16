@@ -11,7 +11,7 @@ function serve(over={},prefix=""){ const H=headersFor(), hits=[];
     if(prefix){ if(u===prefix) u=prefix+"/"; if(!u.startsWith(prefix+"/")){ res.writeHead(404,{"Content-Type":"text/plain"}); return res.end("hors base"); } u=u.slice(prefix.length); }
     if(u==="/") u="/index.html"; let f=path.join(ROOT,u); if(!f.startsWith(ROOT)){ res.writeHead(403); return res.end(); }
     if(!fs.existsSync(f)&&fs.existsSync(f+".html")) f+=".html";
-    let body; if(over[u]) body=over[u](); else if(fs.existsSync(f)&&fs.statSync(f).isFile()) body=fs.readFileSync(f); else { f=path.join(ROOT,"404.html"); res.writeHead(404,{...H,"Content-Type":MIME[".html"]}); return res.end(fs.readFileSync(f)); }
+    let body; if(over[u]) body=over[u](); else if(u==="/config.js") body=blankCfgJs(); else if(fs.existsSync(f)&&fs.statSync(f).isFile()) body=fs.readFileSync(f); else { f=path.join(ROOT,"404.html"); res.writeHead(404,{...H,"Content-Type":MIME[".html"]}); return res.end(fs.readFileSync(f)); }
     if(path.extname(f)===".html") body=Buffer.from(body.toString().replace("connect-src 'self'","connect-src 'self' https://abcdefghij.supabase.co"+EXTRA.v));   // idem pour la balise meta
     res.writeHead(200,{...H,"Content-Type":MIME[path.extname(f)]||"application/octet-stream"}); res.end(body); });
   return new Promise(r=>srv.listen(0,"127.0.0.1",()=>r({srv,hits,url:"http://127.0.0.1:"+srv.address().port+prefix,close:()=>srv.close()}))); }
@@ -20,8 +20,10 @@ const FAKE_KEY=b64({alg:"HS256",typ:"JWT"})+"."+b64({role:"anon",iss:"supabase",
 const SERVICE_KEY=b64({alg:"HS256",typ:"JWT"})+"."+b64({role:"service_role",iss:"supabase"})+"."+"signaturesignaturesig";
 // config.js de test : valeurs valides (aucun réseau : le client est simulé)
 const cfgJs=(extra={})=>()=>{ const c=fs.readFileSync(path.join(ROOT,"config.js"),"utf8");
-  const o={SUPABASE_URL:"https://abcdefghij.supabase.co",SUPABASE_ANON_KEY:FAKE_KEY,...extra};
-  let s=c; for(const [k,v] of Object.entries(o)) s=s.replace(new RegExp(k+':\\s*"[^"]*"'),k+": "+JSON.stringify(v)); return s; };
+  const o={SUPABASE_URL:"https://abcdefghij.supabase.co",SUPABASE_ANON_KEY:FAKE_KEY,PROVIDERS:["google","azure","github"],...extra};
+  let s=c; for(const [k,v] of Object.entries(o)) s=s.replace(new RegExp(k+':\\s*(?:"[^"]*"|\\[[^\\]]*\\])'),k+": "+JSON.stringify(v)); return s; };
+// config.js de test « non configuré » (site 100 % invité), indépendant des valeurs de production
+const blankCfgJs=()=>cfgJs({SUPABASE_URL:"",SUPABASE_ANON_KEY:""})();
 // base de données simulée, partagée entre pages ; imite les règles RLS du schéma
 function makeDb(){ const rows=new Map(), users=new Set(), log=[];
   const o={rows,users,log,failUpdate:false}; const fn=(op,a)=>{ log.push(op);

@@ -2906,7 +2906,10 @@ let lsOK=(()=>{ try{ localStorage.setItem("carnet.t","1"); localStorage.removeIt
 let lastRaw=null;
 function persistLocal(){ try{
   // le profil a changé ici : horodaté, il l'emportera sur celui d'un autre appareil ou onglet moins récent
-  const pj=JSON.stringify(state.profile); if(pj!==lastPJ){ lastPJ=pj; state.profileAt=Date.now(); }
+  // chaque champ modifié reçoit aussi sa propre date : deux appareils qui changent des champs différents gardent les deux changements
+  const pj=JSON.stringify(state.profile); if(pj!==lastPJ){ const now=Date.now(); let old=null; try{ old=lastPJ? JSON.parse(lastPJ) : null; }catch(e){}
+    const at=cleanPAt(state.pAt); for(const k of Object.keys(state.profile)) if(!old||JSON.stringify(old[k])!==JSON.stringify(state.profile[k])) at[k]=now;
+    state.pAt=cleanPAt(at); lastPJ=pj; state.profileAt=now; }
   // un autre onglet a écrit depuis : on fusionne avant d'écrire, pour ne pas écraser ses changements
   const raw=localStorage.getItem(LS);
   if(raw&&raw!==lastRaw){ let cur=null; try{ cur=JSON.parse(raw); }catch(e){} if(cur&&cur.profile&&typeof cur.profile==="object"&&(+cur.savedAtLocal||0)>(+state.savedAtLocal||0)){ const r=mergeInto(cur,+cur.savedAtLocal||0); if(r.changed) queueMicrotask(()=>rerender(r)); } }
@@ -2917,11 +2920,14 @@ function mergeInto(d,srcT){
   const del=mergeDeleted(state.deleted,d.deleted), week=state.week;
   const hasP=!!(d.profile&&typeof d.profile==="object"&&!Array.isArray(d.profile)), pl=+state.profileAt||0, pr=+d.profileAt||0;
   const prof= hasP&&((state.isExample&&!d.isExample&&!pl)||((pl||pr)? pr>pl : (+srcT||0)>(+state.savedAtLocal||0)));
-  const m={...x14Merge(d,state),profile:prof?d.profile:state.profile,isExample:prof?d.isExample:state.isExample,log:dropDeleted(cleanLog([...cleanLog(d.log),...cleanLog(state.log)]),del),week:prof?d.week:week,
+  // profil le plus récent, puis les champs modifiés plus récemment de l'autre côté
+  const mp= hasP&&!state.isExample&&!d.isExample? (prof? mergeProfile(d.profile,d.pAt,state.profile,state.pAt) : mergeProfile(state.profile,state.pAt,d.profile,d.pAt)) : prof? {profile:d.profile,pAt:cleanPAt(d.pAt)} : {profile:state.profile,pAt:cleanPAt(state.pAt)};
+  const pch= JSON.stringify(mp.profile)!==JSON.stringify(state.profile);
+  const m={...x14Merge(d,state),profile:mp.profile,pAt:mp.pAt,isExample:prof?d.isExample:state.isExample,log:dropDeleted(cleanLog([...cleanLog(d.log),...cleanLog(state.log)]),del),week:prof?d.week:week,
     appliedByDate:{...cleanApplied(d.appliedByDate),...cleanApplied(state.appliedByDate)},deleted:del,moves:mergeStamped(d.moves,state.moves,cleanMoves),done:mergeStamped(d.done,state.done,cleanDone),
-    seen:Math.max(+state.seen||0,+d.seen||0),savedAtLocal:state.savedAtLocal,profileAt:prof?pr:pl};
+    seen:Math.max(+state.seen||0,+d.seen||0),savedAtLocal:state.savedAtLocal,profileAt:Math.max(pl,hasP?pr:0)};
   loadState(m); if(!prof) state.week=clampWeek(week);
-  return {changed:snap()!==before,prof};
+  return {changed:snap()!==before,prof:prof||pch};
 }
 function rerender(r){ try{ recompute(); if(r&&r.prof) fillForm(); }catch(e){} }
 const LS_BLOCKED="impossible ici, le stockage de ton navigateur est bloqué. Tes changements seront perdus en fermant la page.";
@@ -2950,7 +2956,7 @@ function resetLocal(){
 function erasedElsewhere(reload){ if(!wizEl.hidden) closeWiz(); resetLocal(); setStore(dbRef? "rien d'enregistré encore. Dès que tu remplis ton profil, c'est sauvegardé dans ton compte." : localStatus()); showHome(); toast("Tes données ont été effacées depuis un autre appareil ou onglet.");
   if(reload&&dbRef) setTimeout(()=>{ initAccount(); },0); }   // le compte a un nouveau contenu : on le charge
 // le consentement a été retiré (ou le compte vidé) depuis un autre appareil : la sauvegarde dans le compte est suspendue
-function consentLost(){ dbRef=null; noAccount=true; acct.st="consent"; setStore(localStatus()); renderAcct(); toast("Ton accord n'est plus enregistré dans ton compte (retiré depuis un autre appareil ?) : la sauvegarde dans le compte est suspendue."); if(!sheetEl) openAccount(avBtn()); }
+function consentLost(){ dbRef=null; noAccount=true; acct.st="consent"; setStore(localStatus()); renderAcct(); toast("Ton accord n'est plus enregistré dans ton compte (retiré depuis un autre appareil ?) : la sauvegarde dans le compte est suspendue."); if(!sheetEl&&authEl.hidden&&wizEl.hidden) openAuth("consent",avBtn()); }
 function persist(){
   if(persistLocal()&&!state.isExample) localSaved=true;
   if(!dbRef){ if(noAccount) setStore(localStatus()); return; }
@@ -2977,7 +2983,7 @@ async function flush(){
     if(hasEpoch(rd)&&state.eid!==undefined&&ep!==state.eid){ writing=false; pending=false; erasedElsewhere(!rd.erased); return; }   // le compte a changé d'époque (effacement) depuis notre dernière synchro : on n'écrit rien
     if(hasEpoch(rd)&&state.eid!==ep){ state.eid=ep; persistLocal(); } else if(state.eid===undefined) state.eid="";
     if(rd&&!rd.erased&&rd.profile&&typeof rd.profile==="object"&&!Array.isArray(rd.profile)){ const r=mergeInto(rd,+rd.savedAt||0); if(r.changed){ persistLocal(); rerender(r); } }
-    await dbRef.set(JSON.parse(JSON.stringify({profile:state.profile,isExample:state.isExample,log:state.log,week:state.week,appliedByDate:state.appliedByDate||{},deleted:state.deleted||{},moves:state.moves||{},done:state.done||{},feel:state.feel||{},acts:state.acts||{},rhr:state.rhr||{},seen:+state.seen||0,profileAt:+state.profileAt||0,eid:state.eid||"",savedAt:state.savedAtLocal||Date.now()}))); flushFailed=false; acct.lastAt=Date.now(); setStore(state.isExample&&!localSaved? EXAMPLE_MSG : ACCOUNT_OK); }
+    await dbRef.set(JSON.parse(JSON.stringify({profile:state.profile,isExample:state.isExample,log:state.log,week:state.week,appliedByDate:state.appliedByDate||{},deleted:state.deleted||{},moves:state.moves||{},done:state.done||{},feel:state.feel||{},acts:state.acts||{},rhr:state.rhr||{},seen:+state.seen||0,profileAt:+state.profileAt||0,pAt:cleanPAt(state.pAt),eid:state.eid||"",savedAt:state.savedAtLocal||Date.now()}))); flushFailed=false; acct.lastAt=Date.now(); setStore(state.isExample&&!localSaved? EXAMPLE_MSG : ACCOUNT_OK); }
   catch(e){ if(e&&e.code==="NOROW"){ writing=false; pending=false; consentLost(); return; }
     flushFailed=true;
     setStore(lsOK? "impossible dans le compte, gardé sur cet appareil seulement." : "impossible dans le compte, et le stockage de ce navigateur est bloqué. Tes changements seront perdus en fermant la page."); }
@@ -3010,6 +3016,14 @@ function cleanProfile(p){ const out={start:"",raceDate:""}; if(!p||typeof p!=="o
   for(const k of ["start","raceDate"]){ const v=own(k); if(okIso(v)) out[k]=v; }
   const ty=own("types"); if(Array.isArray(ty)) out.types=[...new Set(ty.slice(0,20).filter(t=>typeof t==="string"&&EXAMPLE.types.includes(t)))].slice(0,EXAMPLE.types.length);
   return out; }
+// date de modification de chaque champ du profil : {champ: horodatage}, champs connus seulement
+const PAT_KEYS=new Set([...Object.keys(EXAMPLE),"raceDate"]);
+function cleanPAt(o){ const out={}; if(!o||typeof o!=="object"||Array.isArray(o)) return out; const lim=Date.now()+6e4;
+  for(const [k,v] of Object.entries(o)) if(PAT_KEYS.has(k)&&isFinite(+v)&&+v>0) out[k]=Math.min(+v,lim); return out; }
+// fusion de deux profils : « win » (le plus récent) sert de base, chaque champ de « lose » modifié plus tard le remplace
+function mergeProfile(win,winAt,lose,loseAt){ const W=cleanPAt(winAt), Lo=cleanPAt(loseAt), out={...win}, at={...W};
+  if(lose&&typeof lose==="object"&&!Array.isArray(lose)) for(const [k,t] of Object.entries(Lo)) if(t>(W[k]||0)&&Object.prototype.hasOwnProperty.call(lose,k)){ out[k]=lose[k]; at[k]=t; }
+  return {profile:out,pAt:at}; }
 // semaines retirées : {date: horodatage}, 200 au plus ; une saisie plus récente que le retrait reste
 function cleanDeleted(o){ if(!o||typeof o!=="object"||Array.isArray(o)) return {};
   return Object.fromEntries(Object.entries(o).filter(([k,v])=>/^\d{4}-\d{2}-\d{2}$/.test(k)&&isFinite(+v)&&+v>0).map(([k,v])=>[k,Math.min(+v,Date.now())]).sort((a,b)=>b[1]-a[1]).slice(0,200)); }
@@ -3023,6 +3037,7 @@ function loadState(d){
   for(const k of x14Keys){ if(Object.hasOwn(d,k)) state[k]=X14[k](d[k]); else if(!state[k]) state[k]={}; }
   if(isFinite(+d.savedAtLocal)&&+d.savedAtLocal>0) state.savedAtLocal=+d.savedAtLocal;
   state.profileAt= isFinite(+d.profileAt)&&+d.profileAt>0? Math.min(+d.profileAt,Date.now()) : 0;
+  state.pAt=cleanPAt(d.pAt);
   // début du plan illisible ou absent : recalculé (date de course, sinon aujourd'hui)
   const st=state.profile.start;
   if(!okIso(st)){ const r=raceOn(state.profile); state.profile.start= r? autoStart(r) : todayIso(); }
@@ -3041,7 +3056,7 @@ const acct={st:"pending",name:"",lastAt:0,failed:false,uid:""};
 const nameOf=me=>{ try{ if(!me) return ""; if(typeof me==="string") return me.trim().slice(0,60);
   const n=me.display_name||me.displayName||me.name||[me.first_name||me.given_name||me.firstName,me.last_name||me.family_name||me.lastName].filter(Boolean).join(" ");
   return typeof n==="string"&&n.trim()? n.trim().slice(0,60) : (typeof me.email==="string"? me.email.trim().slice(0,80) : ""); }catch(e){ return ""; } };
-const homeEl=$("#home"), wrapEl=$(".wrap"), wizEl=$("#wiz");
+const homeEl=$("#home"), wrapEl=$(".wrap"), wizEl=$("#wiz"), authEl=$("#auth");
 const hasData=()=> !state.isExample||localSaved;
 function showHome(){ closeSheet(true); wrapEl.hidden=true; homeEl.hidden=false; renderHome(); window.scrollTo(0,0); try{ $("#homeT").focus({preventScroll:true}); }catch(e){} }
 function showApp(){ if(!seenV()) markSeen(false); homeEl.hidden=true; wrapEl.hidden=false; hvMark(); try{ renderChart(sortedLog()); }catch(e){} }
@@ -3055,6 +3070,8 @@ function renderHome(){
 function renderAcct(){
   document.querySelectorAll(".js-av").forEach(b=>{ b.dataset.st=acct.st; b.setAttribute("aria-label","Compte : "+acctText().toLowerCase()); const i=b.querySelector(".av-i"); if(i) i.textContent=acct.name? acct.name.charAt(0).toUpperCase():""; });
   renderHome(); const sh=sheetEl&&sheetEl.querySelector('.sheet[data-kind="acct"]'); if(sh) fillAcct(sh);
+  const can=!!(window.CarnetAuth&&window.CarnetAuth.canLogin); document.querySelectorAll(".js-login").forEach(b=>{ b.hidden=!(can&&acct.st==="guest"); });
+  if(!authEl.hidden&&acct.st!=="pending"&&((authEl.dataset.mode==="consent")!==(acct.st==="consent"))) closeAuth();
 }
 const avBtn=()=>[...document.querySelectorAll(".js-av")].find(b=>b.getClientRects().length)||null;
 // actions des boutons de l'accueil et de la barre du haut
@@ -3064,6 +3081,7 @@ document.addEventListener("click",e=>{ const b=e.target.closest&&e.target.closes
   else if(a==="wizard") openWizard(b);
   else if(a==="home") showHome();
   else if(a==="acct") openAccount(b);
+  else if(a==="login") openAuth("login",b);
 });
 
 /* assistant de création du plan : 5 étapes plein écran, rien n'est enregistré avant « Créer mon plan » */
@@ -3212,15 +3230,8 @@ wizEl.addEventListener("keydown",e=>{ if(e.key==="Escape"){ e.preventDefault(); 
 /* compte : état de connexion, export / import / effacement des données */
 const fmtDT=t=> t>0? new Date(t).toLocaleString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"}) : "";
 const LEGAL_NAV=`<nav class="legalnav" aria-label="Informations légales"><a href="cgu.html" target="_blank" rel="noopener">CGU</a><a href="confidentialite.html" target="_blank" rel="noopener">Confidentialité</a><a href="cookies.html" target="_blank" rel="noopener">Stockage local</a><a href="mentions-legales.html" target="_blank" rel="noopener">Mentions légales</a><a href="contact.html" target="_blank" rel="noopener">Tes droits RGPD</a></nav>`;
-// bloc de connexion : cases non précochées (âge, CGU et données de santé), puis un bouton par fournisseur configuré
-function consentBlock(cs,A){
-  const chk=`<label class="ack"><input type="checkbox" id="accAge"><span>J'ai au moins 15 ans.</span></label>
-    <label class="ack"><input type="checkbox" id="accTerms"><span>J'ai lu et j'accepte les <a href="cgu.html" target="_blank" rel="noopener">CGU</a> et la <a href="confidentialite.html" target="_blank" rel="noopener">politique de confidentialité</a>.</span></label>
-    <label class="ack"><input type="checkbox" id="accHealth"><span><b>Données de santé.</b> Je consens explicitement à ce que mes données de santé soient enregistrées dans mon compte : âge, taille, poids, suivi, ressenti après séance, activités et pesées importées d'Apple Santé ou de Polar Flow, fréquence cardiaque de repos, pour synchroniser mon carnet entre mes appareils. Je peux retirer ce consentement à tout moment (écran Compte).</span></label>`;
-  if(cs) return `<div class="acc-login"><p><b>Ton accord pour la sauvegarde dans ton compte</b></p>${chk}<div class="prov"><button class="btn" type="button" data-acc="consent-ok">Accepter et activer la sauvegarde</button><button class="btn ghost" type="button" data-acc="consent-no">Refuser et me déconnecter</button></div></div>`;
-  const P=A.providers.map(p=>`<button class="btn ghost" type="button" data-acc="prov" data-prov="${esc(p.id)}">Continuer avec ${esc(p.label)}</button>`).join("");
-  return `<div class="acc-login"><p><b>Se connecter pour synchroniser</b></p>${chk}<div class="prov">${P}</div></div>`;
-}
+// feuille Compte : invité ou accord manquant -> bouton vers l'écran de connexion
+function loginCta(cs){ return `<div class="acc-login"><p><b>${cs?"Ton accord est nécessaire":"Synchronise ton carnet"}</b></p><p class="note">${cs?"Rien n'est enregistré dans ton compte tant que tu n'as pas donné ton accord.":"Crée ton compte ou connecte-toi en un clic avec Google ou GitHub. Ce que tu as déjà rempli ici est repris."}</p><div class="prov"><button class="btn" type="button" data-acc="login">${cs?"Donner mon accord":"Se connecter ou créer un compte"}</button>${cs?`<button class="btn ghost" type="button" data-acc="consent-no">Refuser et me déconnecter</button>`:""}</div></div>`; }
 // un compte différent de celui qui a créé les données de cet appareil : rien n'est fusionné ni écrit avant ton choix
 function ownerBlock(){ return `<div class="acc-login"><p><b>Que faire des données de cet appareil ?</b></p><p>Elles ont été enregistrées avec un autre compte. Pour protéger les deux comptes, rien n'est mélangé ni envoyé.</p><div class="prov"><button class="btn" type="button" data-acc="own-out" data-first>Me déconnecter et garder cet appareil</button><button class="btn ghost" type="button" data-acc="own-use">Utiliser les données de ce compte (celles de cet appareil seront remplacées)</button><button class="btn ghost" type="button" data-acc="own-zero">Repartir de zéro (efface cet appareil et les données de ce compte)</button></div></div>`; }
 const consentRecord=()=>({cgu:window.CarnetAuth.CONSENT_V,privacy:window.CarnetAuth.CONSENT_V,terms:true,health:true,age15:true,at:new Date().toISOString()});
@@ -3231,7 +3242,7 @@ function fillAcct(sh){
   const loc= localSaved&&state.savedAtLocal? fmtDT(state.savedAtLocal) : "Rien d'enregistré encore", acc= conn? (acct.lastAt? fmtDT(acct.lastAt) : "Pas encore") : "Pas de compte connecté";
   const row=(k,t,s,cls)=>`<button class="opt${cls?" "+cls:""}" type="button" data-acc="${k}"><span>${esc(t)}<small>${esc(s)}</small></span><span aria-hidden="true">›</span></button>`;
   b.innerHTML=`<div class="acc-st" data-st="${esc(acct.st)}"><span class="acc-dot" aria-hidden="true"></span><div><b id="accSt" tabindex="-1">${esc(acctText())}</b>${acct.name?`<div class="acc-nm">${esc(acct.name)}</div>`:""}<p>${esc(ex)}</p>${g&&can&&acct.failed?`<button class="btn ghost sm" type="button" data-acc="retry" data-first>Réessayer</button>`:""}</div></div>
-    ${(g&&can)||cs? consentBlock(cs,A) : acct.st==="owner"? ownerBlock() : ""}
+    ${(g&&can)||cs? loginCta(cs) : acct.st==="owner"? ownerBlock() : ""}
     <dl class="acc-dl"><div><dt>Dernier enregistrement sur cet appareil</dt><dd>${esc(loc)}</dd></div><div><dt>Dernier enregistrement dans le compte</dt><dd>${esc(acc)}</dd></div></dl>
     <div class="grp">${row("export","Exporter mes données","Un fichier JSON : plan-course-donnees.json")}${row("import","Importer mes données","Depuis un fichier JSON exporté ici")}${row("home","Revoir l'accueil","La présentation du carnet")}${row("news","Quoi de neuf","Les nouveautés de la version "+APP_V)}${row("erase","Effacer mes données","Profil, suivi, coches, déplacements, préférences (appareil et compte)","danger")}${conn||cs? row("signout","Me déconnecter","Ce navigateur seulement")+(conn?row("withdraw","Retirer mon consentement","Supprime tes données du compte, garde le compte"):"")+row("delacct","Supprimer mon compte","Compte et données supprimés définitivement","danger") : ""}</div>
     <div class="alerts msg" id="accMsg" role="status" aria-live="polite"></div>
@@ -3255,13 +3266,7 @@ function openAccount(opener){
       else if(k==="home"){ closeSheet(true); showHome(); }
       else if(k==="news"){ closeSheet(true); openNews(avBtn()); }
       else if(k==="erase") openErase(1,opener);
-      else if(k==="prov"||k==="consent-ok"){ const bx=["#accAge","#accTerms","#accHealth"].map(q=>sh.querySelector(q));
-        if(bx.some(x=>!x||!x.checked)){ msg(`<div class="alert warn" role="alert">Coche les trois cases pour continuer : ton âge (15 ans au moins), les CGU et la politique de confidentialité, et ton consentement pour tes données de santé.</div>`); const f=bx.find(x=>x&&!x.checked); if(f) f.focus(); return; }
-        b.disabled=true;
-        try{
-          if(k==="prov"){ await window.CarnetAuth.signIn(b.dataset.prov,consentRecord()); }
-          else { await window.CarnetAuth.saveConsent(consentRecord()); closeSheet(true); acct.st="pending"; renderAcct(); await initAccount(); toast("Sauvegarde dans ton compte activée."); }
-        }catch(e){ b.disabled=false; msg(`<div class="alert warn" role="alert">${k==="prov"?"Impossible de lancer la connexion pour l'instant. Réessaie dans un instant.":"Impossible d'enregistrer ton accord pour l'instant. Réessaie dans un instant."}</div>`); } }
+      else if(k==="login") openAuth(acct.st==="consent"?"consent":"login",opener);
       else if(k==="own-use"){ b.disabled=true; resetLocal(); acct.st="pending"; renderAcct(); await initAccount(); closeSheet(true); toast("Tu utilises maintenant les données de ce compte."); }
       else if(k==="own-zero"&&!b.dataset.arm){ b.dataset.arm="1"; b.textContent="Oui, effacer définitivement cet appareil et les données de ce compte"; b.classList.remove("ghost"); b.classList.add("danger"); msg(`<div class="alert bad" role="alert"><b>Dernière confirmation.</b> Les données de cet appareil et celles de ce compte seront effacées définitivement. Il n'y aura pas d'annulation possible. Pour renoncer, choisis une autre option.</div>`); }
       else if(k==="own-zero"){ b.disabled=true; const o=ownerPending; try{ if(o&&o.ref){ try{ await o.ref.set({erased:true,eid:newEid(),savedAt:Date.now()}); }catch(e){ if(!(e&&e.code==="NOROW")) throw e; } } resetLocal(); acct.st="pending"; renderAcct(); await initAccount(); closeSheet(true); toast("Tu repars de zéro avec ce compte."); }catch(e){ b.disabled=false; msg(`<div class="alert warn" role="alert">Impossible pour l'instant : rien n'a été effacé. Réessaie dans un instant.</div>`); } }
@@ -3374,6 +3379,54 @@ async function eraseAll(){
   } finally{ erasing=false; }
 }
 
+/* écran de connexion / création de compte (plein écran) : trois accords distincts non précochés, puis un bouton par fournisseur.
+   Mode « consent » : retour de connexion sans accord enregistré -> accepter (crée la ligne du compte) ou refuser (déconnexion). */
+const PROV_ICON={
+  google:`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h6a5.1 5.1 0 0 1-2.2 3.4v2.8h3.6c2.1-2 3.2-4.8 3.2-8.2z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.4-2.7l-3.6-2.8c-1 .7-2.3 1.1-3.8 1.1-2.9 0-5.4-2-6.3-4.6H2v2.9A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.7 14a6.6 6.6 0 0 1 0-4.1V7H2a11 11 0 0 0 0 9.9z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2 7l3.7 2.9C6.6 7.3 9.1 5.4 12 5.4z"/></svg>`,
+  github:`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="currentColor"><path d="M12 1.5A10.5 10.5 0 0 0 8.7 22c.5.1.7-.2.7-.5v-1.9c-2.9.6-3.5-1.2-3.5-1.2-.5-1.2-1.2-1.6-1.2-1.6-.9-.6.1-.6.1-.6 1 .1 1.6 1.1 1.6 1.1.9 1.6 2.5 1.1 3.1.9.1-.7.4-1.1.7-1.4-2.3-.3-4.8-1.2-4.8-5.2 0-1.1.4-2.1 1.1-2.8-.1-.3-.5-1.3.1-2.8 0 0 .9-.3 2.9 1.1a10 10 0 0 1 5.2 0c2-1.4 2.9-1.1 2.9-1.1.6 1.5.2 2.5.1 2.8.7.7 1.1 1.7 1.1 2.8 0 4-2.5 4.9-4.8 5.2.4.3.7 1 .7 1.9v2.9c0 .3.2.6.7.5A10.5 10.5 0 0 0 12 1.5z"/></svg>`,
+  azure:`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#F25022" d="M2 2h9.5v9.5H2z"/><path fill="#7FBA00" d="M12.5 2H22v9.5h-9.5z"/><path fill="#00A4EF" d="M2 12.5h9.5V22H2z"/><path fill="#FFB900" d="M12.5 12.5H22V22h-9.5z"/></svg>`,
+  apple:`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="currentColor"><path d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.8 1.2 1.8 2.6 3.1 2.6 1.3-.1 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.5 1-1.4 1.3-2.7 1.4-2.8-.1 0-2.6-1-2.6-4.2zM13.9 5c.7-.8 1.2-2 1-3.1-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.9-1 3 1.1.1 2.2-.6 2.9-1.4z"/></svg>`};
+const AU_BOX=["#accAge","#accTerms","#accHealth"];
+let auOpener=null, auBusy=false;
+const auReady=()=>AU_BOX.every(q=>$(q).checked);
+function auSync(){ const r=auReady(); authEl.dataset.ready=r?"1":"0"; $("#auHint").hidden=r; if(r) $("#accMsg").innerHTML=""; }
+function openAuth(mode,opener){
+  const A=window.CarnetAuth, cs=mode==="consent"; if(!cs&&!(A&&A.canLogin)){ openAccount(opener); return; }
+  closeSheet(true); auOpener=opener||document.activeElement; authEl.dataset.mode=cs?"consent":"login";
+  setT($("#auK"),cs?"Dernière étape":"Gratuit · sans publicité");
+  setT($("#auT"),cs?"Active la sauvegarde":"Retrouve ton carnet partout");
+  setT($("#auSub"),cs? (acct.name?"Tu es connecté en tant que "+acct.name+". ":"Tu es connecté. ")+"Donne ton accord pour enregistrer ton carnet dans ton compte : rien n'y est écrit avant."
+    : "Crée ton compte ou connecte-toi : c'est le même bouton. Ton plan et ton suivi te suivent sur tous tes appareils.");
+  $("#auProvs").innerHTML= cs? `<button class="au-prov" type="button" data-acc="consent-ok"><span>Accepter et activer la sauvegarde</span></button><button class="au-prov" type="button" data-acc="consent-no"><span>Refuser et me déconnecter</span></button>`
+    : A.providers.map(p=>`<button class="au-prov" type="button" data-acc="prov" data-prov="${esc(p.id)}">${PROV_ICON[p.id]||""}<span>Continuer avec ${esc(p.label)}</span></button>`).join("");
+  setT($("#auLater"),cs?"Plus tard":"Continuer sans compte");
+  AU_BOX.forEach(q=>{ $(q).checked=false; }); $("#accMsg").innerHTML=""; auBusy=false; auSync();
+  authEl.hidden=false; wrapEl.inert=true; homeEl.inert=true; wizEl.inert=true; document.documentElement.style.overflow="hidden"; authEl.scrollTop=0;
+  try{ $("#auT").focus({preventScroll:true}); }catch(e){}
+}
+function closeAuth(){ if(authEl.hidden) return; authEl.hidden=true; wrapEl.inert=false; homeEl.inert=false; wizEl.inert=false;
+  if(!sheetEl&&!timerEl&&wizEl.hidden) document.documentElement.style.overflow="";
+  const o=auOpener; auOpener=null; if(o&&document.contains(o)&&o.getClientRects().length) o.focus({preventScroll:true}); }
+authEl.addEventListener("change",e=>{ if(e.target&&e.target.type==="checkbox") auSync(); });
+authEl.addEventListener("keydown",e=>{ if(e.key==="Escape"&&!auBusy){ e.preventDefault(); closeAuth(); } else if(e.key==="Tab") trapTab(e,authEl); });
+$("#auClose").addEventListener("click",()=>{ if(!auBusy) closeAuth(); });
+$("#auLater").addEventListener("click",()=>{ if(!auBusy) closeAuth(); });
+// retour arrière depuis la page du fournisseur (cache de navigation) : boutons rendus de nouveau utilisables
+window.addEventListener("pageshow",e=>{ if(e.persisted&&!authEl.hidden){ auBusy=false; openAuth(authEl.dataset.mode,auOpener); } });
+authEl.addEventListener("click",async e=>{ const b=e.target.closest&&e.target.closest("[data-acc]"); if(!b||auBusy) return; const k=b.dataset.acc, msg=t=>{ $("#accMsg").innerHTML=t; };
+  if(k==="consent-no"){ auBusy=true; b.disabled=true; await signOutNow(false); auBusy=false; closeAuth(); return; }
+  if(!auReady()){ msg(`<div class="alert warn" role="alert">Coche les trois cases pour continuer : ton âge (15 ans au moins), les CGU et la politique de confidentialité, et ton consentement pour tes données de santé.</div>`); const f=AU_BOX.map(q=>$(q)).find(x=>!x.checked); if(f) f.focus(); return; }
+  const A=window.CarnetAuth, lab=b.querySelector("span")||b, old=lab.textContent, all=[...authEl.querySelectorAll("[data-acc]")];
+  auBusy=true; all.forEach(x=>{ x.disabled=true; }); b.setAttribute("aria-busy","true");
+  setT(lab,k==="prov"? "Redirection vers "+((A.providers.find(p=>p.id===b.dataset.prov)||{}).label||"le fournisseur")+"…" : "Enregistrement…");
+  let gone=false;
+  try{
+    if(k==="prov"){ await A.signIn(b.dataset.prov,consentRecord()); gone=true; setTimeout(()=>{ if(auBusy){ auBusy=false; all.forEach(x=>{ x.disabled=false; }); b.removeAttribute("aria-busy"); setT(lab,old); } },8000); }
+    else { await A.saveConsent(consentRecord()); auBusy=false; closeAuth(); acct.st="pending"; renderAcct(); await initAccount(); toast("Sauvegarde dans ton compte activée."); return; }
+  }catch(err){ msg(`<div class="alert warn" role="alert">${k==="prov"?"Impossible de lancer la connexion pour l'instant. Réessaie dans un instant.":"Impossible d'enregistrer ton accord pour l'instant. Réessaie dans un instant."}</div>`); }
+  if(!gone){ auBusy=false; all.forEach(x=>{ x.disabled=false; }); b.removeAttribute("aria-busy"); setT(lab,old); }
+});
+
 $("#profileForm").addEventListener("submit",e=>e.preventDefault());
 let local=loadLocal();
 $(".wrap").dataset.tab="semaine";
@@ -3409,7 +3462,7 @@ async function initAccount(){
     try{ acct.name= user.me? nameOf(await user.me()) : ""; }catch(e){ acct.name=""; }
     if(!c.consent){   // pas d'accord enregistré pour ce compte : rien n'est écrit tant qu'il n'est pas donné
       let ok=false; const p=A.takePendingConsent(); if(p){ try{ ok=await A.saveConsent(p); }catch(e){} }
-      if(!ok){ dbRef=null; noAccount=true; acct.st="consent"; setStore(localStatus()); renderAcct(); if(!sheetEl) openAccount(avBtn()); return; } }
+      if(!ok){ dbRef=null; noAccount=true; acct.st="consent"; setStore(localStatus()); renderAcct(); if(!sheetEl&&authEl.hidden&&wizEl.hidden) openAuth("consent",avBtn()); return; } }
     const ref=db.doc("carnet"); acct.uid=String(uid);
     const snap=await ref.get();   // la référence n'est gardée qu'après une lecture réussie : jamais d'écriture à l'aveugle
     const d=snap.exists? (snap.data()||{}) : null; lastRemote=d;
@@ -3432,9 +3485,10 @@ async function initAccount(){
       const log=dropDeleted(cleanLog([...(local&&!local.isExample?cleanLog(local.log):[]),...cleanLog(d.log)]),del);
       // séances cochées : réunies (celles de cet appareil l'emportent), dernière version vue : la plus récente des deux
       const lo=local&&!local.isExample, done=mergeStamped(d.done,lo?local.done:{},cleanDone), moves=mergeStamped(d.moves,lo?local.moves:{},cleanMoves), seen=Math.max(+d.seen||0,+(local&&local.seen)||0);
-      const ok=safeStart({...x14Merge(d,lo?local:null),profile:d.profile,isExample:d.isExample,log,week:d.week,appliedByDate:d.appliedByDate,deleted:del,moves,done,seen,eid:ep});
+      const mp= lo&&!d.isExample? mergeProfile(d.profile,d.pAt,local.profile,local.pAt) : {profile:d.profile,pAt:cleanPAt(d.pAt)}, pmerged=JSON.stringify(mp.profile)!==JSON.stringify(d.profile);
+      const ok=safeStart({...x14Merge(d,lo?local:null),profile:mp.profile,pAt:mp.pAt,profileAt:Math.max(+d.profileAt||0,pmerged?+(local&&local.profileAt)||0:0),isExample:d.isExample,log,week:d.week,appliedByDate:d.appliedByDate,deleted:del,moves,done,seen,eid:ep});
       const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
-      if(ok){ persistLocal(); if(log.length!==cleanLog(d.log).length||Object.keys(del).length!==Object.keys(cleanDeleted(d.deleted)).length||!same(done,cleanDone(d.done))||!same(moves,cleanMoves(d.moves))||!same(cleanFeel(d.feel),state.feel)||!same(cleanActs(d.acts),state.acts)||!same(cleanRhr(d.rhr),state.rhr)) flush(); setStore(ACCOUNT_OK); }
+      if(ok){ persistLocal(); if(pmerged||log.length!==cleanLog(d.log).length||Object.keys(del).length!==Object.keys(cleanDeleted(d.deleted)).length||!same(done,cleanDone(d.done))||!same(moves,cleanMoves(d.moves))||!same(cleanFeel(d.feel),state.feel)||!same(cleanActs(d.acts),state.acts)||!same(cleanRhr(d.rhr),state.rhr)) flush(); setStore(ACCOUNT_OK); }
       else setStore("données du compte illisibles, rien n'a été écrasé.");
     }else if(local && !local.isExample){
       if(remoteOk){ state.deleted=del; state.log=dropDeleted(cleanLog([...cleanLog(d.log),...state.log]),del); state.done=mergeStamped(d.done,state.done,cleanDone); state.moves=mergeStamped(d.moves,state.moves,cleanMoves); Object.assign(state,x14Merge(d,state)); state.seen=Math.max(+state.seen||0,Math.min(APP_V,+d.seen||0)); recompute(); persistLocal(); }

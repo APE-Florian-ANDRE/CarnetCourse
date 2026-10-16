@@ -80,7 +80,7 @@
     <form class="logform" id="logForm">
       <div class="field"><label for="lgDate">Date</label><input type="date" id="lgDate" required aria-describedby="lgDateHint"><span class="hint" id="lgDateHint">Aujourd'hui ou une date passée.</span></div>
       <div class="field"><label for="lgPoids">Poids moyen (kg)</label><input type="text" inputmode="decimal" id="lgPoids" required placeholder="ex. 81,4" aria-describedby="lgPoidsHint"><span class="hint" id="lgPoidsHint">Entre 35 et 250 kg.</span></div>
-      <div class="field"><label for="lgSommeil">Sommeil moyen (h)</label><input type="number" id="lgSommeil" step="0.5" min="3" max="12" value="7.5"></div>
+      <div class="field"><label for="lgSommeil">Sommeil moyen (h)</label><input type="text" inputmode="decimal" id="lgSommeil" min="3" max="12" value="7,5"></div>
       <div class="field"><label for="lgFatigue">Fatigue (1 à 5)</label><select id="lgFatigue"><option value="1">1 · en pleine forme</option><option value="2" selected>2 · normale</option><option value="3">3 · un peu lourd</option><option value="4">4 · fatigué</option><option value="5">5 · épuisé</option></select></div>
       <div class="field"><label for="lgFaites">Séances faites</label><input type="number" id="lgFaites" min="0" max="7" value="4" inputmode="numeric"></div>
       <div class="field"><label for="lgPrevues">Séances prévues</label><input type="number" id="lgPrevues" min="1" max="7" value="4" inputmode="numeric"></div>
@@ -138,10 +138,10 @@
         <div class="field"><label for="activite">Activité hors sport</label>
           <select id="activite" name="activite"><option value="1.25">Assis la plupart du temps</option><option value="1.4">Un peu actif (marche, debout par moments)</option><option value="1.55">Métier physique ou très actif</option></select></div>
         <div class="field" data-sp="course trail vtt forme"><label for="fcmax">FC max (bpm) · optionnel</label><input id="fcmax" name="fcmax" type="number" min="140" max="220" placeholder="ex. 188" aria-describedby="fcmaxHint"><span class="hint" id="fcmaxHint">Mesurée sur un effort maximal de préférence, les formules par l'âge se trompent souvent de 10 bpm.</span></div>
-        <div class="field" data-sp="vtt forme" hidden><label for="hSem">Heures de sport par semaine aujourd'hui</label><input id="hSem" name="hSem" type="number" min="0" max="25" step="0.5" inputmode="decimal" placeholder="ex. 4" aria-describedby="hSemHint"><span class="hint" id="hSemHint">Vide ou 0 : le plan démarre prudemment selon ton niveau, puis monte de 6 % par semaine au plus.</span></div>
+        <div class="field" data-sp="vtt forme" hidden><label for="hSem">Heures de sport par semaine aujourd'hui</label><input id="hSem" name="hSem" type="text" inputmode="decimal" min="0" max="25" placeholder="ex. 4" aria-describedby="hSemHint"><span class="hint" id="hSemHint">Vide ou 0 : le plan démarre prudemment selon ton niveau, puis monte de 6 % par semaine au plus.</span></div>
         <div class="row2" data-sp="course trail">
           <div class="field"><label for="volume">Km par semaine aujourd'hui</label><input id="volume" name="volume" type="number" min="0" max="200"></div>
-          <div class="field"><label for="longest">Plus longue sortie du mois (km)</label><input id="longest" name="longest" type="number" step="0.5" min="0" max="60"></div>
+          <div class="field"><label for="longest">Plus longue sortie du mois (km)</label><input id="longest" name="longest" type="text" inputmode="decimal" min="0" max="60" placeholder="ex. 12,5"></div>
         </div>
         <div class="field" data-sp="course trail"><label for="ref">Ta référence de vitesse · optionnel</label>
           <div class="row2"><select id="ref" name="ref" aria-describedby="vmaHint"><option value="none">Aucune</option><option value="vma">VMA connue (km/h)</option><option value="5">Chrono 5 km (mm:ss)</option><option value="10">Chrono 10 km (mm:ss ou h:mm:ss)</option></select>
@@ -258,7 +258,7 @@
 <main class="home" id="home" aria-labelledby="homeT" hidden>
   <div class="htop">
     <span class="brand"><i aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="14" cy="4" r="2"/><path d="M8 21l3-6 3 2v5M6 12l3-4 4 1 3 4h3M11 15l-1-5"/></svg></i>Carnet de course</span>
-    <span class="hbar"><button class="btn ghost sm" type="button" data-act="open">Ouvrir l'appli</button><button class="av js-av" type="button" data-act="acct" aria-haspopup="dialog" aria-label="Compte"><span class="av-i" aria-hidden="true"></span><svg class="av-p" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c1-4 4-6 7.5-6s6.5 2 7.5 6"/></svg><span class="av-d" aria-hidden="true"></span></button></span>
+    <span class="hbar"><button class="au-login js-login" type="button" data-act="login" hidden>Se connecter</button><button class="btn ghost sm" type="button" data-act="open">Ouvrir l'appli</button><button class="av js-av" type="button" data-act="acct" aria-haspopup="dialog" aria-label="Compte"><span class="av-i" aria-hidden="true"></span><svg class="av-p" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c1-4 4-6 7.5-6s6.5 2 7.5 6"/></svg><span class="av-d" aria-hidden="true"></span></button></span>
   </div>
   <section class="hero">
     <h1 id="homeT" tabindex="-1">Ton plan de course, calé sur ta vie</h1>
@@ -321,9 +321,9 @@
       <div class="field" data-sp="course trail"><label for="wzObjectif">Objectif</label><select id="wzObjectif"><option value="forme">Forme et perte de poids</option><option value="5">5 km</option><option value="10">10 km</option><option value="21">Semi-marathon</option><option value="42">Marathon</option></select></div>
       <div class="field" data-sp="vtt force" hidden><label for="wzSObj" id="wzSObjL">Orientation de l'entraînement</label><select id="wzSObj"></select></div>
       <div class="field" id="wzRaceF"><label for="wzRace" id="wzRaceL">Date de ta course · optionnel</label><input id="wzRace" type="date" aria-describedby="wzRaceH"><span class="hint" id="wzRaceH">Le plan se cale dessus : la dernière semaine est celle de ta course.</span></div>
-      <div class="row2" data-sp="course trail"><div class="field"><label for="wzVolume">Km par semaine aujourd'hui</label><input id="wzVolume" type="number" inputmode="numeric" min="0" max="200" aria-describedby="wzVolH" autocomplete="off"></div><div class="field"><label for="wzLongest">Plus longue sortie du mois (km)</label><input id="wzLongest" type="number" inputmode="decimal" step="0.5" min="0" max="60" autocomplete="off"></div></div>
+      <div class="row2" data-sp="course trail"><div class="field"><label for="wzVolume">Km par semaine aujourd'hui</label><input id="wzVolume" type="number" inputmode="numeric" min="0" max="200" aria-describedby="wzVolH" autocomplete="off"></div><div class="field"><label for="wzLongest">Plus longue sortie du mois (km)</label><input id="wzLongest" type="text" inputmode="decimal" min="0" max="60" placeholder="ex. 12,5" autocomplete="off"></div></div>
       <span class="hint" id="wzVolH" data-sp="course trail">Mets 0 si tu ne cours pas encore.</span>
-      <div class="field" data-sp="vtt forme" hidden><label for="wzHSem">Heures de sport par semaine aujourd'hui</label><input id="wzHSem" type="number" inputmode="decimal" min="0" max="25" step="0.5" placeholder="ex. 4" autocomplete="off"><span class="hint">Laisse vide si tu ne sais pas : le plan démarre prudemment.</span></div>
+      <div class="field" data-sp="vtt forme" hidden><label for="wzHSem">Heures de sport par semaine aujourd'hui</label><input id="wzHSem" type="text" inputmode="decimal" min="0" max="25" placeholder="ex. 4" autocomplete="off"><span class="hint">Laisse vide si tu ne sais pas : le plan démarre prudemment.</span></div>
     </section>
     <section class="wz-step" data-s="3" hidden>
       <p class="wz-k">Étape 3 sur 5</p><h2 id="wzT3" tabindex="-1">Ta semaine type</h2>
@@ -353,6 +353,43 @@
     <div class="alert bad" id="wzErr" role="alert" hidden></div>
   </form>
   <div class="wz-foot"><button class="btn" type="button" id="wzNext">Continuer</button></div>
+</div>
+<!-- connexion / création de compte : plein écran, même bouton pour les deux (OAuth) -->
+<div class="auth" id="auth" role="dialog" aria-modal="true" aria-labelledby="auT" data-mode="login" hidden>
+  <div class="au-main">
+    <div class="au-top">
+      <span class="brand"><i aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="14" cy="4" r="2"/><path d="M8 21l3-6 3 2v5M6 12l3-4 4 1 3 4h3M11 15l-1-5"/></svg></i>Carnet de course</span>
+      <button class="au-x" type="button" id="auClose" aria-label="Fermer"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="au-box">
+      <p class="au-k" id="auK">Gratuit · sans publicité</p>
+      <h2 id="auT" tabindex="-1">Retrouve ton carnet partout</h2>
+      <p class="au-sub" id="auSub">Crée ton compte ou connecte-toi : c'est le même bouton. Ton plan et ton suivi te suivent sur tous tes appareils.</p>
+      <fieldset class="au-cons" id="auCons">
+        <legend>Avant de continuer</legend>
+        <label class="au-chk"><input type="checkbox" id="accAge"><span>J'ai au moins 15 ans</span></label>
+        <label class="au-chk"><input type="checkbox" id="accTerms"><span>J'accepte les <a href="cgu.html" target="_blank" rel="noopener">CGU</a> et la <a href="confidentialite.html" target="_blank" rel="noopener">politique de confidentialité</a></span></label>
+        <label class="au-chk"><input type="checkbox" id="accHealth" aria-describedby="auHealthD"><span>J'accepte que mes <b>données de santé</b> soient enregistrées dans mon compte</span></label>
+        <details class="au-more"><summary>Quelles données ?</summary><p id="auHealthD">Âge, taille, poids, suivi, ressenti après séance, activités et pesées importées d'Apple Santé ou de Polar Flow, fréquence cardiaque de repos : seulement pour synchroniser ton carnet entre tes appareils. Tu peux retirer ce consentement à tout moment depuis l'écran Compte.</p></details>
+      </fieldset>
+      <div class="au-provs" id="auProvs"></div>
+      <p class="au-hint" id="auHint" aria-live="polite">Coche les 3 cases pour continuer.</p>
+      <div class="au-msg" id="accMsg" role="status" aria-live="polite"></div>
+      <button class="au-link" type="button" id="auLater">Continuer sans compte</button>
+    </div>
+    <p class="au-foot">Sans compte, tout fonctionne : tes données restent sur cet appareil.</p>
+  </div>
+  <aside class="au-side" aria-label="Ce que t'apporte un compte">
+    <div class="au-card">
+      <p class="au-sk">Avec un compte</p>
+      <ul class="au-list">
+        <li><span class="au-i" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="13" height="9" rx="2"/><rect x="13" y="9" width="8" height="12" rx="2"/><path d="M7 17h4"/></svg></span><div><b>Sur tous tes appareils</b><span>Téléphone, ordinateur : ton plan, tes coches et ton suivi sont à jour partout.</span></div></li>
+        <li><span class="au-i" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span><div><b>Toi seul y as accès</b><span>Tes données sont protégées par des règles d'accès, hébergées dans l'UE.</span></div></li>
+        <li><span class="au-i" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 4v4h4"/></svg></span><div><b>Rien n'est perdu</b><span>Ce que tu as déjà rempli sur cet appareil est repris dans ton compte.</span></div></li>
+        <li><span class="au-i" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M7 12h10M10 18h4"/></svg></span><div><b>Ni pub, ni traceur</b><span>Pas de mot de passe à retenir. Exporte ou supprime tout quand tu veux.</span></div></li>
+      </ul>
+    </div>
+  </aside>
 </div>
 <div id="toasts" aria-live="polite"></div>
 <p class="sr-only" id="srLive" aria-live="polite"></p>

@@ -17,7 +17,7 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
 
  // F0 : non configuré => invité, aucune connexion proposée
  { const S0=await L.serve(); const db=L.makeDb(); const p=await mk(S0,db,{seed:data()}); await acct(p);
-   ok(await p.evaluate(()=>!document.querySelector("[data-prov]")&&!document.querySelector("#accAge")),"F0 sans configuration : aucun bouton de connexion");
+   ok(await p.evaluate(()=>!document.querySelector("[data-prov]")&&!document.querySelector('[data-acc="login"]')&&document.querySelector(".js-login").hidden),"F0 sans configuration : aucun bouton de connexion");
    ok((await p.textContent(".sheet .acc-st")).includes("n'est pas activée"),"F0 message honnête");
    await csp(p); await p.ctx.close(); S0.close(); }
  // F9 : clé service_role / URL http refusées
@@ -27,6 +27,8 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
    await p.ctx.close(); Sx.close(); }
  // F1 : invité configuré => cases + fournisseurs
  { const db=L.makeDb(); const p=await mk(S,db,{seed:data()}); await acct(p);
+   ok(await p.evaluate(()=>!document.querySelector(".js-login").hidden),"F1 bouton « Se connecter »"); await p.click('.sheet [data-acc="login"]'); await p.waitForTimeout(300);
+   ok(await p.evaluate(()=>!document.getElementById("auth").hidden&&document.activeElement.id==="auT"),"F1 écran de connexion ouvert, titre focalisé");
    const labels=await p.$$eval("[data-prov]",e=>e.map(x=>x.textContent)); ok(labels.join("|")==="Continuer avec Google|Continuer avec Microsoft|Continuer avec GitHub","F1 boutons fournisseurs",labels);
    ok(await p.evaluate(()=>["#accAge","#accTerms","#accHealth"].every(q=>document.querySelector(q)&&!document.querySelector(q).checked)),"F1 trois cases non précochées");
    await p.click("[data-prov=google]"); await p.waitForTimeout(200); ok((await p.textContent("#accMsg")).includes("Coche les trois cases"),"F1 refus sans consentement");
@@ -49,7 +51,7 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
    await csp(p); await p.ctx.close(); }
  // F3 : session sans accord => rien n'est écrit tant que non accepté
  { const db=L.makeDb(); const p=await mk(S,db,{session:L.SESSION(),seed:data()}); await p.waitForTimeout(900);
-   ok(await p.evaluate(()=>!!document.querySelector('.sheet[data-kind="acct"] [data-acc="consent-ok"]')),"F3 feuille d'accord ouverte automatiquement");
+   ok(await p.evaluate(()=>!document.getElementById("auth").hidden&&!!document.querySelector('#auth [data-acc="consent-ok"]')),"F3 écran d'accord ouvert automatiquement");
    ok(db.rows.size===0,"F3 aucune écriture sans accord",[...db.rows.keys()]);
    await p.click("[data-acc=consent-ok]"); await p.waitForTimeout(200); ok((await p.textContent("#accMsg")).includes("Coche"),"F3 accord refusé sans cases");
    await p.check("#accAge"); await p.check("#accTerms"); await p.check("#accHealth"); await p.click("[data-acc=consent-ok]"); await p.waitForTimeout(1500);
@@ -106,7 +108,7 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
  { const db=L.makeDb(); const A=await mk(S,db,{session:L.SESSION(),seed:data(),pend:PEND}); await A.waitForTimeout(1200); const B=await mk(S,db,{session:L.SESSION(),seed:data()}); await B.waitForTimeout(1200);
    await acct(A); await A.click("[data-acc=withdraw]"); await A.waitForTimeout(250); await A.click("#wdGo"); await A.waitForTimeout(800); ok(!db.rows.has("u-1"),"M1 ligne supprimée par le retrait");
    await B.evaluate(()=>{ const e=document.querySelector("#age"); e.value=41; e.dispatchEvent(new Event("change",{bubbles:true})); }); await B.waitForTimeout(2500);
-   ok(!db.rows.has("u-1"),"M1 l'autre appareil ne recrée pas la ligne"); ok(await B.evaluate(()=>!!document.querySelector('.sheet [data-acc="consent-ok"]')),"M1 l'autre appareil passe en « accord à redonner »");
+   ok(!db.rows.has("u-1"),"M1 l'autre appareil ne recrée pas la ligne"); ok(await B.evaluate(()=>!!document.querySelector('#auth:not([hidden]) [data-acc="consent-ok"]')),"M1 l'autre appareil passe en « accord à redonner »");
    ok(await B.evaluate(()=>!!localStorage.getItem("carnet-course.v1")),"M1 ses données locales sont gardées"); await csp(A); await csp(B); await A.ctx.close(); await B.ctx.close(); }
  // M2 : données locales d'un autre compte : rien n'est fusionné ni écrit
  { const db=L.makeDb(); db.rows.set("u-Y",{user_id:"u-Y",doc:{profile:{...prof,age:28,sexe:"F"},isExample:false,log:[],week:1,savedAt:5,profileAt:5,seen:13},consent:JSON.parse(PEND)});
