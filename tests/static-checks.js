@@ -27,7 +27,14 @@ ok(!/\*/.test(conn||""),"CSP connect-src sans joker");
 if(su){ const left=(cfg0.match(/À COMPLÉTER/g)||[]).length; ok(left===0,"SUPABASE_URL renseignée : plus aucun champ « À COMPLÉTER » dans config.js",left); } else console.log("OK   (SUPABASE_URL vide : mode invité, contrôle des champs légaux non bloquant)");
 // aucun secret
 const all=[]; (function walk(d){ for(const e of fs.readdirSync(d,{withFileTypes:true})){ if(["node_modules",".git"].includes(e.name)) continue; const p=path.join(d,e.name); e.isDirectory()? walk(p) : all.push(p); } })(REPO);
-const leak=all.filter(p=>!/\.(png|jpg)$/.test(p)).filter(p=>{ const s=fs.readFileSync(p,"utf8"); return /service_role["']?\s*[:=]\s*["'][\w-]{20,}|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}|sb_secret_|-----BEGIN/.test(s) && !p.endsWith("lib.js") && !p.endsWith("static-checks.js"); }); ok(leak.length===0,"aucun secret ni jeton dans le dépôt",leak);
+// un JWT "anon" (rôle public, fait pour être publié - cf. auth.js validConfig()) n'est pas une fuite ; tout le reste (service_role, sb_secret_, clé privée, JWT d'un autre rôle) l'est
+function jwtAnonOnly(s){ const re=/eyJ[A-Za-z0-9_-]{20,}\.([A-Za-z0-9_-]{20,})\.[A-Za-z0-9_-]{10,}/g; let m, any=false;
+  while((m=re.exec(s))){ any=true; let role; try{ role=JSON.parse(Buffer.from(m[1].replace(/-/g,"+").replace(/_/g,"/"),"base64").toString("utf8")).role; }catch(e){ return false; } if(role!=="anon") return false; }
+  return any; }
+const leak=all.filter(p=>!/\.(png|jpg)$/.test(p)).filter(p=>{ const s=fs.readFileSync(p,"utf8"); if(p.endsWith("lib.js")||p.endsWith("static-checks.js")) return false;
+  if(/service_role["']?\s*[:=]\s*["'][\w-]{20,}|sb_secret_|-----BEGIN/.test(s)) return true;
+  if(/eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}/.test(s)) return !jwtAnonOnly(s);
+  return false; }); ok(leak.length===0,"aucun secret ni jeton dans le dépôt",leak);
 const cfg=fs.readFileSync(R+"/config.js","utf8"); ok(!su||/^https:\/\/[a-z0-9.-]+$/i.test(su),"SUPABASE_URL : https, sans chemin"); ok(!/service_role["']?\s*[:=]/i.test(cfg)&&!/SUPABASE_JS_SRI/.test(cfg),"config.js : pas de clé service_role");
 ok(!/eval\(|new Function|document\.write|innerHTML\s*=\s*[^`'"]*location/.test(fs.readFileSync(R+"/app.js","utf8")+auth),"pas d'eval / new Function / document.write");
 ok(/target="_blank"(?![^>]*noopener)/.test(fs.readFileSync(R+"/app.js","utf8")+idx)===false,"liens target=_blank avec rel=noopener");
@@ -65,6 +72,6 @@ ok(/sb-carnet-auth-code-verifier/.test(fs.readFileSync(R+"/cookies.html","utf8")
   const cfgP=tmp+"/public/config.js", orig=fs.readFileSync(cfgP,"utf8"); const run=u=>{ fs.writeFileSync(cfgP,orig.replace(/CHAT_WEBHOOK_URL:\s*"[^"]*"/,'CHAT_WEBHOOK_URL: "'+u+'"')); const before=fs.readFileSync(tmp+"/vercel.json","utf8"); const r=cp.spawnSync("node",[tmp+"/tools/set-csp.js"],{encoding:"utf8"}); return {st:r.status,same:fs.readFileSync(tmp+"/vercel.json","utf8")===before,v:fs.readFileSync(tmp+"/vercel.json","utf8")}; };
   const bad=["http://n8n.example.org/webhook/x","https://*.example.org/x","https://n8n.example.org/x?a=b","https://n8n.example.org/x;script-src *","https://user:pw@n8n.example.org/x","javascript:alert(1)","https://n8n.example.org/x y"]; const bb=bad.filter(u=>{ const r=run(u); return r.st===0||!r.same; });
   ok(bb.length===0,"v15 set-csp.js refuse un CHAT_WEBHOOK_URL non https ou piégé",bb);
-  const g=run("https://n8n.example.org/webhook/carnet-coach"); ok(g.st===0&&/connect-src 'self' https:\/\/n8n\.example\.org(;|")/.test(g.v)&&!/n8n\.example\.org\/webhook/.test(g.v),"v15 set-csp.js : seule l'origine du webhook entre dans connect-src");
+  const g=run("https://n8n.example.org/webhook/carnet-coach"); ok(g.st===0&&/connect-src 'self'(?: https:\/\/[a-z0-9]+\.supabase\.co)? https:\/\/n8n\.example\.org(;|")/.test(g.v)&&!/n8n\.example\.org\/webhook/.test(g.v),"v15 set-csp.js : seule l'origine du webhook entre dans connect-src");
   fs.rmSync(tmp,{recursive:true,force:true}); }
 console.log(fails?"ECHECS "+fails:"TOUT OK"); process.exit(fails?1:0);

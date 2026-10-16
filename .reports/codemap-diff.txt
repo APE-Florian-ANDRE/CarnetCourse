@@ -1,0 +1,34 @@
+Codemap scan — 2026-10-16
+
+Status: FIRST RUN. No prior docs/CODEMAPS/ existed, so this is an initial generation, not a diff.
+Files created:
+  docs/CODEMAPS/architecture.md
+  docs/CODEMAPS/backend.md
+  docs/CODEMAPS/frontend.md
+  docs/CODEMAPS/data.md
+  docs/CODEMAPS/dependencies.md
+
+Files scanned: 44 (public/*.html,*.js,*.css; supabase/schema.sql; integrations/n8n/**; tools/*.js; tests/*.js; vercel.json)
+Root package.json: none found — confirmed zero npm dependencies at the top level.
+
+Architecture summary:
+- Static, no-build, vanilla-JS site (public/) with local-first storage (localStorage), optional Supabase
+  account sync (one table: public.user_data, RLS-enforced), and an optional n8n+Claude "Coach" webhook,
+  all gated by presence of config values in public/config.js.
+- Deployed on Vercel; buildCommand runs tests/static-checks.js as a deploy gate (CSP consistency, no
+  inline scripts/secrets, legal links present).
+
+New/notable integrations detected:
+- integrations/n8n/: generates a self-contained n8n workflow (workflow-coach.json) that proxies chat to
+  Anthropic's Claude API with JWT verification against Supabase, a per-user rate limit, and a safety-phrase
+  filter duplicated from public/coach.js (single source: build-workflow.js splices the client regex block
+  into the generated server-side Code nodes).
+- integrations/n8n/mcp-server/: read-only MCP stdio server exposing 3 tools (lire_profil, lire_suivi,
+  lire_ressenti) scoped by a caller-supplied Supabase JWT; has its own package.json, separate from the
+  rest of the repo.
+
+Architecture changes vs. baseline: n/a (no baseline existed).
+
+Staleness warnings: n/a (nothing to compare against; recommend re-running this command after the next
+significant feature/refactor pass, or whenever public/app.js, supabase/schema.sql, or integrations/n8n/
+change materially).
