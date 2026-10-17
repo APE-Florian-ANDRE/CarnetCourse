@@ -1,0 +1,28 @@
+/* Bandeau de consentement : compact, en bas d'écran, Accepter et Refuser identiques ; clair / sombre (3 blocs de variables) */
+:root{--ck-bg:#FFFFFF;--ck-fg:#1C1C1E;--ck-line:rgba(60,60,67,.25);--ck-link:#0058B8;--ck-btn:#0066D6;--ck-btn-fg:#FFFFFF;--ck-pad:150px}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ck-bg:#2C2C2E;--ck-fg:#FFFFFF;--ck-line:rgba(235,235,245,.22);--ck-link:#7CB8FF;--ck-btn:#0A84FF;--ck-btn-fg:#000000}}
+:root[data-theme="dark"]{--ck-bg:#2C2C2E;--ck-fg:#FFFFFF;--ck-line:rgba(235,235,245,.22);--ck-link:#7CB8FF;--ck-btn:#0A84FF;--ck-btn-fg:#000000}
+@media (min-width:640px){:root{--ck-pad:140px}}
+.ck{position:fixed;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:34;max-width:760px;margin:0 auto;max-height:60vh;overflow:auto;background:var(--ck-bg);color:var(--ck-fg);border:1px solid var(--ck-line);border-radius:16px;box-shadow:0 8px 28px rgba(0,0,0,.22);font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;letter-spacing:normal;text-align:left}
+.ck[hidden]{display:none}
+.ck-in{padding:12px 14px;display:grid;gap:10px}
+.ck-t{margin:0;color:var(--ck-fg)}
+.ck a,.ck-lnk{color:var(--ck-link);text-decoration:underline;text-underline-offset:2px}
+.ck-b{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ck-btn{flex:1 1 0;min-width:0;min-height:44px;padding:0 16px;border:0;border-radius:12px;background:var(--ck-btn);color:var(--ck-btn-fg);font:inherit;font-weight:600;cursor:pointer}
+.ck-b .ck-btn{max-width:220px}
+.ck-lnk{background:none;border:0;padding:0 4px;min-height:44px;font:inherit;cursor:pointer}
+.ck-p[hidden]{display:none}
+.ck-p{display:grid;gap:8px;padding:8px 0;border-top:1px solid var(--ck-line);border-bottom:1px solid var(--ck-line)}
+.ck-chk{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+.ck-chk input{width:22px;height:22px;flex:none;margin:0;accent-color:var(--ck-btn)}
+.ck-save{justify-self:start;flex:none}
+.ck button:focus-visible,.ck a:focus-visible,.ck input:focus-visible,[data-consent-open]:focus-visible{outline:3px solid var(--ck-link);outline-offset:2px}
+@media (max-width:639px){.ck{font-size:14px}.ck-in{padding:10px 12px;gap:8px}.ck-btn{padding:0 10px}}
+@media (max-width:360px){:root{--ck-pad:208px}.ck-lnk{flex-basis:100%;text-align:center;min-height:32px}}
+/* tant que le bandeau est visible, la fin de page reste atteignable au-dessus de lui */
+html.ck-on body{padding-bottom:calc(var(--ck-pad) + env(safe-area-inset-bottom,0px))}
+/* lien permanent « Gérer les cookies » dans les pieds de page */
+.legalnav [data-consent-open]{background:none;border:0;padding:8px 0;min-height:44px;display:inline-flex;align-items:center;font:inherit;color:var(--link,var(--accent-text,#0058B8));text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.hfoot .legalnav [data-consent-open],.wrap .legalnav [data-consent-open]{padding:4px 0;min-height:24px}
+button.btn[data-consent-open]{border:0;font:inherit;font-weight:600;cursor:pointer}

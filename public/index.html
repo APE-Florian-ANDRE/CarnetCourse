@@ -10,6 +10,7 @@
 <title>Carnet de course</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="consent.css">
 </head>
 <body>
 
@@ -253,7 +254,7 @@
   </section>
 
   <footer>Les calories sont des estimations (formule de Mifflin-St Jeor, environ 0,9 kcal par kg et par km de course ; pour les autres sports, une dépense par heure d'après les valeurs MET du Compendium des activités physiques). Elles servent de point de départ : c'est la courbe de poids de l'onglet Suivi qui dit s'il faut ajuster. Si tu as un antécédent médical, un trouble alimentaire ou une douleur qui dure, demande l'avis d'un médecin ou d'un diététicien du sport. <button class="linkbtn" type="button" data-news>Quoi de neuf</button>
-  <nav class="legalnav" aria-label="Informations légales"><a href="cgu.html" target="_blank" rel="noopener">CGU</a><a href="confidentialite.html" target="_blank" rel="noopener">Confidentialité</a><a href="cookies.html" target="_blank" rel="noopener">Stockage local</a><a href="mentions-legales.html" target="_blank" rel="noopener">Mentions légales</a><a href="contact.html" target="_blank" rel="noopener">Tes droits RGPD</a></nav></footer>
+  <nav class="legalnav" aria-label="Informations légales"><a href="cgu.html" target="_blank" rel="noopener">CGU</a><a href="confidentialite.html" target="_blank" rel="noopener">Confidentialité</a><a href="cookies.html" target="_blank" rel="noopener">Stockage local</a><a href="mentions-legales.html" target="_blank" rel="noopener">Mentions légales</a><a href="contact.html" target="_blank" rel="noopener">Tes droits RGPD</a><button type="button" data-consent-open>Gérer les cookies</button></nav></footer>
 </div>
 <main class="home" id="home" aria-labelledby="homeT" hidden>
   <div class="htop">
@@ -292,12 +293,12 @@
     <h2 id="homeS">Tes données, ta santé</h2>
     <ul class="tgrid">
       <li><b>Données privées</b><span>Elles restent sur ton appareil. Si tu te connectes, elles sont aussi enregistrées dans ton compte, protégées par des règles d'accès : toi seul peux les lire.</span></li>
-      <li><b>Ni pub, ni suivi</b><span>Aucune publicité, aucun traceur, aucune statistique. Sans connexion à un compte, rien ne quitte ton appareil. Tu peux exporter ou effacer tes données à tout moment.</span></li>
+      <li><b>Ni pub, ni revente</b><span>Aucune publicité, aucune revente de données. Mesure d'audience anonyme, sans cookie, seulement si tu l'acceptes. Sans connexion à un compte, ton carnet ne quitte pas ton appareil. Tu peux exporter ou effacer tes données à tout moment.</span></li>
       <li><b>Pas un avis médical</b><span>Les calories sont des estimations. Au moindre doute, une douleur qui dure ou un trouble alimentaire, demande l'avis d'un médecin.</span></li>
     </ul>
     <div class="cta cta2" id="homeCta2"></div>
   </section>
-  <footer class="hfoot"><nav class="legalnav" aria-label="Informations légales"><a href="cgu.html" target="_blank" rel="noopener">CGU</a><a href="confidentialite.html" target="_blank" rel="noopener">Confidentialité</a><a href="cookies.html" target="_blank" rel="noopener">Stockage local</a><a href="mentions-legales.html" target="_blank" rel="noopener">Mentions légales</a><a href="contact.html" target="_blank" rel="noopener">Tes droits RGPD</a></nav></footer>
+  <footer class="hfoot"><nav class="legalnav" aria-label="Informations légales"><a href="cgu.html" target="_blank" rel="noopener">CGU</a><a href="confidentialite.html" target="_blank" rel="noopener">Confidentialité</a><a href="cookies.html" target="_blank" rel="noopener">Stockage local</a><a href="mentions-legales.html" target="_blank" rel="noopener">Mentions légales</a><a href="contact.html" target="_blank" rel="noopener">Tes droits RGPD</a><button type="button" data-consent-open>Gérer les cookies</button></nav></footer>
 </main>
 <div class="wiz" id="wiz" role="dialog" aria-modal="true" aria-labelledby="wzT1" hidden>
   <div class="wz-top">
@@ -398,5 +399,6 @@
 <script src="auth.js"></script>
 <script src="app.js"></script>
 <script src="coach.js"></script>
+<script src="consent.js"></script>
 </body>
 </html>

@@ -11,6 +11,7 @@
 <title>Cookies et stockage local</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="legal.css">
+<link rel="stylesheet" href="consent.css">
 </head>
 <body>
 <header class="lh"><a class="back" href="./">‹ Retour au carnet</a><span class="brand">Carnet de course</span></header>
@@ -18,7 +19,9 @@
 <div class="banner" role="note"><b>Modèle à faire valider.</b> Ce texte est un modèle de départ : il doit être relu, complété et validé par l'éditeur (et, si besoin, par un juriste) avant la mise en ligne. <span id="phCount"></span></div>
 
 <h1>Cookies et stockage local</h1>
-<p class="lead">Carnet de course n'utilise <b>aucun cookie</b>, aucun traceur publicitaire, aucune mesure d'audience. Il enregistre seulement des informations <b>strictement nécessaires</b> au service que tu demandes, dans le stockage local de ton navigateur (localStorage). Elles sont exemptées de consentement (article 82 de la loi Informatique et Libertés) : il n'y a donc pas de bandeau à accepter.</p>
+<p class="lead">Carnet de course n'utilise <b>aucun cookie</b> et aucun traceur publicitaire. Il enregistre des informations <b>strictement nécessaires</b> au service que tu demandes dans le stockage local de ton navigateur (localStorage) : elles sont exemptées de consentement (article 82 de la loi Informatique et Libertés). Seule la <a href="#audience">mesure d'audience</a>, anonyme et sans cookie, demande ton accord : elle n'est activée que si tu choisis « Accepter » dans le bandeau.</p>
+<p><button type="button" class="btn" data-consent-open>Gérer mes choix (mesure d'audience)</button></p>
+<p id="ckState" aria-live="polite"></p>
 <h2>Ce qui est enregistré</h2>
 <table class="tbl"><thead><tr><th>Clé</th><th>Rôle</th><th>Durée</th></tr></thead><tbody>
 <tr><td><code>carnet-course.v1</code></td><td>Ton profil (dont le sport choisi), ton suivi, tes séances cochées et déplacées, ton ressenti après séance, les activités et mesures que tu as importées</td><td>Jusqu'à effacement</td></tr>
@@ -33,19 +36,32 @@
 <tr><td><code>carnet.consent</code></td><td>Accords donnés juste avant la connexion, le temps du retour du fournisseur (aucune donnée personnelle)</td><td>10 minutes au plus</td></tr>
 <tr><td><code>sb-carnet-auth</code></td><td>Session de connexion gérée par la bibliothèque d'authentification, <b>uniquement si tu te connectes</b>. Elle contient les jetons de connexion ainsi que <b>l'adresse e-mail et le nom fournis par ton fournisseur</b></td><td>Jusqu'à déconnexion</td></tr>
 <tr><td><code>sb-carnet-auth-code-verifier</code></td><td>Code temporaire de sécurité (PKCE) créé au début d'une connexion pour s'assurer que le retour du fournisseur t'est bien destiné. <b>Uniquement pendant la connexion</b>, supprimé dès qu'elle est terminée</td><td>Quelques minutes (supprimé à la fin de la connexion)</td></tr>
+<tr><td><code>carnet.cookies</code></td><td>Ton choix sur la mesure d'audience (accepté ou refusé, et sa date), pour ne pas te reposer la question à chaque visite</td><td>6 mois, puis la question t'est reposée</td></tr>
+<tr><td><code>va-disable</code></td><td>Seulement si tu retires ton accord alors que la mesure d'audience tournait déjà sur la page : demande au script de ne plus rien envoyer. Supprimé au chargement suivant</td><td>Jusqu'au prochain chargement</td></tr>
 <tr><td><code>carnet.owner</code></td><td>Identifiant technique (pseudonyme) du compte auquel appartiennent les données de cet appareil, pour ne jamais les mélanger avec un autre compte</td><td>Jusqu'à effacement</td></tr>
 </tbody></table>
 <p>Le carnet lui-même n'enregistre ni ton nom ni ton e-mail ; toutefois la session de connexion (<code>sb-carnet-auth</code>) les contient, tels que ton fournisseur les a transmis, tant que tu es connecté. « Me déconnecter » la supprime.</p>
+<h2 id="audience">Mesure d'audience (avec ton accord)</h2>
+<ul>
+<li><b>Outil</b> : Vercel Web Analytics, fourni par Vercel Inc. (États-Unis), l'hébergeur du site. Le script est servi par ce site lui-même (<code>/_vercel/insights/script.js</code>) et n'envoie ses mesures qu'à ce site (<code>/_vercel/insights/…</code>) : aucun autre service n'est contacté par ton navigateur.</li>
+<li><b>Finalité</b> : savoir combien de personnes visitent le carnet et quelles pages sont consultées, pour l'améliorer. Rien d'autre : ni publicité, ni profilage, ni revente.</li>
+<li><b>Sans cookie</b> : rien n'est déposé sur ton appareil pour te reconnaître. Les visites sont comptées à l'aide d'une empreinte temporaire calculée par Vercel à partir de la requête ; elle change chaque jour et n'est pas conservée au-delà de 24 heures.</li>
+<li><b>Données</b> : page visitée, site d'où tu viens, type d'appareil, navigateur et système, pays (déduit de l'adresse IP, qui n'est pas conservée). <b>Aucune donnée de ton carnet</b> (profil, poids, séances, ressenti) n'est envoyée. Les résultats ne sont consultés que sous forme <b>agrégée</b> (totaux, pourcentages).</li>
+<li><b>Durée</b> : ton choix est gardé 6 mois ; les statistiques agrégées sont conservées par Vercel selon sa politique <i>[À COMPLÉTER par l'éditeur : durée de conservation selon l'offre Vercel]</i>.</li>
+<li><b>Base légale</b> : ton <b>consentement</b> (art. 82 de la loi Informatique et Libertés et art. 6.1.a du RGPD). Refuser n'a aucune conséquence : le carnet fonctionne exactement de la même façon.</li>
+<li><b>Refuser ou changer d'avis</b> : « Refuser » dans le bandeau, ou à tout moment « Gérer les cookies » en bas de chaque page (ou le bouton ci-dessus). Après un refus ou un retrait, le script n'est plus chargé.</li></ul>
+
 <h2>Les effacer</h2>
 <ul><li>Dans l'appli : Compte, « Effacer mes données » (efface tout le stockage du carnet), ou « Me déconnecter » avec « Effacer aussi les données de cet appareil ».</li>
 <li>Dans ton navigateur : réglages du site, « Effacer les données du site ».</li></ul>
 <h2>Services de tiers</h2>
-<p>Aucun script ni contenu tiers n'est chargé : la bibliothèque d'authentification est hébergée sur ce site (version fixée) et n'est chargée que si tu es connecté. Seuls les échanges avec Supabase (si tu te connectes) et, si l'éditeur a activé le Coach et seulement après ton consentement, avec son serveur n8n sortent de ton appareil. Le fournisseur de connexion que tu choisis peut déposer ses propres cookies sur ses pages : voir sa politique.</p>
+<p>Aucun script ni contenu tiers n'est chargé : la bibliothèque d'authentification est hébergée sur ce site (version fixée) et n'est chargée que si tu es connecté ; le script de mesure d'audience est servi par ce site et n'est chargé qu'avec ton accord. Seuls les échanges avec Supabase (si tu te connectes), la mesure d'audience vers l'hébergeur (si tu l'acceptes) et, si l'éditeur a activé le Coach et seulement après ton consentement, avec son serveur n8n sortent de ton appareil. Le fournisseur de connexion que tu choisis peut déposer ses propres cookies sur ses pages : voir sa politique.</p>
 <p>En savoir plus : <a href="confidentialite.html">politique de confidentialité</a>.</p>
 
 </main>
-<footer class="lf"><nav class="legalnav" aria-label="Informations légales"><a href="cgu.html">CGU</a><a href="confidentialite.html">Confidentialité</a><a href="cookies.html">Stockage local</a><a href="mentions-legales.html">Mentions légales</a><a href="contact.html">Tes droits RGPD</a></nav><p>Dernière mise à jour : 10 octobre 2026 · <span class="nw">Version 2026-10-10</span></p></footer>
+<footer class="lf"><nav class="legalnav" aria-label="Informations légales"><a href="cgu.html">CGU</a><a href="confidentialite.html">Confidentialité</a><a href="cookies.html">Stockage local</a><a href="mentions-legales.html">Mentions légales</a><a href="contact.html">Tes droits RGPD</a><button type="button" data-consent-open>Gérer les cookies</button></nav><p>Dernière mise à jour : 10 octobre 2026 · <span class="nw">Version 2026-10-10</span></p></footer>
 <script src="config.js"></script>
 <script src="legal.js"></script>
+<script src="consent.js"></script>
 </body>
 </html>

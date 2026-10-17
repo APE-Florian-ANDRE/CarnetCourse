@@ -11,6 +11,7 @@
 <title>Politique de confidentialité</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="legal.css">
+<link rel="stylesheet" href="consent.css">
 </head>
 <body>
 <header class="lh"><a class="back" href="./">‹ Retour au carnet</a><span class="brand">Carnet de course</span></header>
@@ -43,7 +44,7 @@
 <tr><td>Consentement</td><td>Versions des CGU et de cette politique acceptées, accord pour les données de santé, confirmation de l'âge, date et heure</td><td>Toi</td></tr>
 <tr><td>Données techniques</td><td>Adresse IP, date, type de navigateur, journaux de sécurité de l'hébergeur et de Supabase</td><td>Automatique</td></tr>
 </tbody></table>
-<p>Le carnet ne conserve <b>ni ton nom, ni ton e-mail</b> dans le stockage local ni dans ses données : ils ne sont affichés qu'en mémoire pendant la session. Aucun cookie publicitaire, aucun outil de mesure d'audience, aucun traceur.</p>
+<p>Le carnet ne conserve <b>ni ton nom, ni ton e-mail</b> dans le stockage local ni dans ses données : ils ne sont affichés qu'en mémoire pendant la session. Aucun cookie, aucune publicité, aucun traceur publicitaire. <b>Mesure d'audience</b> : seulement si tu l'acceptes dans le bandeau, Vercel Web Analytics compte les pages vues de façon anonyme et sans cookie (page visitée, site d'origine, type d'appareil, navigateur, pays déduit de l'adresse IP non conservée) ; aucune donnée de ton carnet n'est concernée. Détails sur la page <a href="cookies.html#audience">cookies et stockage local</a>.</p>
 
 <h2 id="finalites">4. Finalités et bases légales</h2>
 <table class="tbl"><thead><tr><th>Finalité</th><th>Base légale (RGPD)</th></tr></thead><tbody>
@@ -52,6 +53,7 @@
 <tr><td>Enregistrer tes <b>données de santé</b> dans ton compte</td><td>Ton <b>consentement explicite</b> (art. 6.1.a et 9.2.a), donné par une case non précochée et retirable à tout moment</td></tr>
 <tr><td>Conserver la preuve de ton consentement</td><td>Obligation de pouvoir démontrer le consentement (art. 7.1) et intérêt légitime (art. 6.1.f)</td></tr>
 <tr><td>Envoyer tes messages (et, si tu les coches, un résumé de ton profil, de ton ressenti et de tes statistiques) au serveur n8n et au fournisseur d'IA pour obtenir une réponse du Coach</td><td>Ton <b>consentement explicite et distinct</b> (art. 6.1.a et 9.2.a), donné dans l'onglet Coach avant le premier envoi, non précoché pour chaque rubrique, retirable à tout moment</td></tr>
+<tr><td>Mesurer l'audience du site de façon anonyme et agrégée (Vercel Web Analytics, sans cookie) pour l'améliorer</td><td>Ton <b>consentement</b> (art. 6.1.a du RGPD et art. 82 de la loi Informatique et Libertés), donné dans le bandeau (« Accepter » ou « Refuser », aussi simples l'un que l'autre), retirable à tout moment par « Gérer les cookies »</td></tr>
 <tr><td>Sécurité, prévention des abus, journaux techniques</td><td>Intérêt légitime (art. 6.1.f) et obligation légale de conservation des données de connexion de l'hébergeur (art. 6.1.c)</td></tr>
 <tr><td>Répondre à tes demandes de droits</td><td>Obligation légale (art. 6.1.c)</td></tr></tbody></table>
 
@@ -76,13 +78,15 @@
 <li>Données du carnet dans le compte : tant que le compte existe, puis suppression immédiate à ta demande (retrait du consentement, suppression du compte). Un compte inactif depuis <span class="ph" data-ph="INACTIVITE_MOIS">[À COMPLÉTER : durée d&#x27;inactivité avant suppression d&#x27;un compte, ex. 24]</span> mois est supprimé. Est considéré comme actif un compte qui s'est connecté, dont la session de connexion a été renouvelée (simple ouverture du site avec une session ouverte) ou dont les données ont été modifiées.</li>
 <li>Preuve de consentement : supprimée avec les données du compte.</li>
 <li>Journaux techniques : selon les politiques de l'hébergeur et de Supabase, au plus douze mois (à confirmer par l'éditeur).</li>
-<li>Données du mode invité : dans ton navigateur, jusqu'à ce que tu les effaces.</li></ul>
+<li>Données du mode invité : dans ton navigateur, jusqu'à ce que tu les effaces.</li>
+<li>Mesure d'audience : ton choix (accord ou refus) est gardé 6 mois dans ton navigateur, puis la question t'est reposée ; l'empreinte technique de comptage calculée par Vercel ne dure pas plus de 24 heures ; les statistiques agrégées sont conservées par Vercel <i>[À COMPLÉTER par l'éditeur : durée selon l'offre Vercel]</i>.</li></ul>
 
 <h2 id="destinataires">7. Destinataires et sous-traitants</h2>
 <ul>
 <li>L'éditeur (accès limité à ce qui est nécessaire au support et à la sécurité).</li>
 <li><b>Supabase</b> : sous-traitant (base de données et authentification), région : <span class="ph" data-ph="SUPABASE_REGION">[À COMPLÉTER : région du projet Supabase, ex. UE (Francfort)]</span>.</li>
-<li><b><span class="ph" data-ph="HEBERGEUR_NOM">[À COMPLÉTER : hébergeur du site, ex. Vercel Inc.]</span></b> : hébergeur des pages du site (journaux techniques). Aucun autre service de tiers n'est appelé par les pages, sauf, si l'éditeur active le Coach et seulement après ton consentement, le serveur n8n et le fournisseur d'IA ci-dessous.</li>
+<li><b><span class="ph" data-ph="HEBERGEUR_NOM">[À COMPLÉTER : hébergeur du site, ex. Vercel Inc.]</span></b> : hébergeur des pages du site (journaux techniques).</li>
+<li><b>Vercel Inc.</b> (États-Unis) : sous-traitant pour la <b>mesure d'audience</b> (Vercel Web Analytics), <b>seulement si tu l'acceptes</b>. Il reçoit les informations de visite décrites plus haut, jamais les données de ton carnet ; le script et les envois passent par l'adresse de ce site. Aucun autre service de tiers n'est appelé par les pages, sauf, si l'éditeur active le Coach et seulement après ton consentement, le serveur n8n et le fournisseur d'IA ci-dessous.</li>
 <li><b>Fournisseur de connexion que tu choisis</b> (Google, Microsoft, GitHub, Apple) : il traite ta connexion selon sa propre politique, en tant que responsable distinct. Il ne reçoit pas les données de ton carnet.</li>
 <li><b>Serveur n8n</b> (sous-traitant de l'éditeur, hébergeur : <i>[À COMPLÉTER : n8n Cloud ou auto-hébergé, hébergeur et pays]</i>) et <b>fournisseur d'IA</b> (par exemple Anthropic, États-Unis ; nom exact affiché dans la feuille de consentement) : ils reçoivent tes messages du Coach, seulement après ton consentement distinct, voir la section Coach ci-dessus. Contrat de sous-traitance : <i>[À COMPLÉTER : DPA signé avec n8n et le fournisseur d'IA]</i>.</li>
 <li>Aucune vente ni cession à des tiers, aucune publicité.</li></ul>
@@ -113,8 +117,9 @@
 <p>Cette politique peut évoluer. La date de mise à jour figure en bas de page. En cas de changement important, ton accord sera redemandé.</p>
 
 </main>
-<footer class="lf"><nav class="legalnav" aria-label="Informations légales"><a href="cgu.html">CGU</a><a href="confidentialite.html">Confidentialité</a><a href="cookies.html">Stockage local</a><a href="mentions-legales.html">Mentions légales</a><a href="contact.html">Tes droits RGPD</a></nav><p>Dernière mise à jour : 10 octobre 2026 · <span class="nw">Version 2026-10-10</span></p></footer>
+<footer class="lf"><nav class="legalnav" aria-label="Informations légales"><a href="cgu.html">CGU</a><a href="confidentialite.html">Confidentialité</a><a href="cookies.html">Stockage local</a><a href="mentions-legales.html">Mentions légales</a><a href="contact.html">Tes droits RGPD</a><button type="button" data-consent-open>Gérer les cookies</button></nav><p>Dernière mise à jour : 10 octobre 2026 · <span class="nw">Version 2026-10-10</span></p></footer>
 <script src="config.js"></script>
 <script src="legal.js"></script>
+<script src="consent.js"></script>
 </body>
 </html>
