@@ -212,6 +212,14 @@
         </div>
       </details>
     </form>
+    <section class="regen" id="regen" aria-labelledby="rgT">
+      <div class="rg-h"><span class="rg-i" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg></span>
+        <div><h3 id="rgT">Regénérer mon entraînement</h3><p class="rg-sub">Recrée ton plan à partir de ton profil actuel, en repartant de cette semaine.</p></div></div>
+      <dl class="rg-prev" id="rgPrev" aria-live="polite"></dl>
+      <label class="ack rg-opt"><input type="checkbox" id="rgMoves" checked><span>Remettre à leur place les séances que j'ai déplacées</span></label>
+      <p class="rg-keep"><b>Conservés :</b> ton suivi, tes pesées, tes séances cochées et ton ressenti.</p>
+      <button class="btn" type="button" id="rgGo" aria-haspopup="dialog">Regénérer mon plan</button>
+    </section>
     <div class="resetrow">
       <button class="btn ghost" type="button" id="resetEx">Revenir aux données d'exemple</button>
       <span class="note" id="resetConfirm" role="alert" hidden>Tes données de profil et ton suivi seront effacés. <button class="btn" type="button" id="resetYes">Confirmer</button> <button class="btn ghost" type="button" id="resetNo">Annuler</button></span>

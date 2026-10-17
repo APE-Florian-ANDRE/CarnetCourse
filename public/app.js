@@ -1328,7 +1328,7 @@ function recompute(){
   if(plan.unreal) P={...P,objectif:plan.unreal.used}; // objectif trop loin : le plan prépare la distance atteignable
   E=energy(P,plan);
   if(state.week>plan.length) state.week=plan.length;
-  syncSportUI14(); renderPsec(); renderSummary(); psecSum(); renderWeek(); renderNext(); renderPlan(); renderLog(); renderReg(); renderZones(); renderRaceHint(); syncLongDay();
+  syncSportUI14(); renderPsec(); renderRegen(); renderSummary(); psecSum(); renderWeek(); renderNext(); renderPlan(); renderLog(); renderReg(); renderZones(); renderRaceHint(); syncLongDay();
   try{ renderFeel(); renderImp(); }catch(e){ console.warn("v14",e); }
   $("#exampleBanner").hidden=!state.isExample&&!P.incomplete;
   $("#exampleTxt").textContent= P.incomplete&&!state.isExample? "Ton profil est incomplet (âge, taille ou poids manquant) : des valeurs d'exemple sont utilisées à la place. Complète ton profil pour que le plan et les calories soient justes." : "Ce sont des données d'exemple. Remplis l'onglet « Profil » avec les tiennes pour que le plan et les calories soient justes.";
@@ -1456,7 +1456,7 @@ function renderWeek(){
   $("#weekAlerts").innerHTML=al.join("");
   const fp=$("#followedPlan"); if(fp) fp.addEventListener("click",()=>{ followed=realStart(); try{localStorage.setItem("carnet.suivi",followed);}catch(e){} recompute(); $("#weekTitle").focus({preventScroll:true}); });
   const rm=$("#resetMoves"); if(rm) rm.addEventListener("click",()=>resetWeekMoves(wk.w));
-  const rs=$("#restartPlan"); if(rs) rs.addEventListener("click",()=>{ const r=raceOn(state.profile); state.profile={...state.profile,start:r?autoStart(r):todayIso()}; state.isExample=false; state.week=1; fillForm(); persist(); recompute(); $("#weekTitle").focus({preventScroll:true}); });
+  const rs=$("#restartPlan"); if(rs) rs.addEventListener("click",()=>{ regenPlan(false); $("#weekTitle").focus({preventScroll:true}); });
   // jours
   // jours d'avant le début : une seule carte compacte (la carte du jour reste près du haut sur téléphone)
   const bef=f.days.filter(d=>d.kind==="before"), bLast=bef.length?bef[bef.length-1].i:-1;
@@ -2880,6 +2880,27 @@ function psecReveal(el){ const d=el&&el.closest&&el.closest("details.psec"); if(
 const psClamp={};
 function psecClamp(id,typed,to){ if(["age","taille","poids"].includes(id)) psClamp[id]={typed:String(typed).slice(0,12),to}; }
 function psecLine(id,txt){  const el=document.getElementById(id); if(el) setT(el,txt); }
+/* regénérer l'entraînement : le plan repart d'aujourd'hui (ou du début calculé pour la course) avec le profil actuel.
+   Suivi, coches et ressenti sont gardés ; les déplacements à venir peuvent être remis à leur place (marques d'effacement horodatées, pour la synchro). */
+function regenPreview(){ const r=raceOn(state.profile), st=r? autoStart(r) : todayIso(); let n=0; try{ n=buildPlan(profileNums({...state.profile,start:st})).length; }catch(e){}
+  const end= n? addDays(mondayOf(st),n*7-1) : ""; return {st,n,end,race:r}; }
+function regenPlan(resetMoves){
+  const v=regenPreview(), now=Date.now(), tdy=todayIso(); let nm=0;
+  if(resetMoves){ const mv={...cleanMoves(state.moves)}; for(const [k,m] of Object.entries(mv)) if(m&&m.to&&(k>=tdy||m.to>=tdy)){ mv[k]={to:"",at:now}; nm++; } state.moves=cleanMoves(mv); }
+  state.profile={...state.profile,start:v.st}; state.isExample=false; plan=buildPlan(profileNums(state.profile)); const tp=todayPos(); state.week=tp?tp.w:1;
+  fillForm(); persist(); recompute(); return {...v,nm}; }
+function renderRegen(){ const box=$("#regen"); if(!box) return; box.hidden=!!state.isExample; if(box.hidden) return;
+  const v=regenPreview(), row=(k,t)=>`<div><dt>${esc(k)}</dt><dd>${esc(t)}</dd></div>`, df=d=>new Date(d+"T12:00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"});
+  $("#rgPrev").innerHTML= v.n? row("Durée",v.n+" semaine"+(v.n>1?"s":""))+row("Début",df(v.st))+row(v.race?"Course":"Fin",df(v.race||v.end)) : "";
+  const tdy=todayIso(), nm=Object.entries(cleanMoves(state.moves)).filter(([k,m])=>m&&m.to&&(k>=tdy||m.to>=tdy)).length; $(".rg-opt").hidden=!nm; }
+$("#rgGo").addEventListener("click",e=>{ const v=regenPreview(), keep=$("#rgMoves").checked&&!$(".rg-opt").hidden, df=d=>longDate(d);
+  if(!v.n){ toast("Complète d'abord ton profil : âge, taille et poids."); return; }
+  openSheet({title:"Regénérer mon plan",opener:e.currentTarget,kind:"regen",closeLabel:"Annuler",firstClose:true,
+    html:`<p class="note">Ton plan sera recréé avec ton profil actuel : <b>${v.n} semaine${v.n>1?"s":""}</b>, du ${esc(df(v.st))} au ${esc(df(v.end))}${v.race?", jusqu'à ta course":""}.</p>
+      <ul class="rg-list"><li><b>Repart</b> de la semaine 1${keep?", séances déplacées remises à leur place":""}.</li><li><b>Conservés</b> : suivi, pesées, séances cochées, ressenti et activités importées.</li></ul>`,
+    foot:`<button class="btn" type="button" id="rgOk">Regénérer</button>`,
+    onReady:sh=>{ sh.querySelector("#rgOk").addEventListener("click",()=>{ const r=regenPlan(keep); closeSheet(true); selectTab("semaine"); window.scrollTo(0,0);
+      toast("Plan regénéré : "+r.n+" semaine"+(r.n>1?"s":"")+", à partir du "+longDate(r.st)+(r.nm?" · "+r.nm+" séance"+(r.nm>1?"s":"")+" remise"+(r.nm>1?"s":"")+" en place":"")+"."); }); }}); });
 function renderPsec(){
   const p=P, sp=p.sport||"course", SX={H:"Homme",F:"Femme"};
   const dt=p.raceDate&&okIso(p.raceDate)? " · le "+dfmt(new Date(p.raceDate+"T12:00:00")) : "";
