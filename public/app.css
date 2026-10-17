@@ -639,7 +639,6 @@ input:not([type=checkbox]):not([type=radio]):not([type=file]):not([aria-invalid=
 .au-prov:first-child:hover{background:var(--au-ph)}
 .au-prov:first-child svg[fill="currentColor"]{color:#fff}
 .au-prov:first-child svg:not([fill]){background:#fff;border-radius:50%;padding:2px;width:24px;height:24px;left:16px}
-.auth[data-ready="0"] .au-prov:not([data-acc="consent-no"]){opacity:.5}
 .au-prov[aria-busy="true"]{opacity:1}
 .au-prov[aria-busy="true"] span::after{content:"";display:inline-block;width:14px;height:14px;margin-left:10px;vertical-align:-2px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:au-spin .8s linear infinite}
 @keyframes au-spin{to{transform:rotate(360deg)}}
