@@ -99,8 +99,8 @@
     <p class="lead">Une fois par semaine, note ta moyenne de poids (pèse-toi 3 matins ou plus, au réveil) et ton ressenti. L'outil compare la vitesse de perte au rythme prévu et te propose d'ajuster les calories ou d'alléger la semaine.</p>
     <form class="logform" id="logForm">
       <div class="field"><label for="lgDate">Date</label><input type="date" id="lgDate" required aria-describedby="lgDateHint"><span class="hint" id="lgDateHint">Aujourd'hui ou une date passée.</span></div>
-      <div class="field"><label for="lgPoids">Poids moyen (kg)</label><input type="text" inputmode="decimal" id="lgPoids" required placeholder="ex. 81,4" aria-describedby="lgPoidsHint"><span class="hint" id="lgPoidsHint">Entre 35 et 250 kg.</span></div>
-      <div class="field"><label for="lgSommeil">Sommeil moyen (h)</label><input type="text" inputmode="decimal" id="lgSommeil" min="3" max="12" value="7,5"></div>
+      <div class="field"><label for="lgPoids">Poids moyen (kg)</label><input type="text" inputmode="decimal" id="lgPoids" maxlength="8" required placeholder="ex. 81,4" aria-describedby="lgPoidsHint"><span class="hint" id="lgPoidsHint">Entre 35 et 250 kg.</span></div>
+      <div class="field"><label for="lgSommeil">Sommeil moyen (h)</label><input type="text" inputmode="decimal" id="lgSommeil" maxlength="8" min="3" max="12" value="7,5"></div>
       <div class="field"><label for="lgFatigue">Fatigue (1 à 5)</label><select id="lgFatigue"><option value="1">1 · en pleine forme</option><option value="2" selected>2 · normale</option><option value="3">3 · un peu lourd</option><option value="4">4 · fatigué</option><option value="5">5 · épuisé</option></select></div>
       <div class="field"><label for="lgFaites">Séances faites</label><input type="number" id="lgFaites" min="0" max="7" value="4" inputmode="numeric"></div>
       <div class="field"><label for="lgPrevues">Séances prévues</label><input type="number" id="lgPrevues" min="1" max="7" value="4" inputmode="numeric"></div>
@@ -141,7 +141,7 @@
         <div class="field" id="raceDateField"><label for="raceDate" id="raceDateL">Date de ta course · optionnel</label><input id="raceDate" name="raceDate" type="date" aria-describedby="raceHint">
           <span class="hint" id="raceHint" aria-live="polite">Le plan se cale dessus : la dernière semaine est celle de ta course, et le début du plan est calculé pour toi (4 semaines à un an).</span></div>
         <div class="field"><label for="start">Début du plan</label><input id="start" name="start" type="date" aria-describedby="startHint"><span class="hint" id="startHint" aria-live="polite" hidden></span></div>
-        <div class="field"><label for="cible">Poids visé (kg)</label><input id="cible" name="cible" type="text" inputmode="decimal" placeholder="optionnel" aria-describedby="cibleHint"><span class="hint bad" id="cibleHint" aria-live="polite" hidden></span></div>
+        <div class="field"><label for="cible">Poids visé (kg)</label><input id="cible" maxlength="8" name="cible" type="text" inputmode="decimal" placeholder="optionnel" aria-describedby="cibleHint"><span class="hint bad" id="cibleHint" aria-live="polite" hidden></span></div>
         </div>
       </details>
       <details class="psec" id="ps-me" open>
@@ -153,19 +153,19 @@
           <div class="field"><label for="age">Âge</label><input id="age" name="age" type="number" min="15" max="90"></div>
           <div class="field"><label for="taille">Taille (cm)</label><input id="taille" name="taille" type="number" min="130" max="220"></div>
         </div>
-        <div class="field"><label for="poids">Poids (kg)</label><input id="poids" name="poids" type="text" inputmode="decimal" placeholder="ex. 81,5"></div>
-        <div class="field"><label for="mg">Masse grasse (%) · optionnel</label><input id="mg" name="mg" type="text" inputmode="decimal" placeholder="estimée si vide" aria-describedby="mgHint"><span class="hint" id="mgHint" aria-live="polite">Sert à vérifier que tu manges assez pour ta masse maigre.</span></div>
+        <div class="field"><label for="poids">Poids (kg)</label><input id="poids" maxlength="8" name="poids" type="text" inputmode="decimal" placeholder="ex. 81,5"></div>
+        <div class="field"><label for="mg">Masse grasse (%) · optionnel</label><input id="mg" maxlength="8" name="mg" type="text" inputmode="decimal" placeholder="estimée si vide" aria-describedby="mgHint"><span class="hint" id="mgHint" aria-live="polite">Sert à vérifier que tu manges assez pour ta masse maigre.</span></div>
         <div class="field"><label for="activite">Activité hors sport</label>
           <select id="activite" name="activite"><option value="1.25">Assis la plupart du temps</option><option value="1.4">Un peu actif (marche, debout par moments)</option><option value="1.55">Métier physique ou très actif</option></select></div>
         <div class="field" data-sp="course trail vtt forme"><label for="fcmax">FC max (bpm) · optionnel</label><input id="fcmax" name="fcmax" type="number" min="140" max="220" placeholder="ex. 188" aria-describedby="fcmaxHint"><span class="hint" id="fcmaxHint">Mesurée sur un effort maximal de préférence, les formules par l'âge se trompent souvent de 10 bpm.</span></div>
-        <div class="field" data-sp="vtt forme" hidden><label for="hSem">Heures de sport par semaine aujourd'hui</label><input id="hSem" name="hSem" type="text" inputmode="decimal" min="0" max="25" placeholder="ex. 4" aria-describedby="hSemHint"><span class="hint" id="hSemHint">Vide ou 0 : le plan démarre prudemment selon ton niveau, puis monte de 6 % par semaine au plus.</span></div>
+        <div class="field" data-sp="vtt forme" hidden><label for="hSem">Heures de sport par semaine aujourd'hui</label><input id="hSem" maxlength="8" name="hSem" type="text" inputmode="decimal" min="0" max="25" placeholder="ex. 4" aria-describedby="hSemHint"><span class="hint" id="hSemHint">Vide ou 0 : le plan démarre prudemment selon ton niveau, puis monte de 6 % par semaine au plus.</span></div>
         <div class="row2" data-sp="course trail">
           <div class="field"><label for="volume">Km par semaine aujourd'hui</label><input id="volume" name="volume" type="number" min="0" max="200"></div>
-          <div class="field"><label for="longest">Plus longue sortie du mois (km)</label><input id="longest" name="longest" type="text" inputmode="decimal" min="0" max="60" placeholder="ex. 12,5"></div>
+          <div class="field"><label for="longest">Plus longue sortie du mois (km)</label><input id="longest" maxlength="8" name="longest" type="text" inputmode="decimal" min="0" max="60" placeholder="ex. 12,5"></div>
         </div>
         <div class="field" data-sp="course trail"><label for="ref">Ta référence de vitesse · optionnel</label>
           <div class="row2"><select id="ref" name="ref" aria-describedby="vmaHint"><option value="none">Aucune</option><option value="vma">VMA connue (km/h)</option><option value="5">Chrono 5 km (mm:ss)</option><option value="10">Chrono 10 km (mm:ss ou h:mm:ss)</option></select>
-          <input id="refVal" name="refVal" placeholder="choisis d'abord" aria-label="Valeur de la référence" aria-describedby="vmaHint" disabled></div>
+          <input id="refVal" name="refVal" maxlength="24" autocomplete="off" placeholder="choisis d'abord" aria-label="Valeur de la référence" aria-describedby="vmaHint" disabled></div>
           <span class="hint" id="vmaHint" aria-live="polite"></span></div>
         </div>
       </details>
@@ -331,7 +331,7 @@
       <p class="lead">Ces informations servent à calculer ta dépense en calories. Rien n'est enregistré avant la dernière étape.</p>
       <div class="field"><span class="lbl" id="wz-l-sexe">Sexe</span><div class="seg" role="radiogroup" aria-labelledby="wz-l-sexe"><label><input type="radio" name="wz_sexe" value="H"><span>Homme</span></label><label><input type="radio" name="wz_sexe" value="F"><span>Femme</span></label></div></div>
       <div class="row2"><div class="field"><label for="wzAge">Âge</label><input id="wzAge" type="number" inputmode="numeric" min="15" max="90" autocomplete="off"></div><div class="field"><label for="wzTaille">Taille (cm)</label><input id="wzTaille" type="number" inputmode="numeric" min="130" max="220" autocomplete="off"></div></div>
-      <div class="row2"><div class="field"><label for="wzPoids">Poids (kg)</label><input id="wzPoids" type="text" inputmode="decimal" placeholder="ex. 81,5" autocomplete="off"></div><div class="field"><label for="wzCible">Poids visé (kg)</label><input id="wzCible" type="text" inputmode="decimal" placeholder="optionnel" autocomplete="off"></div></div>
+      <div class="row2"><div class="field"><label for="wzPoids">Poids (kg)</label><input id="wzPoids" maxlength="8" type="text" inputmode="decimal" placeholder="ex. 81,5" autocomplete="off"></div><div class="field"><label for="wzCible">Poids visé (kg)</label><input id="wzCible" maxlength="8" type="text" inputmode="decimal" placeholder="optionnel" autocomplete="off"></div></div>
       <div class="alert bad" id="wzMinor" hidden><b>Avant 18 ans</b>, l'outil ne met aucun déficit calorique : tu manges à hauteur de ta dépense. Parles-en à un médecin et à tes parents avant de te lancer dans un plan d'entraînement.</div>
     </section>
     <section class="wz-step" data-s="2" hidden>
@@ -341,9 +341,9 @@
       <div class="field" data-sp="course trail"><label for="wzObjectif">Objectif</label><select id="wzObjectif"><option value="forme">Forme et perte de poids</option><option value="5">5 km</option><option value="10">10 km</option><option value="21">Semi-marathon</option><option value="42">Marathon</option></select></div>
       <div class="field" data-sp="vtt force" hidden><label for="wzSObj" id="wzSObjL">Orientation de l'entraînement</label><select id="wzSObj"></select></div>
       <div class="field" id="wzRaceF"><label for="wzRace" id="wzRaceL">Date de ta course · optionnel</label><input id="wzRace" type="date" aria-describedby="wzRaceH"><span class="hint" id="wzRaceH">Le plan se cale dessus : la dernière semaine est celle de ta course.</span></div>
-      <div class="row2" data-sp="course trail"><div class="field"><label for="wzVolume">Km par semaine aujourd'hui</label><input id="wzVolume" type="number" inputmode="numeric" min="0" max="200" aria-describedby="wzVolH" autocomplete="off"></div><div class="field"><label for="wzLongest">Plus longue sortie du mois (km)</label><input id="wzLongest" type="text" inputmode="decimal" min="0" max="60" placeholder="ex. 12,5" autocomplete="off"></div></div>
+      <div class="row2" data-sp="course trail"><div class="field"><label for="wzVolume">Km par semaine aujourd'hui</label><input id="wzVolume" type="number" inputmode="numeric" min="0" max="200" aria-describedby="wzVolH" autocomplete="off"></div><div class="field"><label for="wzLongest">Plus longue sortie du mois (km)</label><input id="wzLongest" maxlength="8" type="text" inputmode="decimal" min="0" max="60" placeholder="ex. 12,5" autocomplete="off"></div></div>
       <span class="hint" id="wzVolH" data-sp="course trail">Mets 0 si tu ne cours pas encore.</span>
-      <div class="field" data-sp="vtt forme" hidden><label for="wzHSem">Heures de sport par semaine aujourd'hui</label><input id="wzHSem" type="text" inputmode="decimal" min="0" max="25" placeholder="ex. 4" autocomplete="off"><span class="hint">Laisse vide si tu ne sais pas : le plan démarre prudemment.</span></div>
+      <div class="field" data-sp="vtt forme" hidden><label for="wzHSem">Heures de sport par semaine aujourd'hui</label><input id="wzHSem" maxlength="8" type="text" inputmode="decimal" min="0" max="25" placeholder="ex. 4" autocomplete="off"><span class="hint">Laisse vide si tu ne sais pas : le plan démarre prudemment.</span></div>
     </section>
     <section class="wz-step" data-s="3" hidden>
       <p class="wz-k">Étape 3 sur 5</p><h2 id="wzT3" tabindex="-1">Ta semaine type</h2>
