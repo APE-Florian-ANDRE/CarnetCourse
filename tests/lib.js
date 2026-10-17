@@ -2,7 +2,7 @@
 const http=require("http"), fs=require("fs"), path=require("path");
 const EXTRA={v:""};   // origine supplémentaire de connect-src (webhook du Coach, tests)
 const REPO=path.resolve(__dirname,".."), ROOT=path.join(REPO,"public");
-const MIME={".html":"text/html; charset=utf-8",".js":"text/javascript; charset=utf-8",".css":"text/css; charset=utf-8",".svg":"image/svg+xml",".txt":"text/plain; charset=utf-8",".json":"application/json"};
+const MIME={".html":"text/html; charset=utf-8",".js":"text/javascript; charset=utf-8",".css":"text/css; charset=utf-8",".svg":"image/svg+xml",".txt":"text/plain; charset=utf-8",".json":"application/json",".webmanifest":"application/manifest+json; charset=utf-8",".png":"image/png",".xml":"application/xml; charset=utf-8"};
 function headersFor(){ const v=JSON.parse(fs.readFileSync(path.join(REPO,"vercel.json"),"utf8")); const h={}; for(const r of v.headers) if(r.source==="/(.*)") for(const x of r.headers) h[x.key]=x.value;
   // comme « node tools/set-csp.js » après avoir renseigné SUPABASE_URL : l'URL exacte du projet de test est ajoutée à connect-src
   h["Content-Security-Policy"]=h["Content-Security-Policy"].replace("connect-src 'self'","connect-src 'self' https://abcdefghij.supabase.co"+EXTRA.v); return h; }
