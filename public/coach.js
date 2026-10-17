@@ -4,8 +4,8 @@
 (function(){
 "use strict";
 const CFG=window.APP_CONFIG||{}, B=window.CarnetBridge, isLocal=["localhost","127.0.0.1"].includes(location.hostname);
-const COACH_V="2026-10-10.3", K_CONSENT="carnet.coach.consent", K_HIST="carnet.coach.hist";
-const MAX_IN=1000, MAX_REPLY=4000, MAX_BODY=65536, MAX_HIST=40, SEND_N=6, TIMEOUT=45000, MIN_GAP=1500;
+const COACH_V="2026-10-10.3", K_CONSENT="carnet.coach.consent", K_HIST="carnet.coach.hist", K_RATE="carnet.coach.rate";
+const MAX_IN=1000, MAX_REPLY=4000, MAX_BODY=65536, MAX_HIST=40, SEND_N=6, TIMEOUT=45000, MIN_GAP=1500, RATE_N=20, RATE_WIN=3600000;
 const $=s=>document.querySelector(s);
 
 /* ---- adresse du webhook : https obligatoire (http seulement vers localhost, pour tester), pas d'identifiants, pas de paramètres ---- */
@@ -79,6 +79,12 @@ function loadHist(){ let a=null; try{ a=JSON.parse(ls.get(K_HIST)||"[]"); }catch
 let hist=loadHist();
 function saveHist(){ hist=hist.slice(-MAX_HIST); ls.set(K_HIST,JSON.stringify(hist)); }
 
+/* ---- limite de fréquence côté navigateur (la vraie limite est dans n8n : 20 messages par heure et par personne) ---- */
+// horodatages des envois réels de l'heure écoulée (les messages de prudence, jamais envoyés, ne comptent pas)
+function rateList(){ let a=null; try{ a=JSON.parse(ls.get(K_RATE)||"[]"); }catch(e){} const now=Date.now(); return (Array.isArray(a)?a:[]).filter(t=>typeof t==="number"&&t>now-RATE_WIN&&t<=now+60000).slice(-RATE_N); }
+const rateWait=()=>{ const r=rateList(); return r.length<RATE_N? 0 : Math.max(1,Math.ceil((r[0]+RATE_WIN-Date.now())/60000)); };
+function rateHit(){ const r=rateList(); r.push(Date.now()); ls.set(K_RATE,JSON.stringify(r.slice(-RATE_N))); }
+
 /* ---- envoi ---- */
 let ctl=null, busy=false, lastSend=0, userCancel=false, epoch=0;
 const E={auth:"Connecte-toi à ton compte pour utiliser le coach : le serveur vérifie qui tu es. Sans connexion, rien n'est envoyé.",rate:"Trop de messages en peu de temps. Attends quelques minutes puis réessaie.",srv:"Le serveur du coach a un problème. Réessaie dans un moment.",net:"Impossible de joindre le coach. Vérifie ta connexion, ou que le serveur est bien en ligne.",slow:"Le coach met trop de temps à répondre. Réessaie dans un moment.",invalid:"La réponse du coach est illisible. Réessaie, ou préviens l'administrateur du site.",big:"La réponse du coach est trop volumineuse : elle a été refusée.",other:"Le coach n'a pas pu répondre."};
@@ -143,13 +149,15 @@ function renderCfg(){ const c=getConsent(), el=$("#coachCfgTxt"); if(!c){ el.tex
 function wipe(){ epoch++; hist=[]; ls.del(K_HIST); userCancel=true; if(ctl){ try{ ctl.abort(); }catch(e){} } if($("#coachLog")){ paint(); setBusy(false); const i=$("#coachIn"); if(i){ i.value=""; } const c=$("#coachCount"); if(c) c.textContent="0 / "+MAX_IN; } }
 async function send(text){
   if(busy) return; text=String(text).replace(/\s+/g," ").trim().slice(0,MAX_IN); if(!text) return;
-  const now=Date.now(); if(now-lastSend<MIN_GAP) return; lastSend=now;
+  const now=Date.now(); if(now-lastSend<MIN_GAP){ $("#coachLive").textContent="Patiente un instant avant d'envoyer un autre message."; return; } lastSend=now;
   if(hist.length&&ls.get(K_HIST)===null){ hist=[]; paint(); }   // l'historique a été effacé ailleurs : on ne le ressuscite pas
   const k=guard(text);
   if(k){ hist.push({r:"u",t:text,x:1,e:0},{r:"a",t:FIXED[k],x:1,e:0}); saveHist(); paint(); $("#coachIn").value=""; $("#coachLive").textContent="Message de prudence affiché."; return; }
   { let tk=null; try{ tk=window.CarnetAuth&&window.CarnetAuth.accessToken? await window.CarnetAuth.accessToken() : null; }catch(e){}
     if(typeof tk!=="string"||!/^[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}$/.test(tk)){ $("#coachIn").value=text; paint(); bubble("a",E.auth,true); $("#coachLive").textContent=E.auth; return; } }   // invité : bloqué ici, avant tout envoi
   const cons=getConsent(); if(!cons){ lastSend=0; consentSheet($("#coachSend"),()=>send(text)); $("#coachIn").value=text; return; }
+  { const w=rateWait(); if(w){ const m="Tu as envoyé "+RATE_N+" messages en moins d'une heure : attends environ "+w+" min avant le suivant."; $("#coachIn").value=text; paint(); bubble("a",m,true); $("#coachLive").textContent=m; return; } }
+  rateHit();
   const ep=epoch; hist.push({r:"u",t:text,x:0,e:0}); saveHist(); $("#coachIn").value=""; paint(); setBusy(true); userCancel=false; $("#coachLive").textContent="Le coach réfléchit…";
   try{ const r=await callHook(text,cons); if(ep!==epoch) return; hist.push({r:"a",t:r,x:0,e:0}); saveHist(); paint(); $("#coachLive").textContent="Réponse du coach reçue."; }
   catch(e){ if(ep!==epoch) return; const c=e&&e.c||"other"; if(c==="cancel"){ hist.pop(); saveHist(); paint(); $("#coachIn").value=text; $("#coachLive").textContent="Envoi annulé."; } else { paint(); bubble("a",E[c]||E.other,true); $("#coachIn").value=text; $("#coachLive").textContent=E[c]||E.other; } }

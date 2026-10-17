@@ -1335,13 +1335,15 @@ function recompute(){
   const rv=$("#refVal"); rv.disabled=P.ref==="none"||!P.ref; { const PH={vma:"ex. 14,5",5:"ex. 25:30",10:"ex. 52:10"}; rv.placeholder= Object.hasOwn(PH,P.ref)? PH[P.ref] : "choisis d'abord le type"; }
   const ch=$("#cibleHint"), minT=18.5*Math.pow(P.taille/100,2);
   const unread=k=>{ const r=state.profile[k]; return r!=null&&String(r).trim()!==""&&isNaN(numOf(r)); };
-  const mh=$("#mgHint"), mgBad=unread("mg"); mh.classList.toggle("bad",mgBad);
+  // valeur illisible : champ marqué invalide (aria-invalid), le message est dans son indice (aria-describedby) ; une erreur « hors limites » (OOB) reste
+  const inv=(id,on)=>{ const e=$("#"+id); if(!e) return; if(on) e.setAttribute("aria-invalid","true"); else if(!OOB[id]) e.removeAttribute("aria-invalid"); };
+  const mh=$("#mgHint"), mgBad=unread("mg"); mh.classList.toggle("bad",mgBad); inv("mg",mgBad); inv("cible",unread("cible"));
   setT(mh, mgBad? "Nombre non reconnu (ex. 22 ou 18,5) : la masse grasse est estimée en attendant." : "Sert à vérifier que tu manges assez pour ta masse maigre.");
   ch.hidden=!(P.cible<minT)&&!unread("cible");
   if(unread("cible")) setT(ch,"Nombre non reconnu (ex. 76,5) : le poids visé est ignoré.");
   else if(!ch.hidden) setT(ch,"Ce poids donne un IMC de "+fmt1(P.cible/Math.pow(P.taille/100,2))+", sous 18,5 (maigreur). L'outil ne compte pas en dessous de "+fmt1(Math.ceil(minT*10)/10)+" kg ; demande un avis médical.");
   const v=vmaOf(P), h=$("#vmaHint");
-  h.classList.toggle("bad",!!v.bad);
+  h.classList.toggle("bad",!!v.bad); inv("refVal",!!v.bad);
   const ex10=P.ref==="10"? "52:10" : "25:30";
   setT(h,(v.bad==="range"? (P.ref==="vma"?"VMA hors limites : écris un nombre entre 7 et 25 (ex. 14,5). ":"Ce chrono donne une VMA de "+fmt1(v.badVma)+" km/h, hors de 7 à 25 : vérifie la distance choisie et le chrono. ")
     : v.bad? (P.ref==="vma"?"VMA non reconnue : écris un nombre entre 7 et 25 (ex. 14,5). ":"Chrono non reconnu : écris mm:ss (ex. "+ex10+") ou h:mm:ss (ex. 1:05:00), minutes et secondes sous 60. ") : "")+"VMA utilisée : "+fmt1(v.vma)+" km/h, d'après "+v.src+".");
@@ -1763,7 +1765,7 @@ function fillForm(){
 }
 function readForm(){
   const p={...state.profile};
-  FIELDS.forEach(k=>{const el=$("#"+k); if(el) p[k]=el.value;});
+  FIELDS.forEach(k=>{const el=$("#"+k); if(el) p[k]=String(el.value).slice(0,40);});   // longueur bornée (valeur forcée par script comprise)
   RADIOS.forEach(k=>{ if(k==="longDay"&&$("#segLongDay").dataset.locked) return; const r=document.querySelector(`input[name="${k}"]:checked`); if(r)p[k]=r.value;});
   p.types=[...document.querySelectorAll('input[name="types"]:checked')].map(c=>c.value);
   if(p.niveau==="deb"&&+p.seances>4) p.seances="4";
@@ -1835,17 +1837,38 @@ $("#resetNo").addEventListener("click",()=>{$("#resetConfirm").hidden=true;});
 $("#resetYes").addEventListener("click",()=>{hideToast(); $("#logMsg").innerHTML=""; // un « Annuler » de retrait ne survit pas à la remise à zéro
   state={profile:{...EXAMPLE},isExample:true,log:[],week:1,appliedByDate:{},deleted:{},moves:{},done:{},feel:{},acts:{},rhr:{},seen:state.seen,savedAtLocal:Date.now()};localSaved=false;$("#resetConfirm").hidden=true;fillForm();persist();recompute();setStore(lsOK?EXAMPLE_MSG:LS_BLOCKED);});
 
+// erreur de saisie reliée au champ : aria-invalid + message sous le champ (aria-describedby) ; msg vide = erreur retirée
+function fieldErr(el,msg){ if(!el) return; const id=el.id+"Err", f=el.closest(".field")||el.parentElement; let n=document.getElementById(id);
+  if(!n&&msg){ n=document.createElement("span"); n.className="hint bad ferr"; n.id=id; f.appendChild(n); }
+  if(n){ n.textContent=msg||""; n.hidden=!msg; }
+  const d=(el.getAttribute("aria-describedby")||"").split(" ").filter(x=>x&&x!==id); if(msg) d.push(id);
+  if(d.length) el.setAttribute("aria-describedby",d.join(" ")); else el.removeAttribute("aria-describedby");
+  if(msg) el.setAttribute("aria-invalid","true"); else el.removeAttribute("aria-invalid"); }
+// suivi : chaque champ est contrôlé (type, bornes, cohérence) ; les erreurs sont listées dans l'ordre du formulaire
+const LG_IDS=["#lgDate","#lgPoids","#lgSommeil","#lgFaites","#lgPrevues"];
+const lgDateErr=()=>{ const d=$("#lgDate"), v=d.value; return d.validity&&d.validity.badInput||v&&!okIso(v)? "Cette date n'existe pas : choisis une date valide." : !v? "Choisis la date de ta mesure." : v>todayIso()? "Cette date est dans le futur : choisis aujourd'hui ou une date passée." : ""; };
+function lgCheck(){
+  const raw=id=>String($(id).value).trim().replace(",","."), num=id=>{ const v=raw(id); return $(id).validity&&$(id).validity.badInput? NaN : v===""? null : /^\d{1,3}(\.\d{1,2})?$/.test(v)? +v : NaN; };
+  const E={}, [pMin,pMax]=BOUNDS.poids, po=num("#lgPoids"), sl=num("#lgSommeil"), nf=num("#lgFaites"), np=num("#lgPrevues"), int07=(v,lo)=>Number.isInteger(v)&&v>=lo&&v<=7;
+  const de=lgDateErr(); if(de) E["#lgDate"]=de;
+  if(po==null) E["#lgPoids"]="Indique ton poids moyen en kilos, par exemple 81,4.";
+  else if(!(po>=pMin&&po<=pMax)) E["#lgPoids"]="Indique un poids entre "+pMin+" et "+pMax+" kg, par exemple 81,4.";
+  if(sl!=null&&!(sl>=3&&sl<=12)) E["#lgSommeil"]="Indique un sommeil moyen entre 3 et 12 heures (ex. 7,5), ou laisse le champ vide.";
+  if(np!=null&&!int07(np,1)) E["#lgPrevues"]="Indique un nombre entier de séances prévues, de 1 à 7.";
+  if(nf!=null&&!int07(nf,0)) E["#lgFaites"]="Indique un nombre entier de séances faites, de 0 à 7.";
+  else if(nf!=null&&int07(np,1)&&nf>np) E["#lgFaites"]="Pas plus que les séances prévues ("+np+").";
+  LG_IDS.forEach(id=>fieldErr($(id),E[id]||""));
+  const bad=LG_IDS.filter(id=>E[id]); if(bad.length) $(bad[0]).focus();
+  return bad.length? null : {sommeil:sl,faites:nf,prevues:np,poids:po};
+}
+let lgLast={k:"",t:0};
+$("#logForm").noValidate=true;   // contrôle par lgCheck : messages en français, reliés au champ
 $("#logForm").addEventListener("submit",e=>{
   e.preventDefault();
-  const opt=id=>{const v=String($(id).value).trim().replace(",","."); return v===""||isNaN(+v)? null : +v;};
-  const fz=$("#lgFaites"), nf=opt("#lgFaites"), np=opt("#lgPrevues");
-  if(nf!=null&&np!=null&&nf>np){ fz.setCustomValidity("Pas plus que les séances prévues ("+np+")."); fz.reportValidity(); return; }
-  const en={at:Date.now(),date:$("#lgDate").value,poids:+String($("#lgPoids").value).trim().replace(",","."),sommeil:opt("#lgSommeil"),fatigue:+$("#lgFatigue").value,faites:opt("#lgFaites"),prevues:opt("#lgPrevues"),douleur:$("#lgDouleur").value};
-  const today=todayIso(), ld=$("#lgDate");
-  if(!en.date){ ld.setCustomValidity("Choisis la date de ta mesure."); ld.reportValidity(); return; }
-  if(en.date>today){ ld.setCustomValidity("Cette date est dans le futur : choisis aujourd'hui ou une date passée."); ld.reportValidity(); return; }
-  const [pMin,pMax]=BOUNDS.poids;
-  if(!(en.poids>=pMin&&en.poids<=pMax)){ $("#lgPoids").setCustomValidity("Indique un poids entre "+pMin+" et "+pMax+" kg, par exemple 81,4."); $("#lgPoids").reportValidity(); return; }
+  const ok=lgCheck(); if(!ok){ $("#logMsg").innerHTML=`<div class="alert warn">Saisie à corriger : vois le message sous le champ concerné.</div>`; return; }
+  const en={at:Date.now(),date:$("#lgDate").value,poids:ok.poids,sommeil:ok.sommeil,fatigue:numIn($("#lgFatigue").value,1,5)??2,faites:ok.faites,prevues:ok.prevues,douleur:$("#lgDouleur").value==="oui"?"oui":"non"};
+  // double envoi (double clic, Entrée répétée) : la même saisie dans la seconde et demie est ignorée
+  const key=JSON.stringify({...en,at:0}); if(key===lgLast.k&&en.at-lgLast.t<1500) return; lgLast={k:key,t:en.at};
   const old=state.log.find(x=>x.date===en.date), kept=(state.appliedByDate||{})[en.date];
   if(old&&old.applied!=null) en.applied=old.applied; // même semaine corrigée : l'ajustement déjà appliqué reste compté
   else if(kept!=null) en.applied=kept;               // même semaine retirée puis ressaisie : idem
@@ -1866,11 +1889,10 @@ $("#logForm").addEventListener("submit",e=>{
   const up=$("#updPoids"); if(up) up.addEventListener("click",()=>{ const v=+up.dataset.p; state.profile.poids=String(v).replace(".",","); state.isExample=false; fillForm(); persist(); recompute();
     const m=$("#logMsg"); m.innerHTML=`<div class="alert ok">Poids du profil mis à jour : ${fmt1(v)} kg.</div>`; m.tabIndex=-1; m.focus({preventScroll:true}); });
 });
-$("#lgPoids").addEventListener("input",e=>e.target.setCustomValidity(""));
-// date future : message en français dès la saisie (le contrôle natif du « max » passerait avant celui de l'envoi)
-function checkLgDate(){ const d=$("#lgDate"); d.max=todayIso(); d.setCustomValidity(d.value&&d.value>todayIso()? "Cette date est dans le futur : choisis aujourd'hui ou une date passée." : ""); }
+// une erreur disparaît dès que le champ est modifié ; date future signalée dès la saisie
+LG_IDS.forEach(id=>$(id).addEventListener("input",()=>{ fieldErr($(id),""); if(id==="#lgPrevues") fieldErr($("#lgFaites"),""); }));
+function checkLgDate(){ const d=$("#lgDate"); d.max=todayIso(); const m=lgDateErr(); fieldErr(d,d.value&&m? m : ""); }
 ["input","change"].forEach(t=>$("#lgDate").addEventListener(t,checkLgDate));
-["#lgFaites","#lgPrevues"].forEach(id=>$(id).addEventListener("input",()=>$("#lgFaites").setCustomValidity("")));
 $("#lgDate").value=todayIso(); $("#lgDate").max=todayIso();
 
 /* onglets */
@@ -2561,8 +2583,12 @@ function openFeel(w,i,opener){
       if(del) del.addEventListener("click",()=>{ state.feel=cleanFeel({...state.feel,[mk.k]:{x:1,at:Date.now()}}); persist(); recompute(); closeSheet(true); back(); toast("Ressenti effacé."); });
       sh.querySelector("#fSave").addEventListener("click",()=>{
         const rpe=+sh.querySelector("#fRpe").value, pain=pr(), zone=sh.querySelector("#fZone").value;
-        if(!(rpe>=1&&rpe<=10)){ msg("Choisis l'effort perçu (RPE) de 1 à 10."); sh.querySelector("#fRpe").focus(); return; }
-        if(pain&&!Object.hasOwn(PAIN_ZONES,zone)){ msg("Indique où tu as mal."); sh.querySelector("#fZone").focus(); return; }
+        // champ en erreur : aria-invalid, relié au message #fMsg
+        const bad=(id,m)=>{ ["#fRpe","#fZone"].forEach(x=>{ const e=sh.querySelector(x); e.removeAttribute("aria-invalid"); e.setAttribute("aria-describedby",(e.getAttribute("aria-describedby")||"").replace(/\s*fMsg/g,"").trim()); });
+          if(!id){ msg(""); return; } const e=sh.querySelector(id); e.setAttribute("aria-invalid","true"); e.setAttribute("aria-describedby",((e.getAttribute("aria-describedby")||"")+" fMsg").trim()); msg(m); e.focus(); };
+        if(!(rpe>=1&&rpe<=10)){ bad("#fRpe","Choisis l'effort perçu (RPE) de 1 à 10."); return; }
+        if(pain&&!Object.hasOwn(PAIN_ZONES,zone)){ bad("#fZone","Indique où tu as mal."); return; }
+        bad("");
         const mood=+(sh.querySelector('input[name="fMood"]:checked')||{value:0}).value;
         state.feel=cleanFeel({...state.feel,[mk.k]:{rpe,mood,pain,zone:pain?zone:"",note:ta.value,sig:mk.sig,at:Date.now()}}); state.isExample=false; persist(); recompute();
         const sf=feelSafety14();
@@ -3100,10 +3126,12 @@ function wzPrefill(){
   if([0,200,300,400].includes(d)){ keep.hidden=true; keep.querySelector("input").value="-1"; } else{ keep.hidden=false; keep.querySelector("input").value=String(d); setT(keep.querySelector("span"),"garder "+d+" · actuel"); }
   wzset("wz_def",d); $("#wzAck").checked=false; wzSportPrefill14(ex,p);
 }
-function wzFail(el,msg){ const e=$("#wzErr"); e.textContent=msg; e.hidden=false; wizEl.querySelectorAll("[aria-invalid]").forEach(x=>x.removeAttribute("aria-invalid")); if(el){ el.setAttribute("aria-invalid","true"); el.focus(); } return false; }
+// erreur de l'assistant : champ marqué invalide et relié au message (#wzErr) par aria-describedby
+const wzClr=()=>wizEl.querySelectorAll("[aria-invalid]").forEach(x=>{ x.removeAttribute("aria-invalid"); const d=(x.getAttribute("aria-describedby")||"").split(" ").filter(y=>y&&y!=="wzErr"); if(d.length) x.setAttribute("aria-describedby",d.join(" ")); else x.removeAttribute("aria-describedby"); });
+function wzFail(el,msg){ const e=$("#wzErr"); e.textContent=msg; e.hidden=false; wzClr(); if(el){ el.setAttribute("aria-invalid","true"); el.setAttribute("aria-describedby",((el.getAttribute("aria-describedby")||"")+" wzErr").trim()); el.focus(); } return false; }
 const wzNum=(id,lo,hi,int)=>{ const v=numOf($(id).value); return !isNaN(v)&&v>=lo&&v<=hi&&(!int||Number.isInteger(v))? v : NaN; };
 function wzCheck(i){
-  $("#wzErr").hidden=true; wizEl.querySelectorAll("[aria-invalid]").forEach(x=>x.removeAttribute("aria-invalid"));
+  $("#wzErr").hidden=true; wzClr();
   const first=n=>wizEl.querySelector(`input[name="${n}"]`);
   if(i===1){
     if(!wzr("wz_sexe")) return wzFail(first("wz_sexe"),"Choisis ton sexe : la formule de dépense n'est pas la même pour tous.");
@@ -3169,7 +3197,7 @@ function wzShow(i,back){
   wzPrep(i);
   $("#wzProg").setAttribute("aria-valuenow",i); $("#wzProg i").style.width=(i/WZN*100)+"%";
   $("#wzBack").hidden=i===1; setT($("#wzNext"),i===WZN? "Créer mon plan":"Continuer"); wizEl.setAttribute("aria-labelledby","wzT"+i);
-  $("#wzErr").hidden=true; $("#wzForm").scrollTop=0; wizEl.querySelectorAll("[aria-invalid]").forEach(x=>x.removeAttribute("aria-invalid"));
+  $("#wzErr").hidden=true; $("#wzForm").scrollTop=0; wzClr();
   const h=$("#wzT"+i); if(h) h.focus({preventScroll:true}); setT($("#srLive"),"Étape "+i+" sur "+WZN); wzDraftSave();
 }
 /* brouillon : valeurs saisies seulement (jamais de nom), relues avec contrôle, effacé à la création du plan */
@@ -3206,6 +3234,7 @@ function openWizard(opener){
 function closeWiz(){ if(wizEl.hidden) return; wizEl.hidden=true; wrapEl.inert=false; homeEl.inert=false; if(!sheetEl&&!timerEl) document.documentElement.style.overflow="";
   const o=wzOpener; wzOpener=null; if(o&&document.contains(o)&&o.getClientRects().length) o.focus({preventScroll:true}); }
 function wzNext(){
+  if(wizEl.hidden) return;   // double clic sur « Créer mon plan » : l'assistant est déjà fermé, rien n'est recréé
   if(!wzCheck(wzI)) return;
   if(wzI<WZN){ wzShow(wzI+1); return; }
   // dernière étape : toutes les étapes sont revérifiées (un brouillon forgé ne contourne rien), puis seulement ici le profil est créé et enregistré
@@ -3389,7 +3418,7 @@ const PROV_ICON={
 const AU_BOX=["#accAge","#accTerms","#accHealth"];
 let auOpener=null, auBusy=false;
 const auReady=()=>AU_BOX.every(q=>$(q).checked);
-function auSync(){ const r=auReady(); authEl.dataset.ready=r?"1":"0"; $("#auHint").hidden=r; if(r) $("#accMsg").innerHTML=""; }
+function auSync(){ const r=auReady(); authEl.dataset.ready=r?"1":"0"; $("#auHint").hidden=r; if(r) $("#accMsg").innerHTML=""; AU_BOX.forEach(q=>{ if($(q).checked) $(q).removeAttribute("aria-invalid"); }); }
 function openAuth(mode,opener){
   const A=window.CarnetAuth, cs=mode==="consent"; if(!cs&&!(A&&A.canLogin)){ openAccount(opener); return; }
   closeSheet(true); auOpener=opener||document.activeElement; authEl.dataset.mode=cs?"consent":"login";
@@ -3400,7 +3429,7 @@ function openAuth(mode,opener){
   $("#auProvs").innerHTML= cs? `<button class="au-prov" type="button" data-acc="consent-ok"><span>Accepter et activer la sauvegarde</span></button><button class="au-prov" type="button" data-acc="consent-no"><span>Refuser et me déconnecter</span></button>`
     : A.providers.map(p=>`<button class="au-prov" type="button" data-acc="prov" data-prov="${esc(p.id)}">${PROV_ICON[p.id]||""}<span>Continuer avec ${esc(p.label)}</span></button>`).join("");
   setT($("#auLater"),cs?"Plus tard":"Continuer sans compte");
-  AU_BOX.forEach(q=>{ $(q).checked=false; }); $("#accMsg").innerHTML=""; auBusy=false; auSync();
+  AU_BOX.forEach(q=>{ $(q).checked=false; $(q).removeAttribute("aria-invalid"); }); $("#accMsg").innerHTML=""; auBusy=false; auSync();
   authEl.hidden=false; wrapEl.inert=true; homeEl.inert=true; wizEl.inert=true; document.documentElement.style.overflow="hidden"; authEl.scrollTop=0;
   try{ $("#auT").focus({preventScroll:true}); }catch(e){}
 }
@@ -3415,7 +3444,9 @@ $("#auLater").addEventListener("click",()=>{ if(!auBusy) closeAuth(); });
 window.addEventListener("pageshow",e=>{ if(e.persisted&&!authEl.hidden){ auBusy=false; openAuth(authEl.dataset.mode,auOpener); } });
 authEl.addEventListener("click",async e=>{ const b=e.target.closest&&e.target.closest("[data-acc]"); if(!b||auBusy) return; const k=b.dataset.acc, msg=t=>{ $("#accMsg").innerHTML=t; };
   if(k==="consent-no"){ auBusy=true; b.disabled=true; await signOutNow(false); auBusy=false; closeAuth(); return; }
-  if(!auReady()){ msg(`<div class="alert warn" role="alert">Coche les trois cases pour continuer : ton âge (15 ans au moins), les CGU et la politique de confidentialité, et ton consentement pour tes données de santé.</div>`); const f=AU_BOX.map(q=>$(q)).find(x=>!x.checked); if(f) f.focus(); return; }
+  if(!auReady()){ msg(`<div class="alert warn" role="alert">Coche les trois cases pour continuer : ton âge (15 ans au moins), les CGU et la politique de confidentialité, et ton consentement pour tes données de santé.</div>`); const un=AU_BOX.map(q=>$(q)).filter(x=>!x.checked);
+    un.forEach(x=>{ x.setAttribute("aria-invalid","true"); const d=x.getAttribute("aria-describedby")||""; if(!/\baccMsg\b/.test(d)) x.setAttribute("aria-describedby",(d+" accMsg").trim()); });   // cases manquantes marquées et reliées au message
+    if(un[0]) un[0].focus(); return; }
   const A=window.CarnetAuth, lab=b.querySelector("span")||b, old=lab.textContent, all=[...authEl.querySelectorAll("[data-acc]")];
   auBusy=true; all.forEach(x=>{ x.disabled=true; }); b.setAttribute("aria-busy","true");
   setT(lab,k==="prov"? "Redirection vers "+((A.providers.find(p=>p.id===b.dataset.prov)||{}).label||"le fournisseur")+"…" : "Enregistrement…");
