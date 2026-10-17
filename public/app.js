@@ -1551,8 +1551,8 @@ function renderWeek(){
 function goWeek(w,toTop){
   const a=document.activeElement, fid=a&&a.id;
   state.week=clampWeek(w); persist(); recompute();
-  const t=$("#weekTitle"), nav=$("nav.tabs");
-  if(toTop || t.getBoundingClientRect().top<nav.offsetHeight) scrollUnderNav($("#p-semaine"));
+  const t=$("#weekTitle");
+  if(toTop || t.getBoundingClientRect().top<navTopH()) scrollUnderNav($("#p-semaine"));
   restoreFocus(fid);
 }
 // le rendu recrée certains boutons : le focus revient sur le même (ou sur son voisin s'il n'existe plus)
@@ -1874,8 +1874,10 @@ function checkLgDate(){ const d=$("#lgDate"); d.max=todayIso(); d.setCustomValid
 $("#lgDate").value=todayIso(); $("#lgDate").max=todayIso();
 
 /* onglets */
+// hauteur occupée en haut par la barre d'onglets (0 en mobile : barre fixe en bas)
+function navTopH(){ const n=$("nav.tabs"); return n&&getComputedStyle(n).position!=="fixed"? n.offsetHeight : 0; }
 function scrollUnderNav(el){
-  const nav=$("nav.tabs"), top=el.getBoundingClientRect().top+window.scrollY-nav.offsetHeight;
+  const top=el.getBoundingClientRect().top+window.scrollY-navTopH();
   window.scrollTo({top:Math.max(0,top),behavior:"instant"});
 }
 function selectTab(id){
@@ -1885,7 +1887,7 @@ function selectTab(id){
   if(id==="suivi" && P && !$("#chart").dataset.w) renderChart(sortedLog());
   if(id==="suivi" && P) fillLogCounts();
   // la barre d'onglets est collée en haut : le panneau repart juste en dessous
-  const panel=$("#p-"+id); if(panel.getBoundingClientRect().top<$("nav.tabs").offsetHeight) scrollUnderNav(panel);
+  const panel=$("#p-"+id); if(panel.getBoundingClientRect().top<navTopH()) scrollUnderNav(panel);
   try{localStorage.setItem("carnet.tab",id);}catch(e){}
 }
 document.querySelectorAll('nav.tabs button').forEach(b=>b.addEventListener("click",()=>selectTab(b.id.slice(4))));
@@ -2175,7 +2177,7 @@ function dragPos(){ const g=drag; if(!g||g.phase!=="drag") return;
   if(g.tag.textContent!==t){ g.tag.textContent=t; g.tag.className="gtag"+(h&&h.inf.block?" no":h&&h.inf.warn&&h.inf.warn.length?" warn":""); } }
 // défilement automatique près des bords (sous la barre d'onglets collée en haut)
 function dragScroll(){ const g=drag; if(!g||g.phase!=="drag") return;
-  const top=$("nav.tabs").getBoundingClientRect().bottom, H=window.innerHeight, edge=Math.min(90,H/6); let v=0;
+  const n=$("nav.tabs"), fx=getComputedStyle(n).position==="fixed", top=fx?0:n.getBoundingClientRect().bottom, H=fx?n.getBoundingClientRect().top:window.innerHeight, edge=Math.min(90,H/6); let v=0;
   if(g.y<top+edge) v=-(top+edge-g.y); else if(g.y>H-edge) v=g.y-(H-edge);
   if(v){ window.scrollBy(0,Math.max(-22,Math.min(22,Math.round(v/4)||Math.sign(v)))); dragPos(); }
   g.raf=requestAnimationFrame(dragScroll); }
@@ -3064,8 +3066,9 @@ const acctText=()=> acct.st==="connected"? "Connecté à ton compte" : acct.st==
 function renderHome(){
   const st=$("#homeSt"); setT(st, acct.st==="connected"? "Connecté à ton compte"+(acct.name?" · "+acct.name:"") : acct.st==="consent"? "Connecté, sauvegarde en attente de ton accord." : acct.st==="owner"? "Connecté, en attente de ton choix pour les données de cet appareil." : acct.st==="guest"? "Mode invité : tes données restent sur cet appareil." : "Connexion à ton compte en cours…"); st.dataset.st=acct.st;
   const has=hasData()? "1":"0"; if(homeEl.dataset.has===has) return; homeEl.dataset.has=has;
-  const h= has==="1"? `<button class="btn" type="button" data-act="open">Ouvrir mon carnet</button><button class="btn ghost" type="button" data-act="wizard">Refaire mon profil</button>` : `<button class="btn" type="button" data-act="wizard">Créer mon profil</button><button class="btn ghost" type="button" data-act="example">Voir l'exemple</button>`;
-  $("#homeCta").innerHTML=h; $("#homeCta2").innerHTML=h;
+  // un seul bouton principal ; l'action secondaire n'est qu'un lien discret ; le bas de page rappelle le même bouton
+  const b= has==="1"? `<button class="btn" type="button" data-act="open">Ouvrir mon carnet</button>` : `<button class="btn" type="button" data-act="wizard">Créer mon plan gratuit</button>`;
+  $("#homeCta").innerHTML=b+(has==="1"? `<button class="linkbtn" type="button" data-act="wizard">Refaire mon profil</button>` : `<button class="linkbtn" type="button" data-act="example">Voir un exemple</button>`); $("#homeCta2").innerHTML=b;
 }
 function renderAcct(){
   document.querySelectorAll(".js-av").forEach(b=>{ b.dataset.st=acct.st; b.setAttribute("aria-label","Compte : "+acctText().toLowerCase()); const i=b.querySelector(".av-i"); if(i) i.textContent=acct.name? acct.name.charAt(0).toUpperCase():""; });
