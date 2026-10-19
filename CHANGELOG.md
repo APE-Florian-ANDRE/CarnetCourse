@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.0 (site) : refonte visuelle, Coach sur Gemini gratuit
+- Front refait d'après les maquettes app et web : thème sombre, accent citron, Barlow Condensed + DM Sans hébergées sur le site, une couleur par type de séance, barre latérale sur ordinateur, nouvelle page d'accueil.
+- Coach (n8n) : l'IA passe de Claude à **Google Gemini, offre gratuite** (`gemini-flash-lite-latest` par défaut, credential « Header Auth » `x-goog-api-key`). Contenu bloqué par Google => message fixe prudent ; erreurs et quota épuisé => message générique. Politique de confidentialité : Google nommé, réutilisation possible des échanges sur l'offre gratuite signalée. Guide pas à pas : `integrations/n8n/README.md`.
+
 ## 1.3.0 (site) : app v15 : profil rangé, Coach IA (option)
 Même code que `plan-course/work.html` (v15, **sans** le Coach réseau) : `qa/w14/p14.py` (v13 vers v14) puis `qa/w15/p15.py` (v14 vers v15), un seul jeu de fonctions. Plans et calories de la course identiques à la v13 (400 profils).
 

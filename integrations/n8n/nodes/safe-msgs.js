@@ -5,3 +5,4 @@ const SAFE = {
   tca: "Ce que tu décris peut toucher à ton rapport à l'alimentation. Je ne peux pas te conseiller là-dessus : parles-en à ton médecin traitant ou à un professionnel de santé, qui pourra t'aider sans jugement. Si tu es en détresse, le 3114 répond 24 h sur 24 ; en cas de danger immédiat, appelle le 15 ou le 112."
 };
 const FLAG2KIND = { crise: "detresse", urgence: "urgence", alimentation: "tca" };
+const BLOCKED = "Je ne peux pas répondre à ce message. Si tu es en difficulté, le 3114 répond 24 h sur 24 ; en cas de danger immédiat, appelle le 15 ou le 112. Pour une question d'entraînement, reformule-la simplement.";
