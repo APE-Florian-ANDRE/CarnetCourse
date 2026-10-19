@@ -10,7 +10,7 @@ window.APP_CONFIG = Object.freeze({
   /* --- Coach (assistant IA, optionnel). Laisse vide : l'onglet « Coach » est caché et rien n'est envoyé.
        Adresse https du webhook n8n (voir integrations/n8n/README.md). Après l'avoir renseignée : lance « node tools/set-csp.js »
        (ajoute l'origine exacte à connect-src). JAMAIS de clé d'IA ni de secret ici : la clé reste dans n8n. --- */
-  CHAT_WEBHOOK_URL: "",      // ex. https://n8n.example.org/webhook/carnet-coach
+  CHAT_WEBHOOK_URL: "",      // ex. https://n8n.example.org/webhook/carnet-coach  ou, sans n8n, https://ton-site.example.org/api/coach (integrations/vercel/README.md)
   CHAT_PROVIDER_NAME: "",    // fournisseur d'IA appelé par n8n, affiché dans la feuille de consentement (ex. "Google Gemini, États-Unis")
 
   /* --- Informations légales à compléter par l'éditeur (affichées dans les pages légales) --- */

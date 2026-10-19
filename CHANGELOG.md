@@ -3,6 +3,7 @@
 ## 1.4.0 (site) : refonte visuelle, Coach sur Gemini gratuit
 - Front refait d'après les maquettes app et web : thème sombre, accent citron, Barlow Condensed + DM Sans hébergées sur le site, une couleur par type de séance, barre latérale sur ordinateur, nouvelle page d'accueil.
 - Coach (n8n) : l'IA passe de Claude à **Google Gemini, offre gratuite** (`gemini-flash-lite-latest` par défaut, credential « Header Auth » `x-goog-api-key`). Contenu bloqué par Google => message fixe prudent ; erreurs et quota épuisé => message générique. Politique de confidentialité : Google nommé, réutilisation possible des échanges sur l'offre gratuite signalée. Guide pas à pas : `integrations/n8n/README.md`.
+- **Coach sans n8n, option gratuite** : `api/coach.js`, fonction Vercel générée par `integrations/vercel/build-api.js`, avec les mêmes protections que le workflow n8n : même origine seulement, jeton Supabase, adultes seulement, filet de sécurité avant l'IA, drapeau du modèle, limites de 20 messages par heure par personne et 60 par IP (en mémoire d'instance), corps de 16 Ko au plus. Elle appelle Gemini gratuit (`GEMINI_API_KEY` dans les variables d'environnement Vercel). Tests : `tests/vercel-coach.js`. Guide : `integrations/vercel/README.md`.
 
 ## 1.3.0 (site) : app v15 : profil rangé, Coach IA (option)
 Même code que `plan-course/work.html` (v15, **sans** le Coach réseau) : `qa/w14/p14.py` (v13 vers v14) puis `qa/w15/p15.py` (v14 vers v15), un seul jeu de fonctions. Plans et calories de la course identiques à la v13 (400 profils).

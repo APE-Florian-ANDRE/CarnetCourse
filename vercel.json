@@ -68,5 +68,10 @@
     }
   ],
   "buildCommand": "node tests/static-checks.js",
-  "outputDirectory": "public"
+  "outputDirectory": "public",
+  "functions": {
+    "api/coach.js": {
+      "maxDuration": 30
+    }
+  }
 }

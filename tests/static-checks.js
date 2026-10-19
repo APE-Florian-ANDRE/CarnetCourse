@@ -25,6 +25,9 @@ ok(conn===want,"CSP connect-src = "+want+" (lance node tools/set-csp.js si besoi
 ok(!/\*/.test(conn||""),"CSP connect-src sans joker");
 // déploiement bloqué si des champs légaux restent à compléter alors que la connexion est configurée
 if(su){ const left=(cfg0.match(/À COMPLÉTER/g)||[]).length; ok(left===0,"SUPABASE_URL renseignée : plus aucun champ « À COMPLÉTER » dans config.js",left); } else console.log("OK   (SUPABASE_URL vide : mode invité, contrôle des champs légaux non bloquant)");
+// fonction Vercel du Coach (option) : générée, synchronisée avec public/coach.js, aucune clé en dur
+{ const af=REPO+"/api/coach.js"; ok(fs.existsSync(af)&&fs.readFileSync(af,"utf8")===require(REPO+"/integrations/vercel/build-api.js").build(),"api/coach.js synchronisé (node integrations/vercel/build-api.js)");
+  ok(fs.existsSync(af)&&!/sk-ant-|AIza[\w-]{20,}|eyJ[A-Za-z0-9_-]{20,}/.test(fs.readFileSync(af,"utf8"))&&/process\.env\.GEMINI_API_KEY/.test(fs.readFileSync(af,"utf8")),"api/coach.js : clé d'IA lue dans l'environnement, jamais en dur"); }
 // aucun secret
 const all=[]; (function walk(d){ for(const e of fs.readdirSync(d,{withFileTypes:true})){ if(["node_modules",".git"].includes(e.name)) continue; const p=path.join(d,e.name); e.isDirectory()? walk(p) : all.push(p); } })(REPO);
 // un JWT "anon" (rôle public, fait pour être publié - cf. auth.js validConfig()) n'est pas une fuite ; tout le reste (service_role, sb_secret_, clé privée, JWT d'un autre rôle) l'est

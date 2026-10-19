@@ -12,6 +12,8 @@ Webhook n8n ─► Préparer ─► Requête valide ? ─► Vérifier le jeton 
                               └─ non : 400                                       (âge, débit, filet de sécurité)   └─ non : 401 / 403 / 429 / message fixe
 ```
 
+**Sans n8n** : la même chaîne existe en fonction Vercel dans le site lui-même (`api/coach.js`), plus simple à mettre en place. Voir `integrations/vercel/README.md`. Choisis l'un ou l'autre.
+
 Fichiers de ce dossier :
 
 | Fichier | Rôle |

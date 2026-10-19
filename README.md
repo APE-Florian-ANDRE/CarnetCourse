@@ -14,6 +14,8 @@ public/                            ce qui est PUBLIÉ (rien d'autre n'est servi)
 vercel.json                        en-têtes de sécurité, outputDirectory = public
 supabase/schema.sql                table, règles RLS, suppression de compte, purge des comptes inactifs
 tools/set-csp.js  update-vendor.sh écrit la CSP partout (Supabase + webhook du Coach) / met à jour la bibliothèque hébergée
+api/coach.js                       Coach sans n8n : fonction Vercel (générée, Gemini gratuit) : voir integrations/vercel/README.md
+integrations/vercel/               modèle et générateur de api/coach.js, guide pas à pas
 integrations/n8n/                  workflow n8n exportable, prompt du coach, serveur MCP en lecture seule (hors du site publié) : voir son README
 tests/                             tests (faux Supabase, aucun réseau)
 .github/workflows/pages.yml        déploiement GitHub Pages (secours)
@@ -109,5 +111,6 @@ node tests/import-pure.js        # lecteur de fichiers Apple Santé / Polar : fi
 node tests/wiz-regression.js     # assistant : entrées invalides refusées, plans identiques à la v12
 node tests/profil15.js           # profil en sections repliables, Semaine allégée, 320 à 1440 px, clair/sombre, contrastes
 node tests/coach.js              # Coach avec un faux webhook : consentement, JWT, garde-fous santé, erreurs, HTML hostile, annulation, mineurs
+node tests/vercel-coach.js       # fonction Vercel du Coach (faux Supabase, fausse IA, aucun réseau)
 node tests/n8n.js                # workflow n8n (structure, aucun secret, nœuds Code) et serveur MCP en lecture seule
 ```
