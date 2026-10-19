@@ -1467,7 +1467,7 @@ function renderWeek(){
     if(d.run){
       const zs=[...new Set(d.run.blocks.filter(b=>b.z!=="walk"&&!b.race).map(b=>b.z))];
       const top=zs.includes("z3")?"z3":zs.includes("z2")?"z2":"z1";
-      cls+=" "+(d.kind==="race"?"race":d.run.sp==="force"?"rf":top);
+      cls+=" "+(d.kind==="race"?"race":d.run.sp==="force"?"rf":top)+" k-"+(d.run.sp==="force"?"rf":d.kind);
       const cross=d.run.blocks.some(b=>b.cross), tap=!cross&&d.kind!=="race"&&onTapis(P,d.kind);
       if(d.kind==="race"){
         const rp=OBJ[P.objectif].racePct, sp=d.run.raceSpeed||E.vma*(rp[0]+rp[1])/2, rk=raceKm();
@@ -1480,7 +1480,7 @@ function renderWeek(){
       sum=d.run.blocks.map(b=>b.l+(b.min&&!b.mix&&b.z!=="walk"&&b.work==null?" "+fmt0(b.min)+" min":"")+(b.race?" · "+fmt1(raceKm()).replace(",0","")+" km":"")).join(" · ");
       body=`<div class="title">${d.run.title}</div>`; det=`<ul class="blocks">${d.run.blocks.map(b=>`<li><span class="dot ${b.z}"></span><span class="txt">${b.l}${b.min&&!b.mix&&b.z!=="walk"&&b.work==null?" · "+fmt0(b.min)+" min":""}${b.race?" · "+fmt1(raceKm()).replace(",0","")+" km":""}</span>${b.eff?`<span class="pace">${b.eff}${hrTxt(b)}</span>`:b.z!=="walk"&&!b.noPace&&b.lo?`<span class="pace">${b.race?"Allure visée "+paceRangeTxt(E.vma,b.lo,b.hi)+" (estimée d'après ta VMA)":onTapis(P,d.kind)&&d.kind!=="race"?kmh(E.vma,b.lo,b.hi)+" · pente 1 %":paceRangeTxt(E.vma,b.lo,b.hi)}${b.race?"":hrTxt(b)}</span>`:""}</li>`).join("")}</ul>${d.run.note?`<p class="note">${d.run.note}</p>`:""}`;
     }else if(d.renfo){
-      body=`<div class="title">Renforcement</div>`; det=`<p class="note">Pas de course aujourd'hui.</p>`; sum="Pas de course aujourd'hui";
+      cls+=" k-rf"; body=`<div class="title">Renforcement</div>`; det=`<p class="note">Pas de course aujourd'hui.</p>`; sum="Pas de course aujourd'hui";
     }else if(d.kind==="before"){
       chips='<span class="chip rest">Avant le début</span>';
       body=`<div class="title">Avant le début</div><p class="note">Ton plan commence le ${longDate(realStart())}. Mange normalement : ce jour est au maintien.</p>`;
@@ -2070,7 +2070,7 @@ function renderNext(){
   const d=n.d, sub= d.run? (d.kind==="race"? "Ta course" : "≈ "+durTxt(sessionDur(d.run))+kmTxt14(d.run))+(d.renfo?" · renfo "+esc(d.renfo.m):"") : esc(d.renfo.t+" · "+d.renfo.m);
   const canRun= n.dt===tdy&&d.run&&d.kind!=="race";
   el.innerHTML=`<div class="nx-l"><span class="nx-k">Prochaine séance · ${when}</span><b>${esc(sessTitle(d,E.vma))}</b><span class="nx-s">${sub}</span></div><div class="nx-a">${canRun?`<button class="btn sm" type="button" id="nxGo">Démarrer le minuteur</button>`:""}<button class="btn ghost sm" type="button" id="nxSee" aria-label="Voir la séance de ${when.toLowerCase()}">Voir</button></div>`;
-  el.hidden=false;
+  el.className="nextc k-"+(!d.run||d.run.sp==="force"?"rf":d.kind); el.hidden=false;
   const go=$("#nxGo"); if(go) go.addEventListener("click",()=>openTimer(n.w,n.i,go));
   $("#nxSee").addEventListener("click",()=>{ if(state.week!==n.w) goWeek(n.w); const c=$(`#days [data-day="${n.i}"]`); if(c){ scrollUnderNav(c); const f=c.querySelector("button"); if(f) f.focus({preventScroll:true}); } });
 }

@@ -1,0 +1,5 @@
+Polices hébergées sur le site (aucune requête vers Google Fonts), sous licence SIL Open Font License 1.1 :
+- Barlow Condensed (600, 700, 800) : Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow)
+- DM Sans (400 à 700, variable) : Copyright 2014 The DM Sans Project Authors (https://github.com/googlefonts/dm-fonts)
+Texte de la licence : https://openfontlicense.org
+Sous-ensemble « latin » téléchargé depuis fonts.gstatic.com.
