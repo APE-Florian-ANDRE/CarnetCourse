@@ -6,6 +6,7 @@ window.APP_CONFIG = Object.freeze({
   SUPABASE_URL: "https://yunidhwvpusrsgxqdzpb.supabase.co",          // ex. https://abcdefghij.supabase.co
   SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1bmlkaHd2cHVzcnNneHFkenBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE5NjU4MzgsImV4cCI6MjEwNzU0MTgzOH0.cAYQ-UUpdP_Tu29GxqyqhlMcc-cWP5SYAD8X3-y3ry0",     // clé « anon / publishable » du projet (Project Settings > API)
   PROVIDERS: ["google", "github"],   // google, azure (Microsoft), github, apple ; seuls ceux activés dans Supabase fonctionnent
+  EMAIL_LOGIN: true,         // compte par e-mail et mot de passe : active aussi le fournisseur « Email » dans Supabase (Authentication > Providers)
 
   /* --- Coach (assistant IA, optionnel). Laisse vide : l'onglet « Coach » est caché et rien n'est envoyé.
        Adresse https du webhook n8n (voir integrations/n8n/README.md). Après l'avoir renseignée : lance « node tools/set-csp.js »

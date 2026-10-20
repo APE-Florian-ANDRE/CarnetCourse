@@ -3449,10 +3449,11 @@ function openAuth(mode,opener){
   setT($("#auK"),cs?"Dernière étape":"Gratuit · sans publicité");
   setT($("#auT"),cs?"Active la sauvegarde":"Retrouve ton carnet partout");
   setT($("#auSub"),cs? (acct.name?"Tu es connecté en tant que "+acct.name+". ":"Tu es connecté. ")+"Donne ton accord pour enregistrer ton carnet dans ton compte : rien n'y est écrit avant."
-    : "Crée ton compte ou connecte-toi : c'est le même bouton. Ton plan et ton suivi te suivent sur tous tes appareils.");
+    : (A.emailLogin? "Avec Google ou GitHub, le même bouton crée ton compte ou te connecte. Tu peux aussi utiliser ton e-mail." : "Crée ton compte ou connecte-toi : c'est le même bouton.")+" Ton plan et ton suivi te suivent sur tous tes appareils.");
   $("#auProvs").innerHTML= cs? `<button class="au-prov" type="button" data-acc="consent-ok"><span>Accepter et activer la sauvegarde</span></button><button class="au-prov" type="button" data-acc="consent-no"><span>Refuser et me déconnecter</span></button>`
     : A.providers.map(p=>`<button class="au-prov" type="button" data-acc="prov" data-prov="${esc(p.id)}">${PROV_ICON[p.id]||""}<span>Continuer avec ${esc(p.label)}</span></button>`).join("");
   setT($("#auLater"),cs?"Plus tard":"Continuer sans compte");
+  { const m=$("#auMail"), on=!cs&&!!A.emailLogin; m.hidden=!on; $("#auOr").hidden=!A.providers.length; if(on){ $("#auEmail").value=""; $("#auPw").value=""; auMode("signup"); auEye(false); } }
   AU_BOX.forEach(q=>{ $(q).checked=false; $(q).removeAttribute("aria-invalid"); }); $("#accMsg").innerHTML=""; auBusy=false; auSync();
   authEl.hidden=false; wrapEl.inert=true; homeEl.inert=true; wizEl.inert=true; document.documentElement.style.overflow="hidden"; authEl.scrollTop=0;
   try{ $("#auT").focus({preventScroll:true}); }catch(e){}
@@ -3466,11 +3467,14 @@ $("#auClose").addEventListener("click",()=>{ if(!auBusy) closeAuth(); });
 $("#auLater").addEventListener("click",()=>{ if(!auBusy) closeAuth(); });
 // retour arrière depuis la page du fournisseur (cache de navigation) : boutons rendus de nouveau utilisables
 window.addEventListener("pageshow",e=>{ if(e.persisted&&!authEl.hidden){ auBusy=false; openAuth(authEl.dataset.mode,auOpener); } });
+// les trois cases sont exigées avant toute connexion (fournisseur ou e-mail) : sinon message, cases marquées et reliées au message
+function auGate(){ if(auReady()) return true;
+  $("#accMsg").innerHTML=`<div class="alert warn" role="alert">Coche les trois cases pour continuer : ton âge (15 ans au moins), les CGU et la politique de confidentialité, et ton consentement pour tes données de santé.</div>`; const un=AU_BOX.map(q=>$(q)).filter(x=>!x.checked);
+  un.forEach(x=>{ x.setAttribute("aria-invalid","true"); const d=x.getAttribute("aria-describedby")||""; if(!/\baccMsg\b/.test(d)) x.setAttribute("aria-describedby",(d+" accMsg").trim()); });
+  if(un[0]) un[0].focus(); return false; }
 authEl.addEventListener("click",async e=>{ const b=e.target.closest&&e.target.closest("[data-acc]"); if(!b||auBusy) return; const k=b.dataset.acc, msg=t=>{ $("#accMsg").innerHTML=t; };
   if(k==="consent-no"){ auBusy=true; b.disabled=true; await signOutNow(false); auBusy=false; closeAuth(); return; }
-  if(!auReady()){ msg(`<div class="alert warn" role="alert">Coche les trois cases pour continuer : ton âge (15 ans au moins), les CGU et la politique de confidentialité, et ton consentement pour tes données de santé.</div>`); const un=AU_BOX.map(q=>$(q)).filter(x=>!x.checked);
-    un.forEach(x=>{ x.setAttribute("aria-invalid","true"); const d=x.getAttribute("aria-describedby")||""; if(!/\baccMsg\b/.test(d)) x.setAttribute("aria-describedby",(d+" accMsg").trim()); });   // cases manquantes marquées et reliées au message
-    if(un[0]) un[0].focus(); return; }
+  if(!auGate()) return;
   const A=window.CarnetAuth, lab=b.querySelector("span")||b, old=lab.textContent, all=[...authEl.querySelectorAll("[data-acc]")];
   auBusy=true; all.forEach(x=>{ x.disabled=true; }); b.setAttribute("aria-busy","true");
   setT(lab,k==="prov"? "Redirection vers "+((A.providers.find(p=>p.id===b.dataset.prov)||{}).label||"le fournisseur")+"…" : "Enregistrement…");
@@ -3481,6 +3485,46 @@ authEl.addEventListener("click",async e=>{ const b=e.target.closest&&e.target.cl
   }catch(err){ msg(`<div class="alert warn" role="alert">${k==="prov"?"Impossible de lancer la connexion pour l'instant. Réessaie dans un instant.":"Impossible d'enregistrer ton accord pour l'instant. Réessaie dans un instant."}</div>`); }
   if(!gone){ auBusy=false; all.forEach(x=>{ x.disabled=false; }); b.removeAttribute("aria-busy"); setT(lab,old); }
 });
+
+/* Compte par e-mail et mot de passe : créer un compte ou se connecter, mot de passe oublié. Les erreurs sont traduites, jamais affichées telles quelles. */
+const AU_MAILERR={creds:"E-mail ou mot de passe incorrect.",unconfirmed:"Confirme d'abord ton adresse : clique sur le lien de l'e-mail reçu (regarde aussi dans les indésirables).",exists:"Un compte existe déjà avec cette adresse : choisis « J'ai déjà un compte ».",
+  weak:"Mot de passe trop court : 8 caractères au moins.",email:"Cette adresse e-mail n'est pas valide.",rate:"Trop de tentatives : réessaie dans quelques minutes.",disabled:"La création de compte par e-mail n'est pas encore activée sur ce site.",same:"Choisis un mot de passe différent de l'ancien.",other:"Impossible pour l'instant. Vérifie ta connexion et réessaie."};
+let auMM="signup";
+function auMode(m){ auMM=m==="signin"?"signin":"signup"; const up=auMM==="signup";
+  authEl.querySelectorAll("[data-mm]").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.mm===auMM)));
+  $("#auPw").setAttribute("autocomplete",up?"new-password":"current-password"); $("#auPwH").hidden=!up; $("#auForgot").hidden=up;
+  setT($("#auGo").querySelector("span"),up?"Créer mon compte":"Me connecter"); $("#accMsg").innerHTML=""; }
+function auEye(show){ const i=$("#auPw"), b=$("#auEye"); i.type=show?"text":"password"; b.setAttribute("aria-pressed",String(!!show)); b.setAttribute("aria-label",show?"Masquer le mot de passe":"Afficher le mot de passe"); }
+authEl.addEventListener("click",e=>{ const m=e.target.closest&&e.target.closest("[data-mm]"); if(m&&!auBusy){ auMode(m.dataset.mm); $("#auEmail").focus(); } });
+$("#auEye").addEventListener("click",()=>auEye($("#auPw").type==="password"));
+const auMailMsg=(cls,t)=>{ $("#accMsg").innerHTML=`<div class="alert ${cls}" role="${cls==="ok"?"status":"alert"}">${t}</div>`; };
+function auMailBusy(on){ auBusy=on; authEl.querySelectorAll("#auMail button,#auMail input,[data-acc]").forEach(x=>{ x.disabled=on; }); $("#auGo").toggleAttribute("aria-busy",on); }
+$("#auMail").addEventListener("submit",async e=>{ e.preventDefault(); if(auBusy) return; const A=window.CarnetAuth;
+  const em=$("#auEmail"), pw=$("#auPw"), email=em.value.trim(), up=auMM==="signup";
+  [em,pw].forEach(x=>x.removeAttribute("aria-invalid"));
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){ em.setAttribute("aria-invalid","true"); auMailMsg("warn",AU_MAILERR.email); em.focus(); return; }
+  if(up? pw.value.length<A.PW_MIN : !pw.value){ pw.setAttribute("aria-invalid","true"); auMailMsg("warn",up?AU_MAILERR.weak:"Saisis ton mot de passe."); pw.focus(); return; }
+  if(!auGate()) return;
+  const lab=$("#auGo").querySelector("span"), old=lab.textContent; auMailBusy(true); setT(lab,up?"Création du compte…":"Connexion…");
+  try{
+    if(up){ const r=await A.signUpEmail(email,pw.value,consentRecord()); pw.value="";
+      if(r.confirm){ auMailBusy(false); setT(lab,old); auMailMsg("ok",`<b>Vérifie ta boîte mail.</b> Clique sur le lien envoyé à ${esc(email)} pour activer ton compte (regarde aussi dans les indésirables). Si tu avais déjà un compte avec cette adresse, choisis « J'ai déjà un compte ».`); return; } }
+    else await A.signInEmail(email,pw.value,consentRecord());
+    pw.value=""; auMailBusy(false); closeAuth(); acct.st="pending"; renderAcct(); await initAccount(); toast(up?"Compte créé, tu es connecté.":"Tu es connecté."); return;
+  }catch(err){ const c=err&&err.code||"other"; auMailBusy(false); setT(lab,old); auMailMsg("warn",AU_MAILERR[c]||AU_MAILERR.other); if(c==="exists") auMode("signin"); (c==="weak"||c==="creds"?pw:em).focus(); }
+});
+$("#auForgot").addEventListener("click",async()=>{ if(auBusy) return; const A=window.CarnetAuth, em=$("#auEmail"), email=em.value.trim();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){ em.setAttribute("aria-invalid","true"); auMailMsg("warn","Saisis d'abord ton adresse e-mail, puis touche « Mot de passe oublié ? »."); em.focus(); return; }
+  auMailBusy(true); try{ await A.resetPassword(email); auMailMsg("ok",`Si un compte existe pour ${esc(email)}, un e-mail avec un lien pour choisir un nouveau mot de passe vient d'être envoyé. Ouvre-le sur cet appareil.`); }
+  catch(err){ auMailMsg("warn",AU_MAILERR[err&&err.code]||AU_MAILERR.other); } auMailBusy(false); });
+// retour du lien « mot de passe oublié » : choisir le nouveau mot de passe
+function openPwSheet(){ const A=window.CarnetAuth; if(!A||!A.inRecovery) return; closeAuth();
+  openSheet({title:"Nouveau mot de passe",kind:"pw",closeLabel:"Plus tard",html:`<p class="note">Choisis le nouveau mot de passe de ton compte. 8 caractères au moins.</p><div class="field"><label for="npw">Nouveau mot de passe</label><input id="npw" type="password" autocomplete="new-password" minlength="8" maxlength="72" data-first></div><div class="alerts msg" id="npwMsg" role="status" aria-live="polite"></div>`,
+    foot:`<button class="btn" type="button" id="npwGo">Enregistrer</button>`,onReady:sh=>{ const go=sh.querySelector("#npwGo"), i=sh.querySelector("#npw"), m=sh.querySelector("#npwMsg");
+      const save=async()=>{ if(i.value.length<A.PW_MIN){ m.innerHTML=`<div class="alert warn" role="alert">${AU_MAILERR.weak}</div>`; i.focus(); return; } go.disabled=true;
+        try{ await A.updatePassword(i.value); closeSheet(); toast("Mot de passe modifié."); }catch(err){ go.disabled=false; m.innerHTML=`<div class="alert warn" role="alert">${AU_MAILERR[err&&err.code]||AU_MAILERR.other}</div>`; } };
+      go.addEventListener("click",save); i.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); save(); } }); }}); }
+let pwHooked=false;
 
 $("#profileForm").addEventListener("submit",e=>e.preventDefault());
 let local=loadLocal();
@@ -3509,12 +3553,15 @@ async function initAccount(){
   try{
     if(window.CarnetAuth&&window.CarnetAuth.oauthError) setTimeout(()=>toast("La connexion a été annulée ou a échoué. Tu peux réessayer."),400);
     const A=window.CarnetAuth; if(!A||!A.canLogin){ acct.failed=false; guestMode(); return; }   // pas de connexion configurée : invité
-    let c; try{ c=await A.connect(); }catch(e){ acct.failed=true; guestMode(); return; }
+    if(!pwHooked&&A.onRecovery){ pwHooked=true; A.onRecovery(()=>setTimeout(openPwSheet,300)); }
+    // compte injoignable (réseau, Supabase) : on le dit au lieu de passer en invité sans un mot ; la session reste enregistrée et sera reprise
+    let c; try{ c=await A.connect(); }catch(e){ acct.failed=true; guestMode(); setTimeout(()=>toast("Impossible de joindre ton compte pour l'instant : tu es en mode invité sur cet appareil. Réessaie depuis le bouton Compte."),500); return; }
     acct.failed=false; if(!c){ guestMode(); return; }   // pas de session : invité
     const {db,user}=c, uid=user&&user.id? await user.id():null;
     if(!db||!uid||!/^[\w-]{1,128}$/.test(String(uid))){ guestMode(); return; }
     A.onSignedOut(()=>{ if(dbRef||acct.st==="consent"){ dbRef=null; acct.st="guest"; acct.name=""; noAccount=true; setStore(localStatus()); renderAcct(); toast("Tu as été déconnecté."); } });
     try{ acct.name= user.me? nameOf(await user.me()) : ""; }catch(e){ acct.name=""; }
+    if(A.inRecovery) setTimeout(openPwSheet,300);
     if(!c.consent){   // pas d'accord enregistré pour ce compte : rien n'est écrit tant qu'il n'est pas donné
       let ok=false; const p=A.takePendingConsent(); if(p){ try{ ok=await A.saveConsent(p); }catch(e){} }
       if(!ok){ dbRef=null; noAccount=true; acct.st="consent"; setStore(localStatus()); renderAcct(); if(!sheetEl&&authEl.hidden&&wizEl.hidden) openAuth("consent",avBtn()); return; } }

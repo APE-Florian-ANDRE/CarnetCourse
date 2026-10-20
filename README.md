@@ -42,7 +42,7 @@ Sans clés dans `config.js`, la connexion est désactivée et l'écran Compte l'
    - **Microsoft (Azure)** : portail Azure > Microsoft Entra ID > App registrations > *New registration* ; types de comptes « tous les annuaires et comptes Microsoft personnels » ; URI de redirection (Web) = l'URL de rappel ; *Certificates & secrets* > nouveau secret. Dans Supabase (fournisseur « Azure »), Tenant URL : `https://login.microsoftonline.com/common`.
    - **GitHub** : Settings > Developer settings > OAuth Apps > *New*. Authorization callback URL = l'URL de rappel.
    - **Apple** (option) : compte développeur Apple requis (Services ID + clé). Ajoute `"apple"` dans `PROVIDERS`.
-   - Désactive le fournisseur **Email** (le carnet n'a pas de mot de passe) si tu n'en veux pas.
+   - **Email** (compte avec e-mail et mot de passe, `EMAIL_LOGIN: true` dans `config.js`) : voir la section « Compte par e-mail » plus bas. Sinon, désactive-le et mets `EMAIL_LOGIN: false`.
 6. **Authentication > Rate Limits** : garde les valeurs par défaut ou durcis-les (connexions, jetons). Les limites s'appliquent par IP côté Supabase : c'est la protection contre les abus de connexion. Désactive aussi **Allow anonymous sign-ins** (les règles RLS les excluent de toute façon). Option : activer **CAPTCHA** (non géré par ce front, donc à n'activer qu'après l'avoir ajouté) et, en offre payante, un délai d'inactivité de session.
 7. **Authentication > Sessions** : active la rotation des jetons de rafraîchissement (par défaut).
 
@@ -51,6 +51,14 @@ Sans clés dans `config.js`, la connexion est désactivée et l'écran Compte l'
 2. **CSP** : lance `node tools/set-csp.js`. Il lit `SUPABASE_URL` et écrit la même politique dans `vercel.json`, `public/_headers` et les 7 balises meta : `connect-src 'self'` + l'URL **exacte** du projet (pas de joker). `node tests/static-checks.js` échoue si ce n'est pas fait.
 3. **supabase-js** est hébergé dans `public/vendor/` (version exacte, empreinte du paquet npm vérifiée, voir `HASHES.txt`) : aucun script de tiers, pas de SRI externe. Il n'est chargé que si une session existe ou au retour d'une connexion. Pour changer de version : `tools/update-vendor.sh X.Y.Z`, puis modifie `VERSION` dans `auth.js` et relance `set-csp.js` et les tests.
 4. Remplis les infos légales (`LEGAL`) : voir **PLACEHOLDERS.md**. Tant qu'un « À COMPLÉTER » reste **et** que `SUPABASE_URL` est renseignée, `static-checks.js` échoue (le workflow Pages s'arrête avant publication ; sur Vercel, lance-le avant de pousser).
+
+## 3 bis. Compte par e-mail et mot de passe (option)
+L'écran de connexion propose aussi « Créer un compte » / « J'ai déjà un compte » avec un e-mail et un mot de passe, et « Mot de passe oublié ? ». Le mot de passe est géré par Supabase : le site ne le voit ni ne le stocke. Il ne s'affiche que si `EMAIL_LOGIN: true` dans `public/config.js`.
+1. **Supabase > Authentication > Sign In / Providers > Email** : active-le. Garde **Confirm email** activé (sinon n'importe qui peut créer un compte avec l'adresse d'un autre). Longueur minimale du mot de passe : 8.
+2. **E-mails (obligatoire pour des vrais utilisateurs)** : le service d'e-mail intégré de Supabase n'envoie qu'aux membres de ton équipe Supabase, avec un très petit quota par heure. Branche un SMTP : *Authentication > Emails > SMTP Settings* (offre gratuite de Brevo, Resend ou équivalent : hôte, port, utilisateur, mot de passe SMTP, expéditeur sur un domaine que tu contrôles). Ces identifiants restent dans Supabase, jamais dans ce dépôt.
+3. **Authentication > URL Configuration** : *Site URL* et *Redirect URLs* = l'adresse du site (déjà fait pour Google). Les liens de confirmation et de réinitialisation reviennent sur cette adresse.
+4. Option : *Authentication > Emails > Templates* pour traduire les e-mails « Confirm signup » et « Reset password » en français (garde la variable `{{ .ConfirmationURL }}`).
+5. Teste : crée un compte, clique sur le lien reçu, puis déconnecte-toi et reconnecte-toi avec le mot de passe ; teste aussi « Mot de passe oublié ? » (ouvre le lien **sur le même appareil** : il y finit l'échange sécurisé PKCE).
 
 ## 4. Déployer sur Vercel (cible principale)
 1. Pousse ce dossier dans un dépôt GitHub (le `.gitignore` exclut `.env`, clés, `.vercel`).
@@ -69,7 +77,7 @@ Sans clés dans `config.js`, la connexion est désactivée et l'écran Compte l'
 |---|---|
 | Scripts / styles | CSP stricte : `script-src 'self'` + l'URL exacte de supabase-js, `style-src 'self'`, pas d'`unsafe-inline` ni d'`eval`. Les styles dynamiques passent par l'API CSSOM. |
 | Bibliothèque d'authentification | Hébergée sur le site (version exacte, empreinte vérifiée), aucun script de tiers : `script-src 'self'`. Chargée seulement avec une session. Cadre : `top!==self` masque la page. |
-| Authentification | OAuth, flux PKCE, aucun mot de passe géré ; session gérée par supabase-js (`sb-carnet-auth`). |
+| Authentification | OAuth ou e-mail + mot de passe (géré par Supabase, jamais vu par le site), flux PKCE ; session gérée par supabase-js (`sb-carnet-auth`). |
 | Redirection | `redirectTo` calculé depuis l'origine du site, jamais depuis l'URL ; liste blanche exacte côté Supabase ; paramètres d'erreur OAuth effacés et jamais affichés. |
 | Données | RLS : chacun ne lit/écrit que sa ligne ; la ligne n'est CRÉÉE que par l'acceptation du consentement (trois cases : âge, CGU, santé) et jamais recréée par une écriture ; mise à jour seulement si un accord existe ; comptes anonymes exclus ; `doc` borné à 1,5 Mo ; cascade à la suppression du compte ; `anon` sans accès. |
 | Appareil partagé | `carnet.owner` : des données créées avec un autre compte ne sont jamais fusionnées ni envoyées sans choix explicite ; déconnexion avec effacement de l'appareil cochée par défaut ; déconnexion locale seulement. |

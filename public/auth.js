@@ -24,7 +24,20 @@ function validConfig(){
   const p=b64json(k.split(".")[1]); return !!p&&p.role==="anon";
 }
 const provs = (Array.isArray(CFG.PROVIDERS)?CFG.PROVIDERS:[]).filter(p=>Object.hasOwn(LABELS,p)).map(p=>({id:p,label:LABELS[p]}));
-const canLogin = validConfig() && provs.length>0;
+// compte par e-mail et mot de passe (fournisseur « Email » de Supabase) : seulement si EMAIL_LOGIN vaut true dans config.js
+const emailLogin = validConfig() && CFG.EMAIL_LOGIN===true;
+const canLogin = validConfig() && (provs.length>0 || emailLogin);
+const EMAIL_RE = /^[^\s@<>()",;:]{1,64}@[^\s@<>()",;:]{1,253}\.[a-z]{2,24}$/i, PW_MIN = 8, PW_MAX = 72;
+// erreurs Supabase -> codes stables (le texte reçu n'est jamais affiché)
+function mailErr(e){ const m=String(e&&(e.code||e.message)||"").toLowerCase(), st=+(e&&e.status)||0, x=new Error("mail");
+  x.code= /invalid.?(login|credentials)|invalid_credentials/.test(m)? "creds" : /not.?confirmed|email_not_confirmed/.test(m)? "unconfirmed"
+    : /already|registered|exists/.test(m)? "exists" : /weak|password.*(short|length|characters)|weak_password/.test(m)? "weak"
+    : st===429||/rate|too many|over_email_send_rate/.test(m)? "rate" : /signup.*(disabled|not allowed)|provider.*disabled|email_provider_disabled/.test(m)? "disabled"
+    : /same.?password|should be different/.test(m)? "same" : "other"; return x; }
+function checkMail(email,pw){ const e=String(email||"").trim().toLowerCase(), p=String(pw||"");
+  if(!EMAIL_RE.test(e)){ const x=new Error("mail"); x.code="email"; throw x; }
+  if(pw!==undefined&&(p.length<PW_MIN||p.length>PW_MAX)){ const x=new Error("mail"); x.code="weak"; throw x; }
+  return e; }
 
 // ---- chargement de la bibliothèque (même origine)
 let libP=null;
@@ -54,13 +67,15 @@ function cleanConsent(c){
 }
 const ls={ get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }, del(k){ try{ localStorage.removeItem(k); }catch(e){} } };
 
-let client=null, uid=null, consent=null, signedOutCbs=[];
+let client=null, uid=null, consent=null, signedOutCbs=[], recovery=false, recoveryCbs=[];
 async function getClient(){
   if(client) return client;
   if(!validConfig()) throw new Error("config");
   const lib=await loadLib();
   client=lib.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{flowType:"pkce",persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:STORAGE_KEY}});
-  client.auth.onAuthStateChange((ev)=>{ if(ev==="SIGNED_OUT"){ uid=null; consent=null; signedOutCbs.slice().forEach(f=>{ try{ f(); }catch(e){} }); } });
+  client.auth.onAuthStateChange((ev)=>{ if(ev==="SIGNED_OUT"){ uid=null; consent=null; recovery=false; signedOutCbs.slice().forEach(f=>{ try{ f(); }catch(e){} }); }
+    // retour du lien « mot de passe oublié » : la page doit proposer un nouveau mot de passe
+    if(ev==="PASSWORD_RECOVERY"){ recovery=true; recoveryCbs.slice().forEach(f=>{ try{ f(); }catch(e){} }); } });
   return client;
 }
 // la ligne de l'utilisateur : lecture / mise à jour bornées par RLS (user_id = auth.uid()). Écrire ne CRÉE jamais la ligne :
@@ -71,7 +86,7 @@ function docRef(){
       if(!Array.isArray(data)||data.length===0){ const e=new Error("norow"); e.code="NOROW"; throw e; } } };
 }
 const api={
-  canLogin, providers:provs, CONSENT_V, get oauthError(){ return oauthError; },
+  canLogin, providers:provs, emailLogin, PW_MIN, CONSENT_V, get oauthError(){ return oauthError; }, get inRecovery(){ return recovery; },
   // session existante → {db,user,consent}, sinon null (invité). Sans session enregistrée, la bibliothèque n'est même pas chargée.
   async connect(){
     if(!client&&!ls.get(STORAGE_KEY)&&!oauthReturn) return null;
@@ -89,6 +104,23 @@ const api={
     const c=await getClient(); ls.set(CONSENT_KEY,JSON.stringify(cc));
     const {error}=await c.auth.signInWithOAuth({provider,options:{redirectTo:redirectUrl()}}); if(error){ ls.del(CONSENT_KEY); throw error; }
   },
+  // création de compte par e-mail : l'accord est gardé comme pour OAuth (repris après la confirmation de l'adresse, si elle arrive dans les 10 minutes)
+  // -> {confirm:true} quand Supabase envoie un e-mail de confirmation (cas normal), {confirm:false} si la session est ouverte tout de suite
+  async signUpEmail(email,pw,cons){
+    if(!emailLogin) throw new Error("provider"); const e=checkMail(email,pw), cc=cleanConsent(cons); if(!cc) throw new Error("consent");
+    const c=await getClient(); ls.set(CONSENT_KEY,JSON.stringify(cc));
+    const {data,error}=await c.auth.signUp({email:e,password:String(pw),options:{emailRedirectTo:redirectUrl()}}); if(error){ ls.del(CONSENT_KEY); throw mailErr(error); }
+    return {confirm:!(data&&data.session)}; },
+  async signInEmail(email,pw,cons){
+    if(!emailLogin) throw new Error("provider"); const e=checkMail(email), cc=cleanConsent(cons); if(!cc) throw new Error("consent");
+    const c=await getClient(); ls.set(CONSENT_KEY,JSON.stringify(cc));
+    const {error}=await c.auth.signInWithPassword({email:e,password:String(pw||"")}); if(error){ ls.del(CONSENT_KEY); throw mailErr(error); } },
+  // e-mail de réinitialisation : même réponse que l'adresse existe ou non (on ne révèle pas qui a un compte)
+  async resetPassword(email){ if(!emailLogin) throw new Error("provider"); const e=checkMail(email); const c=await getClient();
+    const {error}=await c.auth.resetPasswordForEmail(e,{redirectTo:redirectUrl()}); if(error){ const x=mailErr(error); if(x.code==="rate") throw x; } },
+  async updatePassword(pw){ if(!uid||!client) throw new Error("session"); const p=String(pw||""); if(p.length<PW_MIN||p.length>PW_MAX){ const x=new Error("mail"); x.code="weak"; throw x; }
+    const {error}=await client.auth.updateUser({password:p}); if(error) throw mailErr(error); recovery=false; },
+  onRecovery(f){ if(typeof f==="function") recoveryCbs.push(f); },
   // accord donné juste avant la redirection : valable 10 minutes, versions courantes seulement
   takePendingConsent(){ let c=null; try{ c=cleanConsent(JSON.parse(ls.get(CONSENT_KEY)||"null")); }catch(e){} ls.del(CONSENT_KEY);
     if(c){ const age=Date.now()-Date.parse(c.at); if(!(age>=-60000&&age<=CONSENT_TTL)||c.cgu!==CONSENT_V||c.privacy!==CONSENT_V) c=null; } return c; },

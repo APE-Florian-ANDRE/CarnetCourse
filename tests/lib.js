@@ -20,8 +20,8 @@ const FAKE_KEY=b64({alg:"HS256",typ:"JWT"})+"."+b64({role:"anon",iss:"supabase",
 const SERVICE_KEY=b64({alg:"HS256",typ:"JWT"})+"."+b64({role:"service_role",iss:"supabase"})+"."+"signaturesignaturesig";
 // config.js de test : valeurs valides (aucun réseau : le client est simulé)
 const cfgJs=(extra={})=>()=>{ const c=fs.readFileSync(path.join(ROOT,"config.js"),"utf8");
-  const o={SUPABASE_URL:"https://abcdefghij.supabase.co",SUPABASE_ANON_KEY:FAKE_KEY,PROVIDERS:["google","azure","github"],CHAT_WEBHOOK_URL:"",CHAT_PROVIDER_NAME:"",...extra};   // Coach coupé par défaut, quelle que soit la config de production
-  let s=c; for(const [k,v] of Object.entries(o)) s=s.replace(new RegExp(k+':\\s*(?:"[^"]*"|\\[[^\\]]*\\])'),k+": "+JSON.stringify(v)); return s; };
+  const o={SUPABASE_URL:"https://abcdefghij.supabase.co",SUPABASE_ANON_KEY:FAKE_KEY,PROVIDERS:["google","azure","github"],CHAT_WEBHOOK_URL:"",CHAT_PROVIDER_NAME:"",EMAIL_LOGIN:false,...extra};   // Coach coupé par défaut, quelle que soit la config de production
+  let s=c; for(const [k,v] of Object.entries(o)) s=s.replace(new RegExp(k+':\\s*(?:"[^"]*"|\\[[^\\]]*\\]|true|false)'),k+": "+JSON.stringify(v)); return s; };
 // config.js de test « non configuré » (site 100 % invité), indépendant des valeurs de production
 const blankCfgJs=()=>cfgJs({SUPABASE_URL:"",SUPABASE_ANON_KEY:""})();
 // base de données simulée, partagée entre pages ; imite les règles RLS du schéma
@@ -49,7 +49,21 @@ async function fake(page,db,{session,failRpc}={}){
       const cur=()=>{ try{ return JSON.parse(localStorage.getItem(sk)||"null"); }catch(e){ return null; } };
       const auth={ async getSession(){ return {data:{session:cur()},error:null}; }, onAuthStateChange(cb){ cbs.push(cb); return {data:{subscription:{unsubscribe(){}}}}; },
         async signInWithOAuth(o){ window.__oauth.push({provider:o.provider,redirectTo:o.options&&o.options.redirectTo}); return {data:{},error:null}; },
-        async signOut(o){ window.__signOutScope=o&&o.scope; localStorage.removeItem(sk); cbs.forEach(f=>f("SIGNED_OUT")); return {error:null}; } };
+        async signOut(o){ window.__signOutScope=o&&o.scope; localStorage.removeItem(sk); cbs.forEach(f=>f("SIGNED_OUT")); return {error:null}; },
+        // compte par e-mail : comptes connus dans window.__mailUsers {email:{pw,confirmed}} ; window.__mailConfirm = confirmation par e-mail exigée
+        async signUp(o){ window.__mail=(window.__mail||[]).concat([{op:"signUp",email:o.email,redirect:o.options&&o.options.emailRedirectTo}]); const U=window.__mailUsers=window.__mailUsers||{};
+          if(window.__mailDisabled) return {data:{},error:{message:"Signups not allowed for this instance",status:422}};
+          if(!U[o.email]) U[o.email]={pw:o.password,confirmed:!window.__mailConfirm};
+          if(window.__mailConfirm) return {data:{user:{id:"u-mail"},session:null},error:null};
+          const ss={user:{id:"u-mail",email:o.email,user_metadata:{}},access_token:"m".repeat(20)}; localStorage.setItem(sk,JSON.stringify(ss)); cbs.forEach(f=>f("SIGNED_IN")); return {data:{user:ss.user,session:ss},error:null}; },
+        async signInWithPassword(o){ window.__mail=(window.__mail||[]).concat([{op:"signIn",email:o.email}]); const u=(window.__mailUsers||{})[o.email];
+          if(!u||u.pw!==o.password) return {data:{},error:{message:"Invalid login credentials",status:400}};
+          if(!u.confirmed) return {data:{},error:{message:"Email not confirmed",status:400}};
+          const ss={user:{id:"u-mail",email:o.email,user_metadata:{}},access_token:"m".repeat(20)}; localStorage.setItem(sk,JSON.stringify(ss)); cbs.forEach(f=>f("SIGNED_IN")); return {data:{session:ss},error:null}; },
+        async resetPasswordForEmail(e,o){ window.__mail=(window.__mail||[]).concat([{op:"reset",email:e,redirect:o&&o.redirectTo}]); return {data:{},error:null}; },
+        async updateUser(o){ window.__mail=(window.__mail||[]).concat([{op:"update",pw:o.password}]); return {data:{},error:null}; },
+        __emit(ev){ cbs.forEach(f=>f(ev)); } };
+      window.__sbAuth=auth;
       const from=t=>{ const q={cols:null,uid:null,mode:null,row:null};
         const b={ select(c){ q.mode="select"; q.cols=c; return b; }, eq(c,v){ q.uid=v; return b; },
           async maybeSingle(){ const s=cur(); const uid=s&&s.user&&s.user.id; if(!uid||q.uid!==uid) return {data:null,error:null}; const r=await window.__sbRpc("select",{uid}); if(!r) return {data:null,error:null}; const o={}; for(const c of q.cols.split(",")) o[c.trim()]=r[c.trim()]; return {data:o,error:null}; },

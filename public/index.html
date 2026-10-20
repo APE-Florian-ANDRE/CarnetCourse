@@ -432,6 +432,15 @@
         <details class="au-more"><summary>Quelles données ?</summary><p id="auHealthD">Âge, taille, poids, suivi, ressenti après séance, activités et pesées importées d'Apple Santé ou de Polar Flow, fréquence cardiaque de repos : seulement pour synchroniser ton carnet entre tes appareils. Tu peux retirer ce consentement à tout moment depuis l'écran Compte.</p></details>
       </fieldset>
       <div class="au-provs" id="auProvs"></div>
+      <form class="au-mail" id="auMail" novalidate hidden>
+        <p class="au-or" id="auOr"><span>ou avec ton e-mail</span></p>
+        <div class="au-mm" role="group" aria-label="Compte par e-mail"><button type="button" data-mm="signup" aria-pressed="true">Créer un compte</button><button type="button" data-mm="signin" aria-pressed="false">J'ai déjà un compte</button></div>
+        <div class="au-f"><label for="auEmail">E-mail</label><input id="auEmail" type="email" inputmode="email" autocomplete="email" maxlength="254" spellcheck="false" autocapitalize="off" required></div>
+        <div class="au-f"><label for="auPw">Mot de passe</label><div class="au-pw"><input id="auPw" type="password" autocomplete="new-password" minlength="8" maxlength="72" required aria-describedby="auPwH"><button class="au-eye" type="button" id="auEye" aria-label="Afficher le mot de passe" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+          <span class="au-fh" id="auPwH">8 caractères au moins. Une phrase de passe est plus sûre et plus facile à retenir.</span></div>
+        <button class="au-prov au-go" type="submit" id="auGo"><span>Créer mon compte</span></button>
+        <button class="au-link au-forgot" type="button" id="auForgot" hidden>Mot de passe oublié ?</button>
+      </form>
       <p class="au-hint" id="auHint" aria-live="polite">Coche les 3 cases pour continuer.</p>
       <div class="au-msg" id="accMsg" role="status" aria-live="polite"></div>
       <button class="au-link" type="button" id="auLater">Continuer sans compte</button>
@@ -445,7 +454,7 @@
         <li><span class="au-i" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="13" height="9" rx="2"/><rect x="13" y="9" width="8" height="12" rx="2"/><path d="M7 17h4"/></svg></span><div><b>Sur tous tes appareils</b><span>Téléphone, ordinateur : ton plan, tes coches et ton suivi sont à jour partout.</span></div></li>
         <li><span class="au-i" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span><div><b>Toi seul y as accès</b><span>Tes données sont protégées par des règles d'accès, hébergées dans l'UE.</span></div></li>
         <li><span class="au-i" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 4v4h4"/></svg></span><div><b>Rien n'est perdu</b><span>Ce que tu as déjà rempli sur cet appareil est repris dans ton compte.</span></div></li>
-        <li><span class="au-i" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M7 12h10M10 18h4"/></svg></span><div><b>Ni pub, ni revente</b><span>Pas de mot de passe à retenir. Exporte ou supprime tout quand tu veux.</span></div></li>
+        <li><span class="au-i" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M7 12h10M10 18h4"/></svg></span><div><b>Ni pub, ni revente</b><span>Avec Google, GitHub ou ton e-mail. Exporte ou supprime tout quand tu veux.</span></div></li>
       </ul>
     </div>
   </aside>
