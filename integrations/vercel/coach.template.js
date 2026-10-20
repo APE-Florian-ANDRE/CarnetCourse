@@ -54,7 +54,8 @@ module.exports = async function handler(req, res) {
   while (messages.length && messages[0].role !== "user") messages.shift();
   if (!messages.length || messages[messages.length - 1].role !== "user") return send(res, 400, "Requête invalide.");
   const alt = [];
-  for (const x of messages) { if (alt.length && alt[alt.length - 1].role === x.role) alt[alt.length - 1] = x; else alt.push(x); }
+  // deux messages du même rôle à la suite (réponse en échec entre les deux) : réunis, pour ne pas perdre la question (l'API exige l'alternance)
+  for (const x of messages) { const last = alt[alt.length - 1]; if (last && last.role === x.role) last.content = (last.content + "\n\n" + x.content).slice(-2000); else alt.push({ role: x.role, content: x.content }); }
   let context = "";
   if (b.context && typeof b.context === "object" && !Array.isArray(b.context)) { const s = JSON.stringify(b.context); if (s.length <= 4000) context = s; }
   // le jeton est vérifié par Supabase ; l'identifiant vient de Supabase, jamais du corps de la requête
@@ -62,7 +63,7 @@ module.exports = async function handler(req, res) {
   try {
     const r = await fetch(SUPA + "/auth/v1/user", { headers: { apikey: ANON, Authorization: "Bearer " + m[1] }, signal: AbortSignal.timeout(8000) });
     if (r.status === 200) user = await r.json();
-  } catch (e) { return send(res, 502, "Le coach n'a pas pu répondre. Réessaie dans un moment."); }
+  } catch (e) { console.error("coach: Supabase injoignable"); return send(res, 502, "Le coach n'a pas pu répondre. Réessaie dans un moment."); }
   if (!user || typeof user.id !== "string" || !/^[0-9a-f-]{36}$/i.test(user.id) || user.is_anonymous === true) return send(res, 401, "Connexion requise : reconnecte-toi puis réessaie.");
   // réservé aux adultes : l'âge (toujours envoyé avec le consentement) doit être connu et >= 18
   let age = NaN; try { age = Number(JSON.parse(context || "{}").profil.age); } catch (e) {}
@@ -78,7 +79,10 @@ module.exports = async function handler(req, res) {
   try {
     const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + MODEL + ":generateContent", { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": KEY }, body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: { maxOutputTokens: MAX_TOKENS, temperature: 0.5 } }), signal: AbortSignal.timeout(25000) });
     out = r.status === 200 ? await r.json() : null;   // quota gratuit épuisé (429) ou autre erreur : message générique plus bas
-  } catch (e) { out = null; }
+    // journal Vercel pour l'éditeur : code HTTP et statut Google seulement (jamais le message, la clé ni le contenu de la conversation)
+    if (r.status !== 200) { let g = {}; try { g = ((await r.json()) || {}).error || {}; } catch (e) {} const reason = Array.isArray(g.details) && g.details[0] && g.details[0].reason;
+      console.error("coach: Gemini " + r.status + " " + String(g.status || "").replace(/[^A-Z_]/g, "").slice(0, 40) + (reason ? " " + String(reason).replace(/[^A-Z_]/g, "").slice(0, 40) : "") + " modèle=" + MODEL); }
+  } catch (e) { out = null; console.error("coach: Gemini injoignable (" + String(e && e.name || "erreur").replace(/[^A-Za-z]/g, "").slice(0, 30) + ")"); }
   const cand = out && Array.isArray(out.candidates) && out.candidates[0] && typeof out.candidates[0] === "object" ? out.candidates[0] : {};
   // question ou réponse bloquée par les filtres de Google : message fixe prudent, jamais le texte partiel
   if ((out && out.promptFeedback && out.promptFeedback.blockReason) || /^(SAFETY|PROHIBITED_CONTENT|BLOCKLIST|SPII|RECITATION)$/.test(String(cand.finishReason || ""))) return send(res, 200, BLOCKED);

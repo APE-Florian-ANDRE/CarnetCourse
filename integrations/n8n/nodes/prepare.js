@@ -16,9 +16,9 @@ for (const x of b.messages) {
 }
 while (messages.length && messages[0].role !== "user") messages.shift();
 if (!messages.length || messages[messages.length - 1].role !== "user") return bad(400, "Requête invalide.");
-// deux rôles identiques de suite : on garde le dernier (l'API exige l'alternance)
+// deux rôles identiques de suite (réponse en échec entre les deux) : réunis, pour ne pas perdre la question (l'API exige l'alternance)
 const alt = [];
-for (const x of messages) { if (alt.length && alt[alt.length - 1].role === x.role) alt[alt.length - 1] = x; else alt.push(x); }
+for (const x of messages) { const last = alt[alt.length - 1]; if (last && last.role === x.role) last.content = (last.content + "\n\n" + x.content).slice(-2000); else alt.push({ role: x.role, content: x.content }); }
 let context = "";
 if (b.context && typeof b.context === "object" && !Array.isArray(b.context)) {
   const s = JSON.stringify(b.context);
