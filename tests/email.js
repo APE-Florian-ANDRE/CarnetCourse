@@ -13,23 +13,24 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
  // M1 : formulaire visible, mode création par défaut
  let p=await mk(); await open(p);
  ok(await p.evaluate(()=>!document.querySelector("#auMail").hidden&&document.querySelector("[data-mm=signup]").getAttribute("aria-pressed")==="true"&&document.querySelector("#auPw").autocomplete==="new-password"&&document.querySelector("#auForgot").hidden),"M1 formulaire e-mail affiché (création de compte, new-password, pas de « mot de passe oublié »)");
- // M2 : consentement exigé, champs vérifiés avant tout appel
- await fill(p,"zoe@example.org","unephrasedepasse"); await p.click("#auGo"); await p.waitForTimeout(200);
- ok(/trois cases/.test(await msg(p))&&!(await p.evaluate(()=>window.__mail)),"M2 sans les trois cases : message, aucun appel");
- await tick(p); await fill(p,"pas-une-adresse","unephrasedepasse"); await p.click("#auGo"); await p.waitForTimeout(150);
+ // M2 : pas de cases avant la connexion (accord demandé une fois, ensuite)
+ ok(await p.evaluate(()=>document.querySelector("#auCons").hidden&&!document.querySelector("#auTos").hidden),"M2 écran court : pas de cases avant, CGU rappelées");
+ await fill(p,"pas-une-adresse","unephrasedepasse"); await p.click("#auGo"); await p.waitForTimeout(150);
  ok(/pas valide/.test(await msg(p))&&!(await p.evaluate(()=>window.__mail)),"M3 adresse invalide refusée sans appel");
  await fill(p,"zoe@example.org","court"); await p.click("#auGo"); await p.waitForTimeout(150);
  ok(/8 caractères/.test(await msg(p))&&!(await p.evaluate(()=>window.__mail)),"M4 mot de passe trop court refusé sans appel");
  // M5 : création sans confirmation e-mail => connecté, accord enregistré
  await fill(p,"zoe@example.org","unephrasedepasse"); await p.click("#auGo"); await p.waitForTimeout(900);
- ok(await p.evaluate(()=>document.querySelector("#auth").hidden&&window.__mail[0].op==="signUp"&&window.__mail[0].redirect===location.origin+"/"),"M5 compte créé : écran fermé, lien de retour = ce site");
- ok(await p.evaluate(()=>document.querySelector(".js-av").dataset.st==="connected"),"M5 connecté, sauvegarde active (accord enregistré)");
+ ok(await p.evaluate(()=>window.__mail[0].op==="signUp"&&window.__mail[0].redirect===location.origin+"/"),"M5 compte créé, lien de retour = ce site");
+ ok(await p.evaluate(()=>!document.getElementById("auth").hidden&&!!document.querySelector('#auth [data-acc="consent-ok"]')&&!document.querySelector("#auCons").hidden),"M5 première connexion : écran « Dernière étape » avec les trois cases");
+ await tick(p); await p.click("[data-acc=consent-ok]"); await p.waitForTimeout(900);
+ ok(await p.evaluate(()=>document.querySelector(".js-av").dataset.st==="connected"),"M5 accord donné : connecté, sauvegarde active");
  ok(await p.evaluate(()=>!document.querySelector("#auPw")||document.querySelector("#auPw").value===""),"M5 mot de passe effacé du champ");
  // M6 : session gardée après rechargement
  await p.reload(); await p.waitForTimeout(900); ok(await p.evaluate(()=>document.querySelector(".js-av").dataset.st==="connected"),"M6 session gardée après rechargement");
  await p.context().close();
  // M7 : confirmation exigée => message « vérifie ta boîte mail », reste sur l'écran
- p=await mk(()=>{ window.__mailConfirm=1; }); await open(p); await tick(p); await fill(p,"lea@example.org","unephrasedepasse"); await p.click("#auGo"); await p.waitForTimeout(600);
+ p=await mk(()=>{ window.__mailConfirm=1; }); await open(p); await fill(p,"lea@example.org","unephrasedepasse"); await p.click("#auGo"); await p.waitForTimeout(600);
  ok(/boîte mail/.test(await msg(p))&&/lea@example\.org/.test(await msg(p))&&!(await p.evaluate(()=>document.querySelector("#auth").hidden)),"M7 confirmation exigée : message clair, écran ouvert");
  // M8 : connexion avant confirmation => message traduit ; mauvais mot de passe => message générique
  await p.click("[data-mm=signin]"); ok(await p.evaluate(()=>document.querySelector("#auPw").autocomplete==="current-password"&&!document.querySelector("#auForgot").hidden&&/connecter/.test(document.querySelector("#auGo").textContent)),"M8 mode connexion : current-password, « mot de passe oublié » visible");
@@ -41,7 +42,7 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
  ok(/Si un compte existe/.test(await msg(p))&&await p.evaluate(()=>window.__mail.some(m=>m.op==="reset"&&m.redirect===location.origin+"/")),"M9 e-mail de réinitialisation : réponse neutre, lien de retour = ce site");
  await p.context().close();
  // M10 : création désactivée côté Supabase => message traduit
- p=await mk(()=>{ window.__mailDisabled=1; }); await open(p); await tick(p); await fill(p,"max@example.org","unephrasedepasse"); await p.click("#auGo"); await p.waitForTimeout(500);
+ p=await mk(()=>{ window.__mailDisabled=1; }); await open(p); await fill(p,"max@example.org","unephrasedepasse"); await p.click("#auGo"); await p.waitForTimeout(500);
  ok(/pas encore activée/.test(await msg(p)),"M10 inscription désactivée : message traduit"); await p.context().close();
  // M11 : retour du lien de réinitialisation => feuille « nouveau mot de passe »
  p=await mk(); await p.evaluate(()=>{ localStorage.setItem("sb-carnet-auth",JSON.stringify({user:{id:"u-mail",email:"zoe@example.org",user_metadata:{}},access_token:"m".repeat(20)})); }); await p.reload(); await p.waitForTimeout(900);
@@ -52,5 +53,7 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
  // M12 : EMAIL_LOGIN absent => pas de formulaire
  { const S2=await L.serve({"/config.js":L.cfgJs()}); const ctx=await b.newContext({viewport:{width:390,height:844}}); const q=await ctx.newPage(); await L.fake(q,L.makeDb()); await q.goto(S2.url+"/"); await q.waitForTimeout(600);
    await q.evaluate(()=>document.querySelector(".js-login:not([hidden])").click()); await q.waitForTimeout(250); ok(await q.evaluate(()=>document.querySelector("#auMail").hidden),"M12 sans EMAIL_LOGIN : formulaire e-mail caché"); await ctx.close(); S2.close(); }
+ { const ctx=await b.newContext({viewport:{width:390,height:844}}); const q=await ctx.newPage(); await L.fake(q,L.makeDb()); await q.goto(S.url+"/?code=abc123"); await q.waitForTimeout(1200);
+   ok(await q.evaluate(()=>location.search===""&&!document.getElementById("auth").hidden&&document.querySelector("[data-mm=signin]").getAttribute("aria-pressed")==="true"&&/n'a pas pu se terminer/.test(document.querySelector("#toasts").textContent)),"M13 lien ouvert dans un autre navigateur : message clair, connexion par e-mail proposée, URL nettoyée"); await ctx.close(); }
  ok(E.length===0,"aucune erreur console",E);
  console.log(fails?"ECHECS "+fails:"TOUT OK"); await b.close(); S.close(); process.exit(fails?1:0); })();

@@ -3442,17 +3442,18 @@ const PROV_ICON={
 const AU_BOX=["#accAge","#accTerms","#accHealth"];
 let auOpener=null, auBusy=false;
 const auReady=()=>AU_BOX.every(q=>$(q).checked);
-function auSync(){ const r=auReady(); authEl.dataset.ready=r?"1":"0"; $("#auHint").hidden=r; if(r) $("#accMsg").innerHTML=""; AU_BOX.forEach(q=>{ if($(q).checked) $(q).removeAttribute("aria-invalid"); }); }
+function auSync(){ const r=auReady(), cs=authEl.dataset.mode==="consent"; authEl.dataset.ready=r?"1":"0"; $("#auHint").hidden=r||!cs; if(r) $("#accMsg").innerHTML=""; AU_BOX.forEach(q=>{ if($(q).checked) $(q).removeAttribute("aria-invalid"); }); }
 function openAuth(mode,opener){
   const A=window.CarnetAuth, cs=mode==="consent"; if(!cs&&!(A&&A.canLogin)){ openAccount(opener); return; }
   closeSheet(true); auOpener=opener||document.activeElement; authEl.dataset.mode=cs?"consent":"login";
   setT($("#auK"),cs?"Dernière étape":"Gratuit · sans publicité");
   setT($("#auT"),cs?"Active la sauvegarde":"Retrouve ton carnet partout");
   setT($("#auSub"),cs? (acct.name?"Tu es connecté en tant que "+acct.name+". ":"Tu es connecté. ")+"Donne ton accord pour enregistrer ton carnet dans ton compte : rien n'y est écrit avant."
-    : (A.emailLogin? "Avec Google ou GitHub, le même bouton crée ton compte ou te connecte. Tu peux aussi utiliser ton e-mail." : "Crée ton compte ou connecte-toi : c'est le même bouton.")+" Ton plan et ton suivi te suivent sur tous tes appareils.");
+    : "Connecte-toi ou crée ton compte : ton plan et ton suivi te suivent sur tous tes appareils.");
   $("#auProvs").innerHTML= cs? `<button class="au-prov" type="button" data-acc="consent-ok"><span>Accepter et activer la sauvegarde</span></button><button class="au-prov" type="button" data-acc="consent-no"><span>Refuser et me déconnecter</span></button>`
     : A.providers.map(p=>`<button class="au-prov" type="button" data-acc="prov" data-prov="${esc(p.id)}">${PROV_ICON[p.id]||""}<span>Continuer avec ${esc(p.label)}</span></button>`).join("");
   setT($("#auLater"),cs?"Plus tard":"Continuer sans compte");
+  $("#auCons").hidden=!cs; $("#auTos").hidden=cs;   // connexion : boutons seulement ; les trois cases sont demandées une fois, à la première connexion
   { const m=$("#auMail"), on=!cs&&!!A.emailLogin; m.hidden=!on; $("#auOr").hidden=!A.providers.length; if(on){ $("#auEmail").value=""; $("#auPw").value=""; auMode("signup"); auEye(false); } }
   AU_BOX.forEach(q=>{ $(q).checked=false; $(q).removeAttribute("aria-invalid"); }); $("#accMsg").innerHTML=""; auBusy=false; auSync();
   authEl.hidden=false; wrapEl.inert=true; homeEl.inert=true; wizEl.inert=true; document.documentElement.style.overflow="hidden"; authEl.scrollTop=0;
@@ -3474,13 +3475,13 @@ function auGate(){ if(auReady()) return true;
   if(un[0]) un[0].focus(); return false; }
 authEl.addEventListener("click",async e=>{ const b=e.target.closest&&e.target.closest("[data-acc]"); if(!b||auBusy) return; const k=b.dataset.acc, msg=t=>{ $("#accMsg").innerHTML=t; };
   if(k==="consent-no"){ auBusy=true; b.disabled=true; await signOutNow(false); auBusy=false; closeAuth(); return; }
-  if(!auGate()) return;
+  if(k==="consent-ok"&&!auGate()) return;
   const A=window.CarnetAuth, lab=b.querySelector("span")||b, old=lab.textContent, all=[...authEl.querySelectorAll("[data-acc]")];
   auBusy=true; all.forEach(x=>{ x.disabled=true; }); b.setAttribute("aria-busy","true");
   setT(lab,k==="prov"? "Redirection vers "+((A.providers.find(p=>p.id===b.dataset.prov)||{}).label||"le fournisseur")+"…" : "Enregistrement…");
   let gone=false;
   try{
-    if(k==="prov"){ await A.signIn(b.dataset.prov,consentRecord()); gone=true; setTimeout(()=>{ if(auBusy){ auBusy=false; all.forEach(x=>{ x.disabled=false; }); b.removeAttribute("aria-busy"); setT(lab,old); } },8000); }
+    if(k==="prov"){ await A.signIn(b.dataset.prov,auReady()?consentRecord():null); gone=true; setTimeout(()=>{ if(auBusy){ auBusy=false; all.forEach(x=>{ x.disabled=false; }); b.removeAttribute("aria-busy"); setT(lab,old); } },8000); }
     else { await A.saveConsent(consentRecord()); auBusy=false; closeAuth(); acct.st="pending"; renderAcct(); await initAccount(); toast("Sauvegarde dans ton compte activée."); return; }
   }catch(err){ msg(`<div class="alert warn" role="alert">${k==="prov"?"Impossible de lancer la connexion pour l'instant. Réessaie dans un instant.":"Impossible d'enregistrer ton accord pour l'instant. Réessaie dans un instant."}</div>`); }
   if(!gone){ auBusy=false; all.forEach(x=>{ x.disabled=false; }); b.removeAttribute("aria-busy"); setT(lab,old); }
@@ -3504,12 +3505,11 @@ $("#auMail").addEventListener("submit",async e=>{ e.preventDefault(); if(auBusy)
   [em,pw].forEach(x=>x.removeAttribute("aria-invalid"));
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){ em.setAttribute("aria-invalid","true"); auMailMsg("warn",AU_MAILERR.email); em.focus(); return; }
   if(up? pw.value.length<A.PW_MIN : !pw.value){ pw.setAttribute("aria-invalid","true"); auMailMsg("warn",up?AU_MAILERR.weak:"Saisis ton mot de passe."); pw.focus(); return; }
-  if(!auGate()) return;
   const lab=$("#auGo").querySelector("span"), old=lab.textContent; auMailBusy(true); setT(lab,up?"Création du compte…":"Connexion…");
   try{
-    if(up){ const r=await A.signUpEmail(email,pw.value,consentRecord()); pw.value="";
+    if(up){ const r=await A.signUpEmail(email,pw.value,null); pw.value="";
       if(r.confirm){ auMailBusy(false); setT(lab,old); auMailMsg("ok",`<b>Vérifie ta boîte mail.</b> Clique sur le lien envoyé à ${esc(email)} pour activer ton compte (regarde aussi dans les indésirables). Si tu avais déjà un compte avec cette adresse, choisis « J'ai déjà un compte ».`); return; } }
-    else await A.signInEmail(email,pw.value,consentRecord());
+    else await A.signInEmail(email,pw.value,null);
     pw.value=""; auMailBusy(false); closeAuth(); acct.st="pending"; renderAcct(); await initAccount(); toast(up?"Compte créé, tu es connecté.":"Tu es connecté."); return;
   }catch(err){ const c=err&&err.code||"other"; auMailBusy(false); setT(lab,old); auMailMsg("warn",AU_MAILERR[c]||AU_MAILERR.other); if(c==="exists") auMode("signin"); (c==="weak"||c==="creds"?pw:em).focus(); }
 });
@@ -3551,12 +3551,22 @@ dlCap={ save:async({filename,data})=>{ const mime=/\.json$/.test(filename)?"appl
 function guestMode(){ noAccount=true; if(!dbRef) acct.st="guest"; setStore(localStatus()); renderAcct(); }
 async function initAccount(){
   try{
-    if(window.CarnetAuth&&window.CarnetAuth.oauthError) setTimeout(()=>toast("La connexion a été annulée ou a échoué. Tu peux réessayer."),400);
+    if(window.CarnetAuth&&window.CarnetAuth.oauthError){ const code=window.CarnetAuth.oauthCode;
+      const m= /otp_expired|expired/.test(code)? "Ce lien a expiré ou a déjà servi. Si tu viens de confirmer ton adresse, connecte-toi avec ton e-mail et ton mot de passe."
+        : /access_denied/.test(code)? "Connexion annulée. Tu peux réessayer quand tu veux."
+        : /email.*(verif|confirm)/.test(code)? "Confirme d'abord ton adresse e-mail chez ce fournisseur, puis réessaie."
+        : "La connexion n'a pas abouti. Réessaie, ou utilise une autre méthode de connexion.";
+      setTimeout(()=>toast(m),400); }
     const A=window.CarnetAuth; if(!A||!A.canLogin){ acct.failed=false; guestMode(); return; }   // pas de connexion configurée : invité
     if(!pwHooked&&A.onRecovery){ pwHooked=true; A.onRecovery(()=>setTimeout(openPwSheet,300)); }
     // compte injoignable (réseau, Supabase) : on le dit au lieu de passer en invité sans un mot ; la session reste enregistrée et sera reprise
     let c; try{ c=await A.connect(); }catch(e){ acct.failed=true; guestMode(); setTimeout(()=>toast("Impossible de joindre ton compte pour l'instant : tu es en mode invité sur cet appareil. Réessaie depuis le bouton Compte."),500); return; }
-    acct.failed=false; if(!c){ guestMode(); return; }   // pas de session : invité
+    acct.failed=false;
+    if(!c){ guestMode();   // pas de session : invité
+      // retour de connexion sans session : le plus souvent, lien de confirmation ouvert dans une autre appli que celle de l'inscription (l'adresse est quand même confirmée)
+      if(A.returnFailed) setTimeout(()=>{ toast("La connexion n'a pas pu se terminer sur cet appareil. Si tu viens de confirmer ton adresse, elle est bien validée : connecte-toi avec ton e-mail et ton mot de passe.");
+        if(A.emailLogin&&authEl.hidden&&wizEl.hidden&&!sheetEl){ openAuth("login",avBtn()); auMode("signin"); } },500);
+      return; }
     const {db,user}=c, uid=user&&user.id? await user.id():null;
     if(!db||!uid||!/^[\w-]{1,128}$/.test(String(uid))){ guestMode(); return; }
     A.onSignedOut(()=>{ if(dbRef||acct.st==="consent"){ dbRef=null; acct.st="guest"; acct.name=""; noAccount=true; setStore(localStatus()); renderAcct(); toast("Tu as été déconnecté."); } });

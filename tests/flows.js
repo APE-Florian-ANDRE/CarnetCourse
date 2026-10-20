@@ -25,18 +25,15 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
    const Sx=await L.serve({"/config.js":L.cfgJs(extra)}); const p=await mk(Sx,L.makeDb(),{seed:data()}); await acct(p);
    const can=await p.evaluate(()=>window.CarnetAuth.canLogin); ok(can===false,"F9 config refusée : "+n+" (canLogin="+can+")");
    await p.ctx.close(); Sx.close(); }
- // F1 : invité configuré => cases + fournisseurs
+ // F1 : invité configuré => fournisseurs tout de suite (l'accord est demandé une fois, au retour)
  { const db=L.makeDb(); const p=await mk(S,db,{seed:data()}); await acct(p);
    ok(await p.evaluate(()=>!document.querySelector(".js-login").hidden),"F1 bouton « Se connecter »"); await p.click('.sheet [data-acc="login"]'); await p.waitForTimeout(300);
    ok(await p.evaluate(()=>!document.getElementById("auth").hidden&&document.activeElement.id==="auT"),"F1 écran de connexion ouvert, titre focalisé");
    const labels=await p.$$eval("[data-prov]",e=>e.map(x=>x.textContent)); ok(labels.join("|")==="Continuer avec Google|Continuer avec Microsoft|Continuer avec GitHub","F1 boutons fournisseurs",labels);
-   ok(await p.evaluate(()=>["#accAge","#accTerms","#accHealth"].every(q=>document.querySelector(q)&&!document.querySelector(q).checked)),"F1 trois cases non précochées");
-   await p.click("[data-prov=google]"); await p.waitForTimeout(200); ok((await p.textContent("#accMsg")).includes("Coche les trois cases"),"F1 refus sans consentement");
-   ok(await p.evaluate(()=>window.__oauth.length===0),"F1 aucun appel OAuth sans cases");
-   await p.check("#accAge"); await p.check("#accTerms"); await p.click("[data-prov=azure]"); await p.waitForTimeout(200); ok(await p.evaluate(()=>window.__oauth.length===0),"F1 deux cases sur trois ne suffisent pas (santé séparée des CGU)");
-   await p.check("#accHealth"); await p.click("[data-prov=azure]"); await p.waitForTimeout(300);
+   ok(await p.evaluate(()=>document.querySelector("#auCons").hidden&&!document.querySelector("#auTos").hidden),"F1 connexion directe : pas de cases avant, CGU rappelées sous les boutons");
+   await p.click("[data-prov=azure]"); await p.waitForTimeout(300);
    const oa=await p.evaluate(()=>window.__oauth[0]); ok(oa&&oa.provider==="azure"&&oa.redirectTo===S.url+"/","F1 OAuth Microsoft : redirectTo = racine du site",oa);
-   const pc=await p.evaluate(()=>JSON.parse(localStorage.getItem("carnet.consent")||"null")); ok(pc&&pc.health===true&&pc.age15===true&&/^\d{4}-\d{2}-\d{2}T/.test(pc.at),"F1 accord horodaté gardé le temps du retour",pc);
+   ok(await p.evaluate(()=>localStorage.getItem("carnet.consent")===null),"F1 aucun accord supposé : il sera demandé au retour");
    ok(db.log.length===0,"F1 aucune écriture en base avant connexion"); await csp(p); await p.ctx.close(); }
  // F2 : retour OAuth avec accord en attente + données locales
  { const db=L.makeDb(); const p=await mk(S,db,{session:L.SESSION(),seed:data(),pend:PEND}); await p.waitForTimeout(1200);
@@ -98,7 +95,7 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
  // F8 : retour OAuth en erreur : URL nettoyée, aucun texte reçu affiché
  { const db=L.makeDb(); const p=await mk(S,db,{seed:data(),url:"/?error=access_denied&error_description=%3Cimg%20src%3Dx%20onerror%3Dwindow.__x%3D1%3E"}); await p.waitForTimeout(900);
    ok(await p.evaluate(()=>location.search===""&&!window.__x&&!/onerror/.test(document.body.innerHTML)),"F8 erreur OAuth : URL nettoyée, rien de reflété");
-   ok((await p.textContent("#toasts")).includes("annulée ou a échoué"),"F8 message générique"); await p.ctx.close(); }
+   { const t=await p.textContent("#toasts"); ok(/n'a pas abouti|annulée|expiré/.test(t)&&!/onerror|script/.test(t),"F8 message choisi par l'app (jamais le texte reçu)",t); } await p.ctx.close(); }
  // F11 : fusion avec un autre appareil (pesée écrite ailleurs) : l'écriture périmée ne l'écrase pas
  { const db=L.makeDb(); const B=await mk(S,db,{session:L.SESSION(),seed:data(),pend:PEND}); await B.waitForTimeout(1200);
    const row=db.rows.get("u-1"); row.doc.log=[...row.doc.log,{date:"2026-10-05",poids:79,at:Date.now()+1000}]; row.doc.savedAt=Date.now()+1000;

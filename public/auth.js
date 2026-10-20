@@ -54,9 +54,10 @@ function loadLib(){
 // ---- URL de retour OAuth : toujours la racine de ce site (même origine), jamais un paramètre venu de l'URL
 function redirectUrl(){ const u=new URL(".",location.href); if(u.origin!==location.origin) throw new Error("redirect"); u.search=""; u.hash=""; return u.href; }
 // retour OAuth en erreur : on n'affiche jamais le texte reçu ; l'URL est nettoyée
-let oauthError=false, oauthReturn=false;
+// seul le code d'erreur est gardé, et seulement s'il a la forme d'un identifiant (otp_expired, bad_oauth_state…) : il sert à choisir un message
+let oauthError=false, oauthReturn=false, oauthCode="", returnFailed=false;
 (function(){ try{ const p=new URLSearchParams(location.search+"&"+location.hash.replace(/^#/,"")); oauthReturn=p.has("code");
-  if(p.has("error")||p.has("error_description")||p.has("error_code")){ oauthError=true; history.replaceState(null,"",new URL(".",location.href).pathname); } }catch(e){} })();
+  if(p.has("error")||p.has("error_description")||p.has("error_code")){ oauthError=true; const c=String(p.get("error_code")||p.get("error")||""); oauthCode=/^[a-z_]{2,40}$/.test(c)? c : ""; history.replaceState(null,"",new URL(".",location.href).pathname); } }catch(e){} })();
 
 // ---- consentement : trois accords distincts (âge, CGU + confidentialité, données de santé), horodatés
 function cleanConsent(c){
@@ -86,12 +87,15 @@ function docRef(){
       if(!Array.isArray(data)||data.length===0){ const e=new Error("norow"); e.code="NOROW"; throw e; } } };
 }
 const api={
-  canLogin, providers:provs, emailLogin, PW_MIN, CONSENT_V, get oauthError(){ return oauthError; }, get inRecovery(){ return recovery; },
+  canLogin, providers:provs, emailLogin, PW_MIN, CONSENT_V, get oauthError(){ return oauthError; }, get oauthCode(){ return oauthCode; }, get inRecovery(){ return recovery; },
+  // retour d'une connexion (?code=…) qui n'a pas ouvert de session : lien ouvert dans un autre navigateur, lien expiré ou déjà utilisé
+  get returnFailed(){ return returnFailed; },
   // session existante → {db,user,consent}, sinon null (invité). Sans session enregistrée, la bibliothèque n'est même pas chargée.
   async connect(){
     if(!client&&!ls.get(STORAGE_KEY)&&!oauthReturn) return null;
-    const c=await getClient(); const {data,error}=await c.auth.getSession(); if(error) throw error;
-    const s=data&&data.session; if(!s||!s.user||!s.user.id){ uid=null; return null; }
+    const c=await getClient(); const {data,error}=await c.auth.getSession();
+    if(error){ if(oauthReturn){ returnFailed=true; try{ history.replaceState(null,"",new URL(".",location.href).pathname); }catch(e){} return null; } throw error; }
+    const s=data&&data.session; if(!s||!s.user||!s.user.id){ uid=null; if(oauthReturn){ returnFailed=true; try{ history.replaceState(null,"",new URL(".",location.href).pathname); }catch(e){} } return null; }
     uid=String(s.user.id); const u=s.user, md=u.user_metadata||{};
     const {data:row,error:e2}=await c.from("user_data").select("consent").eq("user_id",uid).maybeSingle(); if(e2) throw e2;
     consent=cleanConsent(row&&row.consent);
@@ -100,20 +104,20 @@ const api={
   },
   async signIn(provider,cons){
     if(!provs.some(p=>p.id===provider)) throw new Error("provider");
-    const cc=cleanConsent(cons); if(!cc) throw new Error("consent");
-    const c=await getClient(); ls.set(CONSENT_KEY,JSON.stringify(cc));
+    // l'accord est facultatif ici : sans lui, l'écran « Dernière étape » le demande au retour, avant toute écriture dans le compte
+    const cc=cleanConsent(cons); const c=await getClient(); if(cc) ls.set(CONSENT_KEY,JSON.stringify(cc)); else ls.del(CONSENT_KEY);
     const {error}=await c.auth.signInWithOAuth({provider,options:{redirectTo:redirectUrl()}}); if(error){ ls.del(CONSENT_KEY); throw error; }
   },
   // création de compte par e-mail : l'accord est gardé comme pour OAuth (repris après la confirmation de l'adresse, si elle arrive dans les 10 minutes)
   // -> {confirm:true} quand Supabase envoie un e-mail de confirmation (cas normal), {confirm:false} si la session est ouverte tout de suite
   async signUpEmail(email,pw,cons){
-    if(!emailLogin) throw new Error("provider"); const e=checkMail(email,pw), cc=cleanConsent(cons); if(!cc) throw new Error("consent");
-    const c=await getClient(); ls.set(CONSENT_KEY,JSON.stringify(cc));
+    if(!emailLogin) throw new Error("provider"); const e=checkMail(email,pw), cc=cleanConsent(cons);
+    const c=await getClient(); if(cc) ls.set(CONSENT_KEY,JSON.stringify(cc)); else ls.del(CONSENT_KEY);
     const {data,error}=await c.auth.signUp({email:e,password:String(pw),options:{emailRedirectTo:redirectUrl()}}); if(error){ ls.del(CONSENT_KEY); throw mailErr(error); }
     return {confirm:!(data&&data.session)}; },
   async signInEmail(email,pw,cons){
-    if(!emailLogin) throw new Error("provider"); const e=checkMail(email), cc=cleanConsent(cons); if(!cc) throw new Error("consent");
-    const c=await getClient(); ls.set(CONSENT_KEY,JSON.stringify(cc));
+    if(!emailLogin) throw new Error("provider"); const e=checkMail(email), cc=cleanConsent(cons);
+    const c=await getClient(); if(cc) ls.set(CONSENT_KEY,JSON.stringify(cc)); else ls.del(CONSENT_KEY);
     const {error}=await c.auth.signInWithPassword({email:e,password:String(pw||"")}); if(error){ ls.del(CONSENT_KEY); throw mailErr(error); } },
   // e-mail de réinitialisation : même réponse que l'adresse existe ou non (on ne révèle pas qui a un compte)
   async resetPassword(email){ if(!emailLogin) throw new Error("provider"); const e=checkMail(email); const c=await getClient();

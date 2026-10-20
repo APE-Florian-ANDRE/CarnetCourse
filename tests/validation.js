@@ -125,11 +125,8 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
    const p=await mk({session:null,path:"/"+q}); await p.waitForTimeout(300);
    ok(await p.evaluate(()=>location.search===""&&location.hash===""),"V7 URL de retour en erreur nettoyée");
    ok(await p.evaluate(()=>!document.body.innerHTML.includes("onerror")&&!document.body.textContent.includes("alert(1)")),"V7 le texte reçu dans l'URL n'est jamais affiché");
-   await act(p,"login"); await p.waitForSelector("#auth:not([hidden])"); await p.click("#auth [data-acc=prov]");
-   ok(await p.evaluate(()=>["#accAge","#accTerms","#accHealth"].every(q=>{ const e=document.querySelector(q); return e.getAttribute("aria-invalid")==="true"&&e.getAttribute("aria-describedby").includes("accMsg"); })&&/trois cases/.test(document.querySelector("#auth #accMsg").textContent)),"V7 cases non cochées : marquées et reliées au message");
-   ok(await p.evaluate(()=>!window.__oauth.length),"V7 aucune redirection sans les trois accords");
-   for(const q of ["#accAge","#accTerms","#accHealth"]) await p.check(q,{force:true});
-   ok(await p.evaluate(()=>!document.querySelector("#auth [aria-invalid]")),"V7 cases cochées : plus d'erreur");
+   await act(p,"login"); await p.waitForSelector("#auth:not([hidden])");
+   ok(await p.evaluate(()=>document.querySelector("#auCons").hidden&&!document.querySelector("#auth [aria-invalid]")),"V7 écran de connexion court : pas de cases à cocher avant");
    await p.evaluate(()=>{ const b=document.querySelector("#auth [data-acc=prov]"); b.click(); b.click(); }); await p.waitForTimeout(300);
    ok(await p.evaluate(()=>window.__oauth.length===1),"V7 double clic : une seule redirection OAuth");
    await clean(p,"V7 Connexion"); await p.ctx.close(); }
