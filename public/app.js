@@ -3555,8 +3555,12 @@ async function initAccount(){
       const m= /otp_expired|expired/.test(code)? "Ce lien a expiré ou a déjà servi. Si tu viens de confirmer ton adresse, connecte-toi avec ton e-mail et ton mot de passe."
         : /access_denied/.test(code)? "Connexion annulée. Tu peux réessayer quand tu veux."
         : /email.*(verif|confirm)/.test(code)? "Confirme d'abord ton adresse e-mail chez ce fournisseur, puis réessaie."
+        : /bad_oauth_state|bad_oauth_callback|flow_state/.test(code)? "La connexion a expiré ou s'est terminée dans un autre onglet. Réessaie depuis cette page, sans changer d'onglet."
+        : /provider_disabled|signup_disabled/.test(code)? "Ce mode de connexion n'est pas activé pour l'instant. Utilise une autre méthode."
         : "La connexion n'a pas abouti. Réessaie, ou utilise une autre méthode de connexion.";
-      setTimeout(()=>toast(m),400); }
+      // le code (forme contrôlée par auth.js : lettres et « _ » seulement) aide à trouver la cause ; jamais le texte reçu
+      const shown=code? m+" (code : "+code+")" : m;
+      setTimeout(()=>toast(shown),400); }
     const A=window.CarnetAuth; if(!A||!A.canLogin){ acct.failed=false; guestMode(); return; }   // pas de connexion configurée : invité
     if(!pwHooked&&A.onRecovery){ pwHooked=true; A.onRecovery(()=>setTimeout(openPwSheet,300)); }
     // compte injoignable (réseau, Supabase) : on le dit au lieu de passer en invité sans un mot ; la session reste enregistrée et sera reprise
