@@ -55,9 +55,13 @@ function loadLib(){
 function redirectUrl(){ const u=new URL(".",location.href); if(u.origin!==location.origin) throw new Error("redirect"); u.search=""; u.hash=""; return u.href; }
 // retour OAuth en erreur : on n'affiche jamais le texte reçu ; l'URL est nettoyée
 // seul le code d'erreur est gardé, et seulement s'il a la forme d'un identifiant (otp_expired, bad_oauth_state…) : il sert à choisir un message
-let oauthError=false, oauthReturn=false, oauthCode="", returnFailed=false;
+let oauthError=false, oauthReturn=false, oauthCode="", oauthCause="", returnFailed=false;
 (function(){ try{ const p=new URLSearchParams(location.search+"&"+location.hash.replace(/^#/,"")); oauthReturn=p.has("code");
-  if(p.has("error")||p.has("error_description")||p.has("error_code")){ oauthError=true; const c=String(p.get("error_code")||p.get("error")||""); oauthCode=/^[a-z_]{2,40}$/.test(c)? c : ""; history.replaceState(null,"",new URL(".",location.href).pathname); } }catch(e){} })();
+  if(p.has("error")||p.has("error_description")||p.has("error_code")){ oauthError=true; const c=String(p.get("error_code")||p.get("error")||""); oauthCode=/^[a-z_]{2,40}$/.test(c)? c : "";
+    // la description reçue n'est JAMAIS affichée : on y reconnaît seulement des messages connus de Supabase, traduits par une clé fixe
+    const d=String(p.get("error_description")||"").toLowerCase();
+    oauthCause= /exchange external code/.test(d)? "exchange" : /database error saving new user/.test(d)? "db" : /getting user email|email.*(not|no).*(found|provided)/.test(d)? "email"
+      : /multiple accounts|already (registered|exists)|identity.*already/.test(d)? "exists" : /unverified email/.test(d)? "unverified" : /provider.*(not enabled|disabled)/.test(d)? "disabled" : ""; history.replaceState(null,"",new URL(".",location.href).pathname); } }catch(e){} })();
 
 // ---- consentement : trois accords distincts (âge, CGU + confidentialité, données de santé), horodatés
 function cleanConsent(c){
@@ -87,7 +91,7 @@ function docRef(){
       if(!Array.isArray(data)||data.length===0){ const e=new Error("norow"); e.code="NOROW"; throw e; } } };
 }
 const api={
-  canLogin, providers:provs, emailLogin, PW_MIN, CONSENT_V, get oauthError(){ return oauthError; }, get oauthCode(){ return oauthCode; }, get inRecovery(){ return recovery; },
+  canLogin, providers:provs, emailLogin, PW_MIN, CONSENT_V, get oauthError(){ return oauthError; }, get oauthCode(){ return oauthCode; }, get oauthCause(){ return oauthCause; }, get inRecovery(){ return recovery; },
   // retour d'une connexion (?code=…) qui n'a pas ouvert de session : lien ouvert dans un autre navigateur, lien expiré ou déjà utilisé
   get returnFailed(){ return returnFailed; },
   // session existante → {db,user,consent}, sinon null (invité). Sans session enregistrée, la bibliothèque n'est même pas chargée.

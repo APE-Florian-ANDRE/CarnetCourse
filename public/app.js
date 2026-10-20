@@ -3551,7 +3551,14 @@ dlCap={ save:async({filename,data})=>{ const mime=/\.json$/.test(filename)?"appl
 function guestMode(){ noAccount=true; if(!dbRef) acct.st="guest"; setStore(localStatus()); renderAcct(); }
 async function initAccount(){
   try{
-    if(window.CarnetAuth&&window.CarnetAuth.oauthError){ const code=window.CarnetAuth.oauthCode;
+    if(window.CarnetAuth&&window.CarnetAuth.oauthError){ const code=window.CarnetAuth.oauthCode, cause=window.CarnetAuth.oauthCause;
+      // cause reconnue (clé fixe venue d'auth.js) : message précis, utile aussi à l'éditeur pour corriger la configuration
+      const CAUSE={exchange:"Le fournisseur a refusé l'échange de connexion : côté éditeur, vérifier le Client Secret et l'URL de rappel du fournisseur dans Supabase.",
+        db:"Le compte n'a pas pu être créé dans la base (erreur Supabase « Database error saving new user »).",
+        email:"Le fournisseur n'a pas transmis ton adresse e-mail : autorise le partage de l'e-mail, ou utilise une autre méthode.",
+        exists:"Un compte existe déjà avec cette adresse e-mail : connecte-toi avec la méthode utilisée la première fois.",
+        unverified:"Ton adresse e-mail n'est pas vérifiée chez ce fournisseur : vérifie-la, puis réessaie.",
+        disabled:"Ce mode de connexion n'est pas activé pour l'instant. Utilise une autre méthode."};
       const m= /otp_expired|expired/.test(code)? "Ce lien a expiré ou a déjà servi. Si tu viens de confirmer ton adresse, connecte-toi avec ton e-mail et ton mot de passe."
         : /access_denied/.test(code)? "Connexion annulée. Tu peux réessayer quand tu veux."
         : /email.*(verif|confirm)/.test(code)? "Confirme d'abord ton adresse e-mail chez ce fournisseur, puis réessaie."
@@ -3559,7 +3566,7 @@ async function initAccount(){
         : /provider_disabled|signup_disabled/.test(code)? "Ce mode de connexion n'est pas activé pour l'instant. Utilise une autre méthode."
         : "La connexion n'a pas abouti. Réessaie, ou utilise une autre méthode de connexion.";
       // le code (forme contrôlée par auth.js : lettres et « _ » seulement) aide à trouver la cause ; jamais le texte reçu
-      const shown=code? m+" (code : "+code+")" : m;
+      const shown=(CAUSE[cause]||m)+(code?" (code : "+code+(cause?", "+cause:"")+")":"");
       setTimeout(()=>toast(shown),400); }
     const A=window.CarnetAuth; if(!A||!A.canLogin){ acct.failed=false; guestMode(); return; }   // pas de connexion configurée : invité
     if(!pwHooked&&A.onRecovery){ pwHooked=true; A.onRecovery(()=>setTimeout(openPwSheet,300)); }
