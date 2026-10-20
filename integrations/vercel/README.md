@@ -18,7 +18,7 @@ Choisis **l'un ou l'autre**, ce guide ou le workflow n8n (`integrations/n8n/READ
 
    | Nom | Valeur | Sensible |
    |---|---|---|
-   | `GEMINI_API_KEY` | ta clé Gemini (commence par `AIza`) | oui (coche « Sensitive ») |
+   | `GEMINI_API_KEY` | ta clé Gemini (commence par `AIza` ou `AQ.`) | oui (coche « Sensitive ») |
    | `SUPABASE_URL` | `https://yunidhwvpusrsgxqdzpb.supabase.co` (la même que dans `config.js`) | non |
    | `SUPABASE_ANON_KEY` | la clé anon publique, la même que dans `config.js` | non |
    | `COACH_MODEL` (facultatif) | un modèle Gemini ; par défaut `gemini-flash-lite-latest` (le plus de requêtes gratuites par jour). Autre choix : `gemini-flash-latest` (un peu meilleur, moins de requêtes gratuites) | non |

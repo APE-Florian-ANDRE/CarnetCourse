@@ -39,7 +39,7 @@ Fichiers de ce dossier :
 
 n8n > *Credentials* > *Create credential* > **Header Auth** :
 - *Name* (de l'en-tête) : `x-goog-api-key`
-- *Value* : ta clé Gemini (elle commence par `AIza`)
+- *Value* : ta clé Gemini (elle commence par `AIza` ou `AQ.`)
 - Nom du credential : `Gemini API key`
 
 *Save*. La clé reste dans n8n : ne la copie ni dans ce dépôt, ni dans `config.js`, ni dans un nœud.

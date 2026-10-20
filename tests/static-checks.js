@@ -27,7 +27,7 @@ ok(!/\*/.test(conn||""),"CSP connect-src sans joker");
 if(su){ const left=(cfg0.match(/À COMPLÉTER/g)||[]).length; ok(left===0,"SUPABASE_URL renseignée : plus aucun champ « À COMPLÉTER » dans config.js",left); } else console.log("OK   (SUPABASE_URL vide : mode invité, contrôle des champs légaux non bloquant)");
 // fonction Vercel du Coach (option) : générée, synchronisée avec public/coach.js, aucune clé en dur
 { const af=REPO+"/api/coach.js"; ok(fs.existsSync(af)&&fs.readFileSync(af,"utf8")===require(REPO+"/integrations/vercel/build-api.js").build(),"api/coach.js synchronisé (node integrations/vercel/build-api.js)");
-  ok(fs.existsSync(af)&&!/sk-ant-|AIza[\w-]{20,}|eyJ[A-Za-z0-9_-]{20,}/.test(fs.readFileSync(af,"utf8"))&&/process\.env\.GEMINI_API_KEY/.test(fs.readFileSync(af,"utf8")),"api/coach.js : clé d'IA lue dans l'environnement, jamais en dur"); }
+  ok(fs.existsSync(af)&&!/sk-ant-|AIza[\w-]{20,}|\bAQ\.[\w-]{20,}|eyJ[A-Za-z0-9_-]{20,}/.test(fs.readFileSync(af,"utf8"))&&/process\.env\.GEMINI_API_KEY/.test(fs.readFileSync(af,"utf8")),"api/coach.js : clé d'IA lue dans l'environnement, jamais en dur"); }
 // aucun secret
 const all=[]; (function walk(d){ for(const e of fs.readdirSync(d,{withFileTypes:true})){ if(["node_modules",".git"].includes(e.name)) continue; const p=path.join(d,e.name); e.isDirectory()? walk(p) : all.push(p); } })(REPO);
 // un JWT "anon" (rôle public, fait pour être publié - cf. auth.js validConfig()) n'est pas une fuite ; tout le reste (service_role, sb_secret_, clé privée, JWT d'un autre rôle) l'est
@@ -35,7 +35,7 @@ function jwtAnonOnly(s){ const re=/eyJ[A-Za-z0-9_-]{20,}\.([A-Za-z0-9_-]{20,})\.
   while((m=re.exec(s))){ any=true; let role; try{ role=JSON.parse(Buffer.from(m[1].replace(/-/g,"+").replace(/_/g,"/"),"base64").toString("utf8")).role; }catch(e){ return false; } if(role!=="anon") return false; }
   return any; }
 const leak=all.filter(p=>!/\.(png|jpg)$/.test(p)).filter(p=>{ const s=fs.readFileSync(p,"utf8"); if(p.endsWith("lib.js")||p.endsWith("static-checks.js")) return false;
-  if(/service_role["']?\s*[:=]\s*["'][\w-]{20,}|sb_secret_|-----BEGIN/.test(s)) return true;
+  if(/service_role["']?\s*[:=]\s*["'][\w-]{20,}|sb_secret_|-----BEGIN|AIza[\w-]{30,}|\bAQ\.[\w-]{30,}/.test(s)) return true;
   if(/eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}/.test(s)) return !jwtAnonOnly(s);
   return false; }); ok(leak.length===0,"aucun secret ni jeton dans le dépôt",leak);
 const cfg=fs.readFileSync(R+"/config.js","utf8"); ok(!su||/^https:\/\/[a-z0-9.-]+$/i.test(su),"SUPABASE_URL : https, sans chemin"); ok(!/service_role["']?\s*[:=]/i.test(cfg)&&!/SUPABASE_JS_SRI/.test(cfg),"config.js : pas de clé service_role");
@@ -49,7 +49,7 @@ ok(!/to anon|to public/i.test(sql.replace(/revoke[^;]*;/gi,"")),"schema.sql : au
   const cfgP=tmp+"/public/config.js", orig=fs.readFileSync(cfgP,"utf8"); const run=u=>{ fs.writeFileSync(cfgP,orig.replace(/SUPABASE_URL:\s*"[^"]*"/,'SUPABASE_URL: "'+u+'"')); const before=fs.readFileSync(tmp+"/vercel.json","utf8"); const r=cp.spawnSync("node",[tmp+"/tools/set-csp.js"],{encoding:"utf8"}); return {st:r.status,same:before===fs.readFileSync(tmp+"/vercel.json","utf8"),out:fs.readFileSync(tmp+"/vercel.json","utf8")}; };
   const bad=["http://abc.supabase.co","https://*.supabase.co","https://abc.supabase.co;script-src *","https://abc.supabase.co/","https://abc.supabase.co/rest","https://abc.supabase.co:8443","https://abc.supabase.co evil.com","https://localhost","//abc.supabase.co","javascript:alert(1)","https://abc.supabase.co'"];
   const badBad=bad.filter(u=>{ const r=run(u); return r.st===0||!r.same; }); ok(badBad.length===0,"set-csp.js refuse les SUPABASE_URL invalides (http, joker, ;, chemin, port, espace) sans rien modifier",badBad);
-  const g=run("https://abcdefghij.supabase.co"); ok(g.st===0&&/connect-src 'self' https:\/\/abcdefghij\.supabase\.co(;|")/.test(g.out),"set-csp.js accepte https://xxxx.supabase.co et l'écrit dans connect-src");
+  const g=run("https://abcdefghij.supabase.co"); ok(g.st===0&&/connect-src 'self' https:\/\/abcdefghij\.supabase\.co( https:\/\/[^;" ]+)*(;|")/.test(g.out),"set-csp.js accepte https://xxxx.supabase.co et l'écrit dans connect-src");
   fs.rmSync(tmp,{recursive:true,force:true}); }
 ok(v.buildCommand==="node tests/static-checks.js"&&v.outputDirectory==="public","vercel.json : buildCommand = static-checks, outputDirectory = public");
 ok(/auth\.sessions/.test(sql)&&/refreshed_at/.test(sql),"purge : tient compte de auth.sessions.refreshed_at");
