@@ -237,18 +237,11 @@
   <!-- COACH (affiché seulement si CHAT_WEBHOOK_URL est configuré dans config.js) -->
   <section class="panel" id="p-coach" role="tabpanel" aria-labelledby="tab-coach" hidden>
     <h2>Coach</h2>
-    <div class="alert warn" id="coachNote"><b>Une aide générale, pas un avis médical.</b> Le coach ne pose pas de diagnostic et ne remplace ni ton médecin ni un diététicien. Douleur forte, malaise, difficultés avec l'alimentation : consulte un professionnel de santé.</div>
-    <p class="alert ok" id="coachSos" role="note"><b>En cas de détresse : 3114</b> (24 h/24) · <b>urgence : 15 / 112</b></p>
-    <p class="muted" id="coachCfgTxt"></p>
-    <p class="alert warn" id="coachGate" hidden></p>
-    <div class="cchat" id="coachLog" role="log" aria-label="Conversation avec le coach" aria-live="polite" tabindex="0"></div>
-    <form id="coachForm" autocomplete="off">
-      <label for="coachIn" class="sr-only">Ton message au coach</label>
-      <textarea id="coachIn" maxlength="1000" rows="3" placeholder="Ex. Comment gérer ma sortie longue de dimanche ?"></textarea>
-      <div class="cform-row"><button class="btn" type="submit" id="coachSend">Envoyer</button><button class="btn ghost" type="button" id="coachCancel" hidden>Annuler</button><span class="coach-wait" id="coachWait" hidden><i aria-hidden="true"></i>Le coach réfléchit…</span><span class="muted" id="coachCount" aria-hidden="true">0 / 1000</span></div>
-    </form>
-    <div class="ctools" id="coachTools"><button class="btn ghost sm" type="button" id="coachCfg">Ce qui est envoyé</button><button class="btn ghost sm" type="button" id="coachClear">Effacer la conversation</button></div>
-    <p class="sr-only" id="coachLive" role="status" aria-live="polite"></p>
+    <p class="alert ok csos" role="note"><b>En cas de détresse : 3114</b> (24 h/24) · <b>urgence : 15 / 112</b></p>
+    <p class="lead" id="coachTabLead">Tes conversations précédentes, gardées sur cet appareil. Le coach s'ouvre aussi avec la bulle en bas à droite, depuis n'importe quel onglet.</p>
+    <p class="alert warn" id="coachTabGate" hidden></p>
+    <div class="cconv-act" id="coachTabAct"><button class="btn" type="button" id="coachNew">Nouvelle conversation</button><button class="btn ghost sm" type="button" id="coachClearAll" hidden>Tout effacer</button></div>
+    <ul class="mlist cconvs" id="coachConvs" aria-label="Conversations précédentes"></ul>
   </section>
 
   <!-- REPÈRES -->
@@ -467,6 +460,23 @@
       </ul>
     </div>
   </aside>
+</div>
+<button class="cfab" type="button" id="coachFab" aria-controls="coachPop" aria-expanded="false" aria-label="Ouvrir le coach" hidden><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 0 1-12.3 7.6L3.5 20.5l1-4.4A8.5 8.5 0 1 1 20.5 12z"/></svg></button>
+<div class="cpop" id="coachPop" role="dialog" aria-modal="false" aria-labelledby="coachPopT" hidden>
+  <div class="cpop-h"><h2 id="coachPopT">Coach</h2><button class="btn ghost sm" type="button" id="coachNew2">Nouvelle</button><button class="sh-x" type="button" id="coachClose" aria-label="Fermer le coach">×</button></div>
+  <div class="cpop-b">
+    <div class="alert warn" id="coachNote"><b>Une aide générale, pas un avis médical.</b> Douleur forte, malaise, difficultés avec l'alimentation : consulte un professionnel de santé.</div>
+    <p class="alert ok" id="coachSos" role="note"><b>En cas de détresse : 3114</b> (24 h/24) · <b>urgence : 15 / 112</b></p>
+    <p class="alert warn" id="coachGate" hidden></p>
+    <div class="cchat" id="coachLog" role="log" aria-label="Conversation avec le coach" aria-live="polite" tabindex="0"></div>
+  </div>
+    <form id="coachForm" autocomplete="off">
+      <label for="coachIn" class="sr-only">Ton message au coach</label>
+      <textarea id="coachIn" maxlength="1000" rows="3" placeholder="Ex. Comment gérer ma sortie longue de dimanche ?"></textarea>
+      <div class="cform-row"><button class="btn" type="submit" id="coachSend">Envoyer</button><button class="btn ghost" type="button" id="coachCancel" hidden>Annuler</button><span class="coach-wait" id="coachWait" hidden><i aria-hidden="true"></i>Le coach réfléchit…</span><span class="muted" id="coachCount" aria-hidden="true">0 / 1000</span></div>
+    </form>
+    <div class="ctools" id="coachTools"><span class="muted" id="coachCfgTxt"></span><button class="btn ghost sm" type="button" id="coachCfg">Ce qui est envoyé</button><button class="btn ghost sm" type="button" id="coachClear">Effacer la conversation</button></div>
+    <p class="sr-only" id="coachLive" role="status" aria-live="polite"></p>
 </div>
 <div id="toasts" aria-live="polite"></div>
 <p class="sr-only" id="srLive" aria-live="polite"></p>

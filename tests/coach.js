@@ -32,7 +32,7 @@ const JWT="aaaaaaaaaa.bbbbbbbbbb.cccccccccc"; const GOOD={...L.SESSION(),access_
     if(!sessionStorage.__seed){ sessionStorage.__seed=1; localStorage.setItem("carnet-course.v1",sd); localStorage.setItem("carnet.hv","1"); localStorage.setItem("carnet.vu","15"); if(pend) localStorage.setItem("carnet.consent",pend); if(hist) localStorage.setItem("carnet.coach.hist",hist); } },{sd,hist,pend:session?JSON.stringify({cgu:"2026-10-10",privacy:"2026-10-10",terms:true,health:true,age15:true,at:new Date().toISOString()}):null});
   await p.goto(S.url+"/"); await p.waitForTimeout(900); p.ctx=ctx; return p; };
  const csp=async p=>{ const v=await p.evaluate(()=>window.__csp||[]); if(v.length) CSPV.push(...v); };
- const open=async p=>{ await p.click("#tab-coach"); await p.waitForTimeout(150); };
+ const open=async p=>{ await p.click("#tab-coach"); if(await p.evaluate(()=>document.querySelector("#coachPop").hidden)) await p.click("#coachFab"); await p.waitForTimeout(150); };   // onglet = historique ; la conversation est dans la bulle
  const say=async(p,t)=>{ await p.fill("#coachIn",t); await p.waitForTimeout(1600); await p.click("#coachSend"); };   // la pause évite la garde anti-rafale (1,5 s)
  const consent=async(p,{prof:a=false,feel:f=false,stats:s=false}={})=>{ await p.waitForSelector(".sheet #coAccept"); await p.check("#coAccept"); if(a) await p.check("#coProf"); if(f) await p.check("#coFeel"); if(s) await p.check("#coStat"); await p.click("#coGo"); await p.waitForTimeout(250); };
  const last=p=>p.evaluate(()=>{ const m=[...document.querySelectorAll("#coachLog .cmsg")].pop(); return m? {cls:m.className,txt:m.querySelector(".cbody").textContent,html:m.querySelector(".cbody").innerHTML} : null; });
@@ -49,7 +49,7 @@ const JWT="aaaaaaaaaa.bbbbbbbbbb.cccccccccc"; const GOOD={...L.SESSION(),access_
  const S=await L.serve(SC);
  // C1 : consentement avant tout envoi
  { const p=await mk(S); await open(p); hits.length=0;
-   ok(await p.evaluate(()=>!document.querySelector("#tab-coach").hidden&&document.querySelector("#p-coach").hidden===false),"C1 onglet visible et ouvert");
+   ok(await p.evaluate(()=>!document.querySelector("#tab-coach").hidden&&document.querySelector("#p-coach").hidden===false&&!document.querySelector("#coachFab").hidden&&!document.querySelector("#coachPop").hidden),"C1 onglet visible, bulle ouverte");
    ok(await p.evaluate(()=>/pas un avis médical/.test(document.querySelector("#coachNote").textContent)),"C1 rappel : pas un avis médical");
    await p.fill("#coachIn","bonjour"); await p.click("#coachSend"); await p.waitForSelector(".sheet #coAccept");
    ok(hits.length===0,"C1 la feuille de consentement s'ouvre, rien n'est envoyé");
@@ -95,7 +95,7 @@ const JWT="aaaaaaaaaa.bbbbbbbbbb.cccccccccc"; const GOOD={...L.SESSION(),access_
      const kinds=await p.evaluate(()=>["en finir avec la vie","chest pain","stop eating"].map(x=>window.CarnetCoach.guard(x))); ok(kinds.join()==="detresse,urgence,tca","C3 catégories : détresse, urgence, alimentation",kinds);
      for(const t of ["envie d'en finir avec la vie","I want to kill myself","jeûne extrême pour perdre 8 kg en une semaine","crise cardiaque ?"]){ await p.fill("#coachIn",t); await p.waitForTimeout(1600); await p.click("#coachSend"); await p.waitForTimeout(250); const m=await last(p); ok(/aucun serveur/.test(m.txt),"C3 « "+t+" » : message fixe, jamais envoyé"); } }
    ok(hits.length===0&&await p.evaluate(()=>!document.querySelector(".sheet")),"C3 aucune requête, aucune demande de consentement");
-   await p.click("#tab-semaine"); await p.click("#tab-coach"); await p.fill("#coachIn","bonjour"); await p.waitForTimeout(1600); await p.click("#coachSend"); await consent(p); await p.waitForFunction(()=>document.querySelectorAll("#coachLog .cmsg.bot").length>8); await p.waitForTimeout(100);
+   await p.evaluate(()=>{ if(!document.querySelector("#coachPop").hidden) document.querySelector("#coachClose").click(); }); await p.click("#tab-semaine"); await open(p); await p.fill("#coachIn","bonjour"); await p.waitForTimeout(1600); await p.click("#coachSend"); await consent(p); await p.waitForFunction(()=>document.querySelectorAll("#coachLog .cmsg.bot").length>8); await p.waitForTimeout(100);
    ok(hits.length===1&&hits[0].body.messages.length===1&&!/suicid|poitrine|anorex/i.test(hits[0].raw),"C3 les messages bloqués ne partent jamais, même plus tard dans la conversation",hits[0]&&hits[0].raw);
    await p.ctx.close(); }
  // C4 : réponses et erreurs
@@ -120,13 +120,13 @@ const JWT="aaaaaaaaaa.bbbbbbbbbb.cccccccccc"; const GOOD={...L.SESSION(),access_
    ok(await p.evaluate(()=>!document.querySelector("#coachSend").disabled&&document.querySelector("#coachCancel").hidden&&document.querySelector("#coachIn").value==="bloque"),"C4 annulation : champ restauré, bouton rendu");
    ok(!(await last(p)).cls.includes("err")&&(await p.evaluate(()=>/annulé/.test(document.querySelector("#coachLive").textContent))),"C4 annulation : pas d'erreur affichée, annoncée aux lecteurs d'écran");
    // historique borné et effaçable
-   const hn=await p.evaluate(()=>JSON.parse(localStorage.getItem("carnet.coach.hist")).length); ok(hn<=40,"C4 historique local borné ("+hn+")");
+   const hn=await p.evaluate(()=>Math.max(...JSON.parse(localStorage.getItem("carnet.coach.hist")).convs.map(c=>c.m.length))); ok(hn<=40,"C4 historique local borné ("+hn+")");
    await p.click("#coachClear"); ok(await p.evaluate(()=>!localStorage.getItem("carnet.coach.hist")&&!document.querySelector("#coachLog .cmsg")),"C4 effacer la conversation");
    await csp(p); await p.ctx.close(); }
  // C9 : « Effacer mes données » efface aussi le coach, y compris une réponse en vol
  { const p=await mk(S); await open(p); await p.fill("#coachIn","bonjour"); await p.waitForTimeout(1600); await p.click("#coachSend"); await consent(p); await p.waitForFunction(()=>document.querySelectorAll("#coachLog .cmsg.bot").length>0);
    hits.length=0; await p.fill("#coachIn","lent"); await p.waitForTimeout(1600); await p.click("#coachSend"); await p.waitForTimeout(300);
-   await p.click(".js-av >> visible=true"); await p.waitForTimeout(350); await p.click("[data-acc=erase]"); await p.waitForTimeout(250); await p.click("#erNext"); await p.waitForTimeout(250); await p.click("#erGo"); await p.waitForTimeout(500);
+   await p.evaluate(()=>{ if(!document.querySelector("#coachPop").hidden) document.querySelector("#coachClose").click(); }); await p.click(".js-av >> visible=true"); await p.waitForTimeout(350); await p.click("[data-acc=erase]"); await p.waitForTimeout(250); await p.click("#erNext"); await p.waitForTimeout(250); await p.click("#erGo"); await p.waitForTimeout(500);
    ok(await p.evaluate(()=>!document.querySelector("#coachLog .cmsg")&&!localStorage.getItem("carnet.coach.hist")&&!localStorage.getItem("carnet.coach.consent")),"C9 effacement : écran du coach vidé, stockage vidé");
    await p.waitForTimeout(2200);
    ok(await p.evaluate(()=>!localStorage.getItem("carnet.coach.hist")&&!document.querySelector("#coachLog .cmsg")&&!document.querySelector("#coachSend").disabled),"C9 la réponse en vol est jetée : l'historique n'est pas recréé, le bouton est rendu");
@@ -143,7 +143,7 @@ const JWT="aaaaaaaaaa.bbbbbbbbbb.cccccccccc"; const GOOD={...L.SESSION(),access_
    ok(c.n<=40&&c.img===0&&!c.pwn&&c.max<=4000,"C5 historique piégé : ≤ 40 messages, texte seul, tailles bornées",c); await p.ctx.close(); }
  // C6c : encart permanent de détresse, et indice de défilement des onglets à 320 px
  { const p=await mk(S,{width:320}); await open(p); ok(await p.evaluate(()=>{ const e=document.querySelector("#coachSos"); return e.getClientRects().length>0&&/3114/.test(e.textContent)&&/24 h\/24/.test(e.textContent)&&/15 \/ 112/.test(e.textContent); }),"C6c encart permanent « 3114 (24 h/24) · urgence : 15 / 112 » visible dans le Coach");
-   await p.click("#tab-semaine"); await p.waitForTimeout(400); const hint=await p.evaluate(()=>{ const n=document.querySelector("nav.tabs"), sg=n.querySelector(".segc"); return {more:n.classList.contains("tabs-more"),after:getComputedStyle(n,"::after").content,over:sg.scrollWidth>sg.clientWidth}; });
+   await p.evaluate(()=>{ if(!document.querySelector("#coachPop").hidden) document.querySelector("#coachClose").click(); }); await p.click("#tab-semaine"); await p.waitForTimeout(400); const hint=await p.evaluate(()=>{ const n=document.querySelector("nav.tabs"), sg=n.querySelector(".segc"); return {more:n.classList.contains("tabs-more"),after:getComputedStyle(n,"::after").content,over:sg.scrollWidth>sg.clientWidth}; });
    ok(!hint.over||(hint.more&&/›/.test(hint.after)),"C6c 320 px : si la barre d'onglets défile, un chevron indique la suite",hint);
    await p.evaluate(()=>{ const sg=document.querySelector(".segc"); sg.scrollLeft=9999; }); await p.waitForTimeout(300); ok(await p.evaluate(()=>!document.querySelector("nav.tabs").classList.contains("tabs-more")),"C6c fin de barre atteinte : chevron retiré"); await p.ctx.close(); }
  // C6b : cases à cocher du consentement : bordure visible (contraste >= 3:1 avec le fond de la feuille), en clair et en sombre
@@ -162,7 +162,7 @@ const JWT="aaaaaaaaaa.bbbbbbbbbb.cccccccccc"; const GOOD={...L.SESSION(),access_
  // C7 : feuilles de même taille, 320 px sans débordement, onglets
  for(const [w,h] of [[320,568],[375,740],[768,900],[1280,800]]){ const p=await mk(S,{width:w}); await p.setViewportSize({width:w,height:h});
    const sz=async()=>{ await p.waitForTimeout(420); return p.evaluate(()=>{ const s=document.querySelector(".sheet"); const q=x=>{ const e=s.querySelector(x); return e? Math.round(e.getBoundingClientRect().height):null; }; const bb=s.getBoundingClientRect(); return [Math.round(bb.width),Math.round(bb.height),Math.round(bb.x),Math.round(bb.y),q(".sh-h"),q(".sh-f")].join(); }); };
-   await p.click("#tab-semaine"); await p.click("#days [data-move]"); const ref=await sz(); await p.keyboard.press("Escape"); await open(p); await p.click("#coachCfg"); const co=await sz();
+   await p.evaluate(()=>{ if(!document.querySelector("#coachPop").hidden) document.querySelector("#coachClose").click(); }); await p.click("#tab-semaine"); await p.click("#days [data-move]"); const ref=await sz(); await p.keyboard.press("Escape"); await open(p); await p.click("#coachCfg"); const co=await sz();
    ok(ref===co,"C7 feuille Coach de même taille que les autres à "+w+" px",{ref,co}); await p.keyboard.press("Escape");
    ok(await p.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),"C7 aucun défilement horizontal à "+w+" px");
    ok(await p.evaluate(()=>{ const t=[...document.querySelectorAll("nav.tabs [role=tab]:not([hidden])")]; return t.length===6&&t.every(b=>b.scrollWidth<=b.clientWidth+1&&b.getBoundingClientRect().height>=30); }),"C7 six onglets lisibles à "+w+" px");
@@ -170,9 +170,23 @@ const JWT="aaaaaaaaaa.bbbbbbbbbb.cccccccccc"; const GOOD={...L.SESSION(),access_
  // C8 : effacer mes données efface aussi le coach
  { const p=await mk(S); await open(p); await p.fill("#coachIn","bonjour"); await p.waitForTimeout(1600); await p.click("#coachSend"); await consent(p); await p.waitForFunction(()=>document.querySelectorAll("#coachLog .cmsg.bot").length>0);
    ok(await p.evaluate(()=>!!localStorage.getItem("carnet.coach.hist")&&!!localStorage.getItem("carnet.coach.consent")),"C8 historique et consentement en local");
-   await p.click(".apptop .av"); await p.waitForTimeout(350); await p.click("[data-acc=erase]"); await p.click("#erNext").catch(()=>{}); await p.waitForTimeout(300);
+   await p.evaluate(()=>{ if(!document.querySelector("#coachPop").hidden) document.querySelector("#coachClose").click(); }); await p.click(".apptop .av"); await p.waitForTimeout(350); await p.click("[data-acc=erase]"); await p.click("#erNext").catch(()=>{}); await p.waitForTimeout(300);
    const btn=await p.$(".sheet #erGo, .sheet [data-erase-go], .sheet .btn.danger"); if(btn){ await btn.click(); await p.waitForTimeout(500); }
    ok(await p.evaluate(()=>!localStorage.getItem("carnet.coach.hist")&&!localStorage.getItem("carnet.coach.consent")),"C8 effacement des données : historique et consentement du coach effacés");
    await p.ctx.close(); }
+// C10 : bulle et historique des conversations (onglet), ancien format repris
+{ const old=JSON.stringify([{r:"u",t:"ANCIENNE question"},{r:"a",t:"ancienne réponse"}]);
+  const p=await mk(S,{hist:old,width:1280}); await p.click("#tab-coach"); await p.waitForTimeout(150);
+  ok(await p.evaluate(()=>document.querySelectorAll("#coachConvs [data-conv]").length===1&&/ANCIENNE question/.test(document.querySelector("#coachConvs").textContent)&&document.querySelector("#coachPop").hidden),"C10 ancien historique repris comme une conversation ; bulle fermée");
+  await p.click("#coachNew"); await p.waitForTimeout(100); ok(await p.evaluate(()=>!document.querySelector("#coachPop").hidden&&!document.querySelector("#coachLog .cmsg")&&document.activeElement.id==="coachIn"),"C10 nouvelle conversation : bulle ouverte, vide, champ actif");
+  await p.fill("#coachIn","bonjour"); await p.waitForTimeout(1600); await p.click("#coachSend"); await consent(p); await p.waitForFunction(()=>document.querySelectorAll("#coachLog .cmsg.bot").length>0);
+  ok(hits.slice(-1)[0].body.messages.length===1,"C10 seule la conversation ouverte est envoyée");
+  ok(await p.evaluate(()=>document.querySelectorAll("#coachConvs [data-conv]").length===2),"C10 deux conversations dans l'onglet");
+  await p.keyboard.press("Escape"); ok(await p.evaluate(()=>document.querySelector("#coachPop").hidden&&document.activeElement.id==="coachFab"),"C10 Échap ferme la bulle, focus rendu");
+  await p.click("#coachConvs li:last-child [data-conv]"); ok(await p.evaluate(()=>!document.querySelector("#coachPop").hidden&&/ANCIENNE question/.test(document.querySelector("#coachLog").textContent)),"C10 rouvrir une conversation précédente");
+  await p.click("#coachClose"); await p.click("#coachConvs li:last-child [data-delconv]");
+  ok(await p.evaluate(()=>document.querySelectorAll("#coachConvs [data-conv]").length===1&&!/ANCIENNE/.test(localStorage.getItem("carnet.coach.hist"))),"C10 supprimer une conversation");
+  await p.click("#coachClearAll"); ok(await p.evaluate(()=>!localStorage.getItem("carnet.coach.hist")&&!document.querySelector("#coachConvs [data-conv]")),"C10 tout effacer");
+  await csp(p); await p.ctx.close(); }
  console.log("erreurs console",E,"violations CSP",CSPV); fails+=E.length+CSPV.length; ok(E.length===0&&CSPV.length===0,"console propre, aucune violation CSP");
  console.log(fails?"ECHECS "+fails:"TOUT OK"); await b.close(); S.close(); hook.close(); process.exit(fails?1:0); })();

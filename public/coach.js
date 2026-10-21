@@ -5,7 +5,7 @@
 "use strict";
 const CFG=window.APP_CONFIG||{}, B=window.CarnetBridge, isLocal=["localhost","127.0.0.1"].includes(location.hostname);
 const COACH_V="2026-10-10.3", K_CONSENT="carnet.coach.consent", K_HIST="carnet.coach.hist", K_RATE="carnet.coach.rate";
-const MAX_IN=1000, MAX_REPLY=4000, MAX_BODY=65536, MAX_HIST=40, SEND_N=6, TIMEOUT=45000, MIN_GAP=1500, RATE_N=20, RATE_WIN=3600000;
+const MAX_IN=1000, MAX_REPLY=4000, MAX_BODY=65536, MAX_HIST=40, MAX_CONV=12, SEND_N=6, TIMEOUT=45000, MIN_GAP=1500, RATE_N=20, RATE_WIN=3600000;
 const $=s=>document.querySelector(s);
 
 /* ---- adresse du webhook : https obligatoire (http seulement vers localhost, pour tester), pas d'identifiants, pas de paramètres ---- */
@@ -72,12 +72,27 @@ const ls={get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; }
 function getConsent(){ let c=null; try{ c=JSON.parse(ls.get(K_CONSENT)||"null"); }catch(e){} if(!c||typeof c!=="object"||c.v!==COACH_V||c.send!==true||isNaN(Date.parse(c.at))) return null; return {v:COACH_V,send:true,at:new Date(c.at).toISOString(),profile:c.profile===true,feel:c.feel===true,stats:c.stats===true}; }
 function setConsent(o){ ls.set(K_CONSENT,JSON.stringify({v:COACH_V,send:true,at:new Date().toISOString(),profile:!!o.profile,feel:!!o.feel,stats:!!o.stats})); }
 
-/* ---- historique local, borné et assaini (jamais envoyé en entier : les derniers messages seulement) ---- */
-function loadHist(){ let a=null; try{ a=JSON.parse(ls.get(K_HIST)||"[]"); }catch(e){} if(!Array.isArray(a)) return []; const out=[];
+/* ---- historique local, borné et assaini (jamais envoyé en entier : les derniers messages de la conversation ouverte seulement) ----
+   { v:2, cur: conversation ouverte, convs: [{ id, at: dernière activité, m: [{ r, t, x, e }] }] } ; MAX_CONV conversations de MAX_HIST messages au plus */
+function cleanMsgs(a){ const out=[]; if(!Array.isArray(a)) return out;
   for(const m of a.slice(-MAX_HIST)){ if(!m||typeof m!=="object") continue; const r=m.r==="u"?"u":m.r==="a"?"a":""; const t=cleanReply(m.t).slice(0,r==="u"?MAX_IN:MAX_REPLY); if(!r||!t) continue; out.push({r,t,x:m.x===1?1:0,e:m.e===1?1:0}); }
   return out; }
-let hist=loadHist();
-function saveHist(){ hist=hist.slice(-MAX_HIST); ls.set(K_HIST,JSON.stringify(hist)); }
+function loadStore(){ let o=null; try{ o=JSON.parse(ls.get(K_HIST)||"null"); }catch(e){}
+  if(Array.isArray(o)) o={cur:"c0",convs:[{id:"c0",at:Date.now(),m:o}]};   // ancien format : une seule conversation
+  const convs=[];
+  if(o&&typeof o==="object"&&Array.isArray(o.convs)) for(const c of o.convs.slice(-MAX_CONV)){ if(!c||typeof c!=="object") continue;
+    const id=typeof c.id==="string"&&/^c[0-9a-z]{1,16}$/.test(c.id)? c.id : "", m=cleanMsgs(c.m); if(!id||!m.length||convs.some(x=>x.id===id)) continue;
+    convs.push({id,at:Number.isFinite(+c.at)&&+c.at>0? +c.at : 0,m}); }
+  return {cur:o&&typeof o.cur==="string"&&convs.some(c=>c.id===o.cur)? o.cur : null,convs}; }
+let store=loadStore();
+const curConv=()=>store.convs.find(c=>c.id===store.cur)||null;
+let hist=curConv()? curConv().m : [];
+function saveHist(touch){ hist=hist.slice(-MAX_HIST); let c=curConv();   // touch=false : rouvrir une conversation ne la fait pas remonter dans la liste
+  if(!c&&hist.length){ c={id:"c"+Date.now().toString(36),at:0,m:[]}; store.convs.push(c); store.cur=c.id; }
+  if(c){ c.m=hist; if(touch!==false||!c.at) c.at=Date.now(); }
+  store.convs=store.convs.filter(x=>x.m.length).slice(-MAX_CONV);
+  if(store.convs.length) ls.set(K_HIST,JSON.stringify({v:2,cur:store.cur,convs:store.convs})); else ls.del(K_HIST);
+  renderConvs(); }
 
 /* ---- limite de fréquence côté navigateur (la vraie limite est dans n8n : 20 messages par heure et par personne) ---- */
 // horodatages des envois réels de l'heure écoulée (les messages de prudence, jamais envoyés, ne comptent pas)
@@ -117,14 +132,15 @@ async function callHook(userText,cons){
 /* ---- interface ---- */
 function bubble(role,text,err){ const log=$("#coachLog"), d=document.createElement("div"); d.className="cmsg "+(role==="u"?"me":"bot")+(err?" err":""); const w=document.createElement("span"); w.className="cwho"; w.textContent=role==="u"?"Toi":err?"Coach (erreur)":"Coach"; const b=document.createElement("div"); b.className="cbody";
   if(role==="u"||err) b.textContent=text; else renderMd(b,text); d.append(w,b); log.append(d); log.scrollTop=log.scrollHeight; return d; }
-function paint(){ const log=$("#coachLog"); log.textContent=""; if(!hist.length){ const p=document.createElement("p"); p.className="muted"; p.textContent="Pose une question sur ton entraînement, tes séances ou ton alimentation. Le coach ne remplace pas un avis médical."; log.append(p); } for(const m of hist) bubble(m.r,m.t,m.e===1); log.scrollTop=log.scrollHeight; }
+function paint(){ const log=$("#coachLog"); if(!log) return; log.textContent=""; if(!hist.length){ const p=document.createElement("p"); p.className="muted"; p.textContent="Pose une question sur ton entraînement, tes séances ou ton alimentation. Le coach ne remplace pas un avis médical."; log.append(p); } for(const m of hist) bubble(m.r,m.t,m.e===1); log.scrollTop=log.scrollHeight; }
 function setBusy(v){ busy=v; $("#coachSend").disabled=v; $("#coachIn").readOnly=v; $("#coachCancel").hidden=!v; $("#coachWait").hidden=!v; $("#coachForm").setAttribute("aria-busy",String(v)); }
 function gateState(){
   const g=$("#coachGate"); let msg="";
   if(!B.ready()) msg="Remplis d'abord ton profil (âge compris) : le coach est réservé aux personnes qui l'ont fait.";
   else if(B.minor()) msg="Le coach est désactivé avant 18 ans.";
   g.hidden=!msg; g.textContent=msg; const off=!!msg;
-  for(const id of ["#coachIn","#coachSend"]) $(id).disabled=off||(id==="#coachSend"&&busy); for(const id of ["#coachForm","#coachTools","#coachLog","#coachNote","#coachCfgTxt"]) $(id).hidden=off;   // coach indisponible (profil incomplet, moins de 18 ans) : le seul message affiché est celui du verrou
+  { const tg=$("#coachTabGate"); if(tg){ tg.hidden=!msg; tg.textContent=msg; } for(const id of ["#coachTabAct","#coachTabLead","#coachConvs"]){ const x=$(id); if(x) x.hidden=off; } const n2=$("#coachNew2"); if(n2) n2.hidden=off; }
+  for(const id of ["#coachIn","#coachSend"]) $(id).disabled=off||(id==="#coachSend"&&busy); for(const id of ["#coachForm","#coachTools","#coachLog","#coachNote"]) $(id).hidden=off;   // coach indisponible (profil incomplet, moins de 18 ans) : le seul message affiché est celui du verrou
   return !off;
 }
 function consentSheet(opener,after){
@@ -146,11 +162,11 @@ ${chk("coStat",cur&&cur.stats,"Inclure mes statistiques importées","Durée et d
 function renderCfg(){ const c=getConsent(), el=$("#coachCfgTxt"); if(!c){ el.textContent="Rien n'est envoyé tant que tu n'as pas accepté."; return; }
   const inc=[c.profile&&"profil",c.feel&&"ressenti",c.stats&&"statistiques"].filter(Boolean); el.textContent="Envoyé avec tes messages : "+(inc.length?inc.join(", "):"rien d'autre que tes messages")+"."; }
 // effacement des données (ou changement de compte) : mémoire, historique, écran vidés ; la requête en vol est annulée et sa réponse jetée
-function wipe(){ epoch++; hist=[]; ls.del(K_HIST); userCancel=true; if(ctl){ try{ ctl.abort(); }catch(e){} } if($("#coachLog")){ paint(); setBusy(false); const i=$("#coachIn"); if(i){ i.value=""; } const c=$("#coachCount"); if(c) c.textContent="0 / "+MAX_IN; } }
+function wipe(){ epoch++; hist=[]; store={cur:null,convs:[]}; ls.del(K_HIST); renderConvs(); userCancel=true; if(ctl){ try{ ctl.abort(); }catch(e){} } if($("#coachLog")){ paint(); setBusy(false); const i=$("#coachIn"); if(i){ i.value=""; } const c=$("#coachCount"); if(c) c.textContent="0 / "+MAX_IN; } }
 async function send(text){
   if(busy) return; text=String(text).replace(/\s+/g," ").trim().slice(0,MAX_IN); if(!text) return;
   const now=Date.now(); if(now-lastSend<MIN_GAP){ $("#coachLive").textContent="Patiente un instant avant d'envoyer un autre message."; return; } lastSend=now;
-  if(hist.length&&ls.get(K_HIST)===null){ hist=[]; paint(); }   // l'historique a été effacé ailleurs : on ne le ressuscite pas
+  if(hist.length&&ls.get(K_HIST)===null){ hist=[]; store={cur:null,convs:[]}; paint(); }   // l'historique a été effacé ailleurs : on ne le ressuscite pas
   const k=guard(text);
   if(k){ hist.push({r:"u",t:text,x:1,e:0},{r:"a",t:FIXED[k],x:1,e:0}); saveHist(); paint(); $("#coachIn").value=""; $("#coachLive").textContent="Message de prudence affiché."; return; }
   { let tk=null; try{ tk=window.CarnetAuth&&window.CarnetAuth.accessToken? await window.CarnetAuth.accessToken() : null; }catch(e){}
@@ -163,10 +179,38 @@ async function send(text){
   catch(e){ if(ep!==epoch) return; const c=e&&e.c||"other"; if(c==="cancel"){ hist.pop(); saveHist(); paint(); $("#coachIn").value=text; $("#coachLive").textContent="Envoi annulé."; } else { paint(); bubble("a",E[c]||E.other,true); $("#coachIn").value=text; $("#coachLive").textContent=E[c]||E.other; } }
   finally{ if(ep===epoch){ setBusy(false); $("#coachIn").focus(); } }
 }
+/* ---- onglet Coach : liste des conversations ; bulle : la conversation ouverte, au-dessus de tous les onglets ---- */
+const when=t=>{ if(!t) return ""; const d=new Date(t), now=new Date(), same=d.toDateString()===now.toDateString();
+  return same? "aujourd'hui à "+d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}) : d.toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"}); };
+function renderConvs(){ const ul=$("#coachConvs"); if(!ul) return; ul.textContent=""; const ca=$("#coachClearAll"); if(ca) ca.hidden=!store.convs.length;
+  if(!store.convs.length){ const li=document.createElement("li"); li.className="cempty"; li.textContent="Aucune conversation pour l'instant. Pose ta première question au coach."; ul.append(li); return; }
+  for(const c of [...store.convs].sort((a,b)=>b.at-a.at)){
+    const li=document.createElement("li"), btn=document.createElement("button"), main=document.createElement("span"), t=document.createElement("span"), sub=document.createElement("span"), del=document.createElement("button");
+    const first=(c.m.find(m=>m.r==="u")||c.m[0]).t, n=c.m.length;
+    btn.type="button"; btn.className="cconv"; btn.dataset.conv=c.id; if(c.id===store.cur) li.className="cur";
+    main.className="m-main"; t.className="m-t"; t.textContent=first.length>90? first.slice(0,88)+"…" : first;   // texte seulement
+    sub.className="m-s"; sub.textContent=when(c.at)+" · "+n+" message"+(n>1?"s":"")+(c.id===store.cur?" · en cours":"");
+    main.append(t,sub); btn.append(main); btn.setAttribute("aria-label","Rouvrir la conversation : "+t.textContent+", "+sub.textContent);
+    del.type="button"; del.className="del"; del.dataset.delconv=c.id; del.textContent="×"; del.setAttribute("aria-label","Supprimer la conversation : "+t.textContent);
+    li.append(btn,del); ul.append(li); } }
+const popOpen=()=>!$("#coachPop").hidden;
+function openPop(focusIn){ const p=$("#coachPop"), f=$("#coachFab"); p.hidden=false; f.setAttribute("aria-expanded","true"); f.setAttribute("aria-label","Fermer le coach"); document.documentElement.classList.add("cpop-on");
+  const ok=gateState(); paint(); renderCfg(); if(focusIn!==false) setTimeout(()=>{ const i=$("#coachIn"); if(ok&&i&&!i.disabled) i.focus(); else $("#coachClose").focus(); },0); }
+function closePop(){ const p=$("#coachPop"), f=$("#coachFab"); if(p.hidden) return; const back=p.contains(document.activeElement); p.hidden=true; f.setAttribute("aria-expanded","false"); f.setAttribute("aria-label","Ouvrir le coach"); document.documentElement.classList.remove("cpop-on"); if(back) f.focus(); }
+function openConv(id){ if(busy) return; const c=store.convs.find(x=>x.id===id); if(!c) return; store.cur=id; hist=c.m; saveHist(false); openPop(); }
+function newConv(){ if(busy) return; store.cur=null; hist=[]; saveHist(false); const i=$("#coachIn"); if(i){ i.value=""; $("#coachCount").textContent="0 / "+MAX_IN; } openPop(); $("#coachLive").textContent="Nouvelle conversation."; }
+function delConv(id){ if(busy&&id===store.cur) return; store.convs=store.convs.filter(x=>x.id!==id); if(store.cur===id){ store.cur=null; hist=[]; } saveHist(); if(popOpen()) paint(); $("#coachLive").textContent="Conversation supprimée."; }
 function init(){
   const tab=$("#tab-coach"), panel=$("#p-coach"); if(!tab||!panel||!B) return;
-  if(!URL_OK){ tab.hidden=true; panel.remove(); tab.remove(); return; }   // non configuré : onglet caché, rien ne tourne
-  tab.hidden=false; paint(); renderCfg();
+  if(!URL_OK){ tab.hidden=true; panel.remove(); tab.remove(); for(const id of ["#coachFab","#coachPop"]){ const x=$(id); if(x) x.remove(); } return; }   // non configuré : onglet caché, rien ne tourne
+  tab.hidden=false; paint(); renderCfg(); renderConvs();
+  const fab=$("#coachFab"); fab.hidden=false;
+  fab.addEventListener("click",()=>popOpen()? closePop() : openPop());
+  $("#coachClose").addEventListener("click",closePop);
+  $("#coachPop").addEventListener("keydown",e=>{ if(e.key==="Escape"&&!document.querySelector(".sheet-bg")){ e.preventDefault(); closePop(); } });
+  $("#coachNew").addEventListener("click",newConv); $("#coachNew2").addEventListener("click",newConv);
+  $("#coachClearAll").addEventListener("click",()=>{ if(busy) return; store={cur:null,convs:[]}; hist=[]; ls.del(K_HIST); renderConvs(); paint(); $("#coachLive").textContent="Toutes les conversations sont effacées."; });
+  $("#coachConvs").addEventListener("click",e=>{ const d=e.target.closest("[data-delconv]"); if(d){ delConv(d.dataset.delconv); return; } const b=e.target.closest("[data-conv]"); if(b) openConv(b.dataset.conv); });
   { const nav=document.querySelector("nav.tabs"), seg=nav&&nav.querySelector(".segc");   // barre d'onglets défilante : indice visible (chevron) et onglet actif ramené à l'écran
     if(seg){ const more=()=>nav.classList.toggle("tabs-more",seg.scrollWidth>seg.clientWidth+2&&seg.scrollLeft+seg.clientWidth<seg.scrollWidth-2);
       seg.addEventListener("scroll",more,{passive:true}); window.addEventListener("resize",more); more(); setTimeout(more,300);
@@ -177,9 +221,9 @@ function init(){
   $("#coachIn").addEventListener("input",e=>{ $("#coachCount").textContent=e.target.value.length+" / "+MAX_IN; });
   $("#coachCancel").addEventListener("click",()=>{ userCancel=true; if(ctl) ctl.abort(); });
   $("#coachCfg").addEventListener("click",e=>consentSheet(e.currentTarget));
-  $("#coachClear").addEventListener("click",()=>{ if(busy) return; hist=[]; ls.del(K_HIST); paint(); $("#coachLive").textContent="Conversation effacée."; });
+  $("#coachClear").addEventListener("click",()=>{ if(busy) return; delConv(store.cur); $("#coachLive").textContent="Conversation effacée."; });
   new MutationObserver(()=>{ if(!panel.hidden) gateState(); }).observe(panel,{attributes:true,attributeFilter:["hidden"]});
-  window.addEventListener("storage",e=>{ if(e.storageArea===localStorage&&(e.key===null||e.key===K_HIST&&e.newValue===null)) wipe(); });
+  window.addEventListener("storage",e=>{ if(e.storageArea!==localStorage) return; if(e.key===null||e.key===K_HIST&&e.newValue===null) wipe(); else if(e.key===K_HIST&&!busy){ store=loadStore(); hist=curConv()? curConv().m : []; renderConvs(); if(popOpen()) paint(); } });
   window.addEventListener("pagehide",()=>{ if(ctl) ctl.abort(); });
 }
 window.CarnetCoach=Object.freeze({guard,renderMd,cleanReply,hookUrl,wipe,enabled:()=>!!URL_OK,COACH_V});

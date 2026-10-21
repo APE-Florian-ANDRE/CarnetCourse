@@ -107,7 +107,8 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
 
  // V6 : Coach — message hostile, réponse hostile, longueur, limite de fréquence
  { const p=await mk({session:GOOD,ls:{"carnet.consent":JSON.stringify({cgu:"2026-10-10",privacy:"2026-10-10",terms:true,health:true,age15:true,at:new Date().toISOString()}),"carnet.coach.consent":JSON.stringify({v:"2026-10-10.3",send:true,at:new Date().toISOString(),profile:false,feel:false,stats:false})}}); await p.click("#tab-coach"); await p.waitForTimeout(150);
-   const n0=hits.length; await p.fill("#coachIn",H[1]+" "+H[0]); await p.click("#coachSend"); await p.waitForFunction(()=>document.querySelectorAll("#coachLog .cmsg.bot").length>0,null,{timeout:5000}).catch(()=>{});
+   if(await p.evaluate(()=>document.querySelector("#coachPop").hidden)) await p.click("#coachFab");   // le coach s'ouvre dans la bulle
+  const n0=hits.length; await p.fill("#coachIn",H[1]+" "+H[0]); await p.click("#coachSend"); await p.waitForFunction(()=>document.querySelectorAll("#coachLog .cmsg.bot").length>0,null,{timeout:5000}).catch(()=>{});
    ok(hits.length===n0+1,"V6 message envoyé au webhook");
    ok(await p.evaluate(h=>{ const u=[...document.querySelectorAll("#coachLog .cmsg.me .cbody")].pop(); return !!u&&u.textContent===h&&!u.children.length; },H[1]+" "+H[0]),"V6 message hostile affiché comme du texte");
    ok(await p.evaluate(()=>{ const r=[...document.querySelectorAll("#coachLog .cmsg.bot .cbody")].pop(); return !!r&&/onerror/.test(r.textContent)&&!r.querySelector("img,script,a"); }),"V6 réponse hostile affichée comme du texte (aucun lien, image ni script)");
