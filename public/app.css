@@ -1107,3 +1107,45 @@ details.psec>.pbody{padding:2px 18px 18px}
 .au-mail [hidden]{display:none!important}
 .au-tos{font-size:.82rem;color:var(--au-sub);line-height:1.45;margin:2px 0 0}
 .au-tos a{color:var(--au-link)}
+
+/* v17 : explications repliées, schémas des mouvements, progression, forme du moment */
+details.why{margin-top:4px}
+details.why>p{max-width:72ch}
+footer details.why summary{font-size:.78rem}
+.renfo+.cbtn.xo,.cbtn.xo{margin-top:10px;background:var(--fill);color:var(--accent-text)}
+.xlist{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:14px}
+.xc{background:var(--fill2);border-radius:16px;padding:12px 14px}
+.xc h4{margin:0 0 6px;font-size:.98rem}
+.xfs{display:flex;align-items:flex-end;justify-content:center;gap:6px;flex-wrap:wrap}
+.xf{margin:0;text-align:center}
+.xf svg{display:block;width:120px;height:auto;max-width:40vw}
+.xf figcaption{font-size:.72rem;color:var(--muted);margin-top:2px}
+.xar{color:var(--muted);font-size:1.1rem;align-self:center}
+.xs,.xb{fill:none;stroke:var(--fg);stroke-width:3.6;stroke-linecap:round;stroke-linejoin:round}
+.xs circle{fill:var(--fg);stroke:none}
+.xb{opacity:.45}
+.xg{stroke:var(--line);stroke-width:2}
+.xp{fill:var(--fill);stroke:var(--muted);stroke-width:1.5}
+line.xp{stroke-width:3;stroke-linecap:round}
+.xw,.xw line,.xw circle{fill:var(--accent);stroke:var(--accent);stroke-width:2.5}
+.xcue{margin:8px 0 0;padding-left:18px;font-size:.86rem;color:var(--fg2)}
+.xcue li+li{margin-top:2px}
+.prog .chart{box-shadow:none;background:none;padding:0;margin-top:8px;border-radius:0}
+.prog h4{margin:18px 0 4px;font-size:.92rem}
+.prog .pgrid{display:grid;gap:4px 18px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.prog svg{display:block;width:100%;height:auto}
+.prog svg text{fill:var(--muted);font-family:var(--f-body);font-size:11px}
+.prog .legend{margin-top:4px}
+.perf .pv{display:flex;align-items:center;gap:12px;margin-top:6px}
+.perf .pv b{font-family:var(--f-head,inherit);font-size:1.25rem}
+.perf .pbadge{display:inline-block;white-space:nowrap;flex:none;padding:3px 10px;border-radius:999px;font-weight:700;font-size:.8rem}
+.perf .pbadge.up{background:var(--ok-bg);color:var(--ok-fg)}
+.perf .pbadge.down{background:var(--warn-bg,var(--fill));color:var(--warn-fg,var(--fg))}
+.perf .pbadge.eq{background:var(--fill);color:var(--fg)}
+.perf ul{margin:8px 0 0;padding-left:18px;font-size:.9rem}
+.perf ul li+li{margin-top:3px}
+.day{cursor:default}
+@media (hover:hover) and (pointer:fine){.day:has(.grip){cursor:grab}.day:has(.grip) :is(button,a,summary,label,.det){cursor:pointer}html.dragging,html.dragging *{cursor:grabbing!important}}
+.day.dghost.mini{max-height:none;width:auto;background:var(--raise);color:var(--fg);font-size:.9rem;box-shadow:0 10px 28px rgba(0,0,0,.4),inset 0 0 0 2px var(--accent);min-width:0;padding:10px 14px;border-radius:14px;display:flex;align-items:center;gap:8px;font-weight:700}
+.day.dghost.mini{flex-direction:column;align-items:flex-start}.day.dghost.mini .gtag{position:static;margin-top:6px}
+html.dragging .days{align-items:stretch}

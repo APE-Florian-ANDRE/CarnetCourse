@@ -1491,6 +1491,7 @@ function renderWeek(){
     }
     if(d.renfo){ const r=d.renfo; chips+=(chips?' ':'')+'<span class="chip rf">Renfo</span>'; if(d.run) sum+=" + "+r.t.toLowerCase();
       det+=`<div class="renfo"><div class="rh"><b>${r.t}</b> <span>· ${r.m}</span></div><ul class="blocks">${r.rows.map(x=>`<li><span class="dot rf"></span><span class="txt">${x[0]}</span>${x[1]?`<span class="pace">${x[1]}</span>`:""}</li>`).join("")}</ul>${r.note?`<p class="note">${r.note}</p>`:""}${d.kind==="q"?`<p class="note">À faire après la séance, idéalement 3 h plus tard.</p>`:""}</div>`; }
+    det+=exoBtn(d);   // schémas des exercices de renforcement
     // actions de la carte : faite / pas faite (jusqu'à aujourd'hui), minuteur, déplacer
     const dIso=date?iso(date):"", sess=hasSession(d), mk=sess?markOf(wk.w,d.i):null;
     let acts="";
@@ -1543,7 +1544,7 @@ function renderWeek(){
   $("#balance").innerHTML=P.sport==="force"? forceBalance14(wk,f) : `<div class="spb"><h3>Équilibre de la semaine</h3><span class="num">${p1} % facile · ${p2} % seuil · ${p3} % intense (cible 80 % de facile)</span></div>
   <div class="bar" role="img" aria-label="${p1} pour cent du temps en facile, ${p2} au seuil, ${p3} en intense"><i data-sw="${p1}" data-sbg="--z1-bar"></i><i data-sw="${p2}" data-sbg="--z2-bar"></i><i data-sw="${p3}" data-sbg="--z3-bar"></i></div>
   <div class="legend"><span><i class="dot z1"></i> facile</span><span><i class="dot z2"></i> seuil</span><span><i class="dot z3"></i> intense</span></div>
-  <p class="note">${f.lowBmi?"Calories : maintien tous les jours, sans déficit (voir l'alerte en haut de la semaine).":f.noDef&&!f.taper?"Calories : pas de déficit cette semaine, tu manges à hauteur de ta dépense.":f.taper?"Calories : affûtage, déficit fixe seul tous les jours, pas de supplément ; jour de course à l'équilibre"+(wk.phase==="race"&&longRace?", comme les 2 jours qui le précèdent":"")+".":"Calories : le déficit fixe s'applique tous les jours. Les jours de repos et de footing, le supplément s'y ajoute. Les jours de séance dure et de sortie longue gardent seulement le déficit fixe, avec plus de glucides pour réussir la séance."}</p>
+  <details class="more why"><summary>Calories de la semaine</summary><p class="note">${f.lowBmi?"Calories : maintien tous les jours, sans déficit (voir l'alerte en haut de la semaine).":f.noDef&&!f.taper?"Calories : pas de déficit cette semaine, tu manges à hauteur de ta dépense.":f.taper?"Calories : affûtage, déficit fixe seul tous les jours, pas de supplément ; jour de course à l'équilibre"+(wk.phase==="race"&&longRace?", comme les 2 jours qui le précèdent":"")+".":"Calories : le déficit fixe s'applique tous les jours. Les jours de repos et de footing, le supplément s'y ajoute. Les jours de séance dure et de sortie longue gardent seulement le déficit fixe, avec plus de glucides pour réussir la séance."}</p></details>
   <div class="weeknav">${wk.w>1?`<button class="btn ghost sm" type="button" id="prevW2">‹ Semaine ${wk.w-1}</button>`:""}${wk.w<plan.length?`<button class="btn ghost sm" type="button" id="nextW2">Semaine ${wk.w+1} ›</button>`:""}</div>`;
   renderRing(wk.w); updFoldAll();
   const pw2=$("#prevW2"), nw2=$("#nextW2");
@@ -1563,12 +1564,29 @@ function restoreFocus(fid){
   let el=document.getElementById(fid); if(!el||el.hidden||el.disabled) el=document.getElementById(alt[fid]||"");
   if(el&&document.activeElement!==el) el.focus({preventScroll:true});
 }
+// objectif trop loin : première date de course (même jour de la semaine, dimanche par défaut) qui le rend atteignable sans risque, début du plan inchangé
+let safeCache={k:"",v:null};
+function safeRaceDate(){
+  const u=plan.unreal; if(!u||!runSport()) return null;
+  const pr=state.profile, tdy=todayIso(), st=realStart()||tdy, k=JSON.stringify([pr,st,tdy]); if(safeCache.k===k) return safeCache.v;
+  const wd= okIso(pr.raceDate)? (new Date(pr.raceDate+"T12:00:00").getDay()+6)%7 : 6;
+  let v=null;
+  for(let n=Math.max(N_MIN,plan.length+1);n<=N_MAX&&!v;n++){
+    const d=addDays(mondayOf(st),(n-1)*7+wd); if(d<tdy) continue;
+    if(reachable(String(u.asked),buildPlanFor(profileNums({...pr,objectif:String(u.asked),start:st,raceDate:d})),P.niveau==="deb")) v=d; }
+  safeCache={k,v:v&&{d:v,st}}; return safeCache.v;
+}
+const yearDate=d=>new Date(d+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+document.addEventListener("click",e=>{ const b=e.target.closest&&e.target.closest("[data-safedate]"); if(!b) return; const v=safeRaceDate(); if(!v) return;
+  state.profile={...state.profile,start:v.st,raceDate:v.d}; state.isExample=false; fillForm(); persist(); recompute(); toast("Course fixée au "+yearDate(v.d)+"."); });
 function unrealAlert(){
   const u=plan.unreal, lab={5:"un 5 km",10:"un 10 km",21:"un semi-marathon (21,1 km)",42:"un marathon (42,2 km)"}[u.asked], used=OBJ[u.used].label;
   const usedTxt= u.used==="forme"? "ta forme, sans course au bout" : used==="Semi"? "un semi-marathon" : "un "+used;
   // débutant : semi à partir de 30 semaines, marathon à partir de 52 ; au-delà de ces seuils, c'est la sortie longue qui manque
   const debMin= P.niveau==="deb"? {21:30,42:52}[u.asked] : 0, tooShort= debMin&&plan.length<debMin;
   const later= tooShort? "Garde ton objectif pour la suite, avec un plan d'au moins "+debMin+" semaines"+(debMin===52?" (un an)":"")+"." : plan.length>=N_MAX? "Garde ton objectif pour plus tard, une fois cette course faite." : "Garde ton objectif pour la suite, avec un plan plus long.";
+  const sd=safeRaceDate();
+  if(sd) return `<div class="alert bad act"><span><b>Objectif trop loin pour ${plan.length} semaines.</b> ${tooShort?"En débutant, "+lab+" demande au moins "+debMin+" semaines de course régulière.":"Ta plus longue sortie ne monterait qu'à "+fmt1(u.top)+" km : la course ferait environ "+fmt1(RACE_KM[u.asked]/Math.max(1,u.top))+" fois cette distance, trop risqué."} <b>Pour viser ${lab} sans risque, choisis une course le ${yearDate(sd.d)} ou après.</b> En attendant, le plan prépare ${usedTxt}.</span><button class="btn" type="button" data-safedate>Viser cette date</button></div>`;
   return `<div class="alert bad"><b>Objectif trop loin pour ${plan.length} semaines.</b> ${tooShort?"En débutant, "+lab+" demande au moins "+debMin+" semaines de course régulière.":"Pour "+lab+", ta plus longue sortie ne monterait qu'à "+fmt1(u.top)+" km d'ici la semaine "+Math.max(1,plan.length-2)+" : la course ferait environ "+fmt1(RACE_KM[u.asked]/Math.max(1,u.top))+" fois cette distance, ce qui multiplie le risque de blessure."} Le plan prépare donc <b>${usedTxt}</b>. ${later}</div>`;
 }
 function renderPlan(){
@@ -1638,7 +1656,7 @@ function renderLog(){
     log.map((e,i)=>`<tr><td class="nw">${dfmt(new Date(e.date+"T12:00:00"))}</td><td class="n">${fmt1(e.poids)} kg</td><td class="n">${ecart(e,i)}</td><td class="n">${dash(e.sommeil,v=>fmt1(v)+" h")}</td><td class="n">${dash(e.fatigue,v=>v+"/5")}</td><td class="n">${seances(e)}</td><td>${e.douleur==="oui"?"oui":"non"}</td><td><button class="btn ghost sm" type="button" data-del="${esc(e.date)}">Retirer</button></td></tr>`).reverse().join("")+`</tbody>` : "";
   $("#logList").innerHTML=log.map((e,i)=>`<li><div class="m-main"><div class="m-t"><span>${dfmt(new Date(e.date+"T12:00:00"))}</span><span class="num">${fmt1(e.poids)} kg${i?" ("+ecart(e,i)+")":""}</span></div><div class="m-s">sommeil ${dash(e.sommeil,v=>fmt1(v)+" h")} · fatigue ${dash(e.fatigue,v=>v+"/5")} · séances ${seances(e)} · douleur ${e.douleur==="oui"?"oui":"non"}</div></div><button class="del" type="button" data-del="${esc(e.date)}" aria-label="Retirer la semaine du ${dfmt(new Date(e.date+"T12:00:00"))}">×</button></li>`).reverse().join("");
   document.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>removeEntry(b.dataset.del,b)));
-  renderAdvice(log);
+  renderAdvice(log); renderProg(log); renderPerf(log);
 }
 // un ajustement négatif qui ferait passer sous le plancher de sécurité (25 kcal/kg MM) une semaine du plan
 function adjHitsFloor(a){ if(P.minor||E.bmi<18.5) return true; const Q={...P,adj:a}; return plan.some(wk=>dayFuel(Q,E,wk).floorHit); }
@@ -1738,6 +1756,70 @@ function renderAdvice(log){
   }
   adv.innerHTML=out.map(x=>`<div class="alert ${x.c}${x.act?" act":""}">${x.h}</div>`).join("");
   const btn=$("#applyAdj"); if(btn) btn.addEventListener("click",()=>{const nv=+btn.dataset.nv; state.profile.adj=nv; const e=state.log.find(x=>x.date===last.date); if(e) e.applied=nv-cur; state.isExample=false; fillForm(); persist(); recompute();});
+}
+
+/* progression : volume prévu / fait par semaine, sommeil et fatigue ; forme du moment (surperformance / sous-performance) */
+function weekDoneVol(w){ const wk=plan[w-1], f=dayFuel(P,E,wk), tdy=todayIso(), run=runSport(); let pv=0,dn=0,n=0,nd=0;
+  for(const d of f.days){ if(!hasSession(d)) continue; const dt=isoOf(w,d.i); if(!dt||dt>tdy) continue;
+    const v= run? (d.run?d.km:0) : (d.run?sessionDur(d.run):0)+(d.renfo?parseInt(d.renfo.m)||0:0);
+    pv+=v; n++; if(markOf(w,d.i)==="done"){ dn+=v; nd++; } }
+  return {pv,dn,n,nd}; }
+function barSvg(rows,unit,lab){
+  const ch=$("#progCharts"), Wd=Math.max(260,Math.round((ch.clientWidth||600)/(ch.clientWidth>620?2:1))-12), H=150,pl=34,pr=8,pt=12,pb=24;
+  const max=Math.max(1,...rows.map(r=>Math.max(r.pv,r.dn))), step=(Wd-pl-pr)/rows.length, bw=Math.max(6,Math.min(26,step*.6)), y=v=>pt+(1-v/max)*(H-pt-pb);
+  const tick=[0,max/2,max].map(v=>`<line x1="${pl}" x2="${Wd-pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pl-5}" y="${y(v)+4}" text-anchor="end">${fmt0(v)}</text>`).join("");
+  const bars=rows.map((r,k)=>{ const x=pl+step*k+(step-bw)/2; return `<rect x="${x}" y="${y(r.pv)}" width="${bw}" height="${H-pb-y(r.pv)}" rx="4" fill="none" stroke="var(--muted)" stroke-dasharray="3 3"/><rect x="${x}" y="${y(r.dn)}" width="${bw}" height="${Math.max(0,H-pb-y(r.dn))}" rx="4" fill="var(--accent)"/>${rows.length<=12||k%2===0?`<text x="${x+bw/2}" y="${H-8}" text-anchor="middle">S${r.w}</text>`:""}`; }).join("");
+  return `<svg viewBox="0 0 ${Wd} ${H}" width="${Wd}" height="${H}" role="img" aria-label="${esc(lab)}">${tick}${bars}</svg><div class="legend"><span><i class="dot dot-a"></i> fait (${unit})</span><span>pointillés : prévu</span></div>`; }
+function lineSvg(series,lab){
+  const ch=$("#progCharts"), Wd=Math.max(260,Math.round((ch.clientWidth||600)/(ch.clientWidth>620?2:1))-12), H=150,pl=34,pr=30,pt=12,pb=24;
+  const pts=series[0].pts; if(pts.length<2) return "";
+  const t0=new Date(pts[0][0]).getTime(), t1=Math.max(new Date(pts[pts.length-1][0]).getTime(),t0+864e5), x=t=>pl+(new Date(t).getTime()-t0)/(t1-t0)*(Wd-pl-pr);
+  let g=""; const s0=series[0], s1=series[1];
+  const yA=v=>pt+(s0.hi-v)/(s0.hi-s0.lo)*(H-pt-pb), yB=v=>pt+(s1.hi-v)/(s1.hi-s1.lo)*(H-pt-pb);
+  for(const v of s0.ticks) g+=`<line x1="${pl}" x2="${Wd-pr}" y1="${yA(v)}" y2="${yA(v)}" stroke="var(--line)"/><text x="${pl-5}" y="${yA(v)+4}" text-anchor="end">${v} h</text>`;
+  for(const v of s1.ticks) g+=`<text x="${Wd-pr+5}" y="${yB(v)+4}">${v}/5</text>`;
+  const path=(s,y,col,dash)=>{ const p=s.pts.filter(q=>q[1]!=null); return p.length? `<path d="${p.map((q,i)=>(i?"L":"M")+x(q[0]).toFixed(1)+" "+y(q[1]).toFixed(1)).join(" ")}" fill="none" stroke="${col}" stroke-width="2.5"${dash?' stroke-dasharray="5 4"':""}/>${p.map(q=>`<circle cx="${x(q[0]).toFixed(1)}" cy="${y(q[1]).toFixed(1)}" r="3.5" fill="${col}"/>`).join("")}` : ""; };
+  const ends=`<text x="${pl}" y="${H-8}">${dfmt(new Date(pts[0][0]+"T12:00:00"))}</text><text x="${Wd-pr}" y="${H-8}" text-anchor="end">${dfmt(new Date(pts[pts.length-1][0]+"T12:00:00"))}</text>`;
+  return `<svg viewBox="0 0 ${Wd} ${H}" width="${Wd}" height="${H}" role="img" aria-label="${esc(lab)}">${g}<line x1="${pl}" x2="${Wd-pr}" y1="${yA(7)}" y2="${yA(7)}" stroke="var(--z1)" stroke-dasharray="2 4"/>${path(s0,yA,"var(--z1)")}${path(s1,yB,"var(--z3)",1)}${ends}</svg><div class="legend"><span><i class="dot z1"></i> sommeil (h)</span><span><i class="dot z3"></i> fatigue (1 à 5)</span><span>pointillés bleus : 7 h</span></div>`; }
+function renderProg(log){
+  const el=$("#progCharts"); if(!el) return; const tdy=todayIso(), out=[]; el.dataset.w=el.clientWidth||"";   // onglet caché : redessiné à son ouverture, à la bonne largeur
+  const ws=plan.filter(wk=>{ const a=isoOf(wk.w,0); return a&&a<=tdy; }).slice(-12).map(wk=>({w:wk.w,...weekDoneVol(wk.w)})).filter(r=>r.n);
+  if(ws.some(r=>r.nd)) out.push(`<div><h4>${runSport()?"Kilomètres":"Minutes"} par semaine</h4>${barSvg(ws,runSport()?"km":"min","Volume fait et prévu par semaine")}</div>`);
+  const sl=log.filter(e=>e.sommeil!=null&&e.sommeil!==""||e.fatigue!=null);
+  if(sl.length>=2) out.push(`<div><h4>Sommeil et fatigue</h4>${lineSvg([{pts:sl.map(e=>[e.date,e.sommeil==null||e.sommeil===""?null:+e.sommeil]),lo:4,hi:10,ticks:[5,7,9]},{pts:sl.map(e=>[e.date,e.fatigue==null?null:+e.fatigue]),lo:1,hi:5,ticks:[1,3,5]}],"Sommeil et fatigue par semaine")}</div>`);
+  el.innerHTML= out.length? `<div class="pgrid">${out.join("")}</div>` : `<p class="note">Coche « Faite » sur tes séances et note tes semaines : tes courbes de volume, de sommeil et de fatigue s'afficheront ici.</p>`;
+}
+// effort perçu attendu selon la séance (échelle 1 à 10)
+const RPE_EXP=d=> d.kind==="race"? 8.5 : d.run? (d.run.rpeAvg||({q:7,long:4.5,easy:3.5}[d.run.type]||4)) : d.renfo? 6 : null;
+function renderPerf(log){
+  const el=$("#perfCard"); if(!el) return; const tdy=todayIso(), from=addDays(tdy,-21), live=liveOf(state.feel), byDate={};
+  for(const wk of plan) for(const d of wk.days){ const dt=isoOf(wk.w,d.i); if(dt&&dt>=from&&dt<=tdy) byDate[dt]={w:wk.w,d}; }
+  const gaps=[]; let moods=[], pains=0;
+  for(const k of Object.keys(live)){ const v=live[k], s=byDate[k]; if(!s) continue; if(v.mood>0) moods.push(v.mood); if(v.pain>0) pains++;
+    const ex=RPE_EXP(s.d); if(ex&&v.rpe>0) gaps.push(ex-v.rpe); }
+  let tot=0,done=0; for(const k of Object.keys(byDate)){ const s=byDate[k]; if(!hasSession(s.d)||k===tdy) continue; tot++; if(markOf(s.w,s.d.i)==="done") done++; }
+  const last=log.length&&log[log.length-1].date>=addDays(tdy,-14)? log[log.length-1] : null, sl=last&&last.sommeil!=null&&last.sommeil!==""? +last.sommeil : null, fa=last? +last.fatigue||null : null;
+  const gap=gaps.length>=2? gaps.reduce((a,x)=>a+x,0)/gaps.length : null, reg=tot>=3? done/tot : null, mood=moods.length>=2? moods.reduce((a,x)=>a+x,0)/moods.length : null;
+  if(gap==null&&reg==null&&sl==null&&fa==null){ el.hidden=true; return; }
+  const low=(gap!=null&&gap<=-1)||(reg!=null&&reg<.6)||(fa!=null&&fa>=4)||(mood!=null&&mood<=2.2)||(sl!=null&&sl<6.5);
+  const high=!low&&gap!=null&&gap>=1&&(reg==null||reg>=.75)&&(fa==null||fa<=3);
+  const tips=[];
+  if(low){
+    if(sl!=null&&sl<7) tips.push(`Tu dors ${fmt1(sl)} h par nuit : vise 7 à 9 h. Couche-toi 30 min plus tôt et coupe les écrans avant ; c'est la récupération la plus efficace.`);
+    if(fa!=null&&fa>=4) tips.push("Fatigue élevée : fais de cette semaine une semaine plus légère, footings vraiment faciles.");
+    if(gap!=null&&gap<=-1) tips.push("Les séances te coûtent plus que prévu : ralentis les footings (tu dois pouvoir parler) et ne force pas le fractionné.");
+    if(reg!=null&&reg<.6) tips.push(`${done} séance${done>1?"s":""} faite${done>1?"s":""} sur ${tot} ces 3 semaines : déplace une séance plutôt que la sauter, ou choisis moins de séances dans ton profil.`);
+    if(mood!=null&&mood<=2.2) tips.push("Forme du jour basse : repas suffisants autour des séances, et une vraie journée de repos.");
+    if(+P.deficit>0&&(fa>=4||(sl!=null&&sl<6.5))) tips.push("Avec un déficit de calories, mange un peu plus les jours de séance tant que la fatigue dure.");
+  } else if(high){
+    tips.push(`Tes séances te paraissent plus faciles que prévu (environ ${fmt1(gap)} point${gap>=2?"s":""} d'effort en moins).`);
+    tips.push(runSport()? "Ta forme a sans doute progressé : refais un test (5 km ou VMA) et mets à jour ta référence de vitesse dans Profil pour des allures justes." : "Ta forme progresse : augmente un peu la charge à la prochaine séance si la technique reste propre.");
+    tips.push("Ne rajoute pas de séances pour autant : la régularité fait la progression.");
+  } else tips.push("Effort, régularité et récupération sont dans les clous : continue comme ça.");
+  if(pains>=2) tips.push("Douleur notée plusieurs fois : si elle dure, demande l'avis d'un médecin ou d'un kiné.");
+  const facts=[gap!=null?`effort ressenti ${gap>=0?"−":"+"}${fmt1(Math.abs(gap))} pt vs prévu`:null,reg!=null?`régularité ${Math.round(reg*100)} %`:null,sl!=null?`sommeil ${fmt1(sl)} h`:null,fa!=null?`fatigue ${fa}/5`:null].filter(Boolean).join(" · ");
+  const [cls,txt]= low? ["down","Tu sous-performes"] : high? ["up","Tu surperformes"] : ["eq","Dans les clous"];
+  el.hidden=false; el.innerHTML=`<h3>Ma forme du moment</h3><div class="pv"><span class="pbadge ${cls}">${txt}</span><span class="note">${esc(facts)} · 3 dernières semaines</span></div><ul>${tips.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`;
 }
 
 /* ---------- formulaire ---------- */
@@ -1907,6 +1989,7 @@ function selectTab(id){
   document.querySelectorAll("section.panel").forEach(s=>s.hidden=s.id!=="p-"+id);
   $(".wrap").dataset.tab=id;
   if(id==="suivi" && P && !$("#chart").dataset.w) renderChart(sortedLog());
+  if(id==="suivi" && P && !$("#progCharts").dataset.w) renderProg(sortedLog());
   if(id==="suivi" && P) fillLogCounts();
   // la barre d'onglets est collée en haut : le panneau repart juste en dessous
   const panel=$("#p-"+id); if(panel.getBoundingClientRect().top<navTopH()) scrollUnderNav(panel);
@@ -1927,7 +2010,7 @@ $("#weekTitle").tabIndex=-1;
 function scrollToToday(){ const c=$("#todayCard"); if(c) scrollUnderNav(c); }
 $("#todayW").addEventListener("click",()=>{const tp=todayPos(); if(!tp)return; if(tp.w!==state.week) goWeek(tp.w); scrollToToday();});
 let rzT=null, rzW=window.innerWidth;
-window.addEventListener("resize",()=>{clearTimeout(rzT); rzT=setTimeout(()=>{ if(window.innerWidth===rzW||!P)return; rzW=window.innerWidth; renderChart(sortedLog()); },150);});
+window.addEventListener("resize",()=>{clearTimeout(rzT); rzT=setTimeout(()=>{ if(window.innerWidth===rzW||!P)return; rzW=window.innerWidth; renderChart(sortedLog()); renderProg(sortedLog()); },150);});
 
 // annonces lecteur d'écran : vidées après quelques secondes pour ne pas rester périmées
 { const sl=$("#srLive"); let st=null; if(sl) new MutationObserver(()=>{ if(!sl.textContent) return; clearTimeout(st); st=setTimeout(()=>{ sl.textContent=""; },6000); }).observe(sl,{childList:true,characterData:true,subtree:true}); }
@@ -2166,8 +2249,94 @@ $("#days").addEventListener("click",e=>{
   else if(b.dataset.vm!=null){ const a=b.closest("article"), open=a.classList.contains("cmp"); setTile(a,open); if(a.dataset.iso){ tiles.o[a.dataset.iso]=open; saveTiles(); } updFoldAll(); }
   else if(b.dataset.ics!=null) openExport(b,{w,i:+b.dataset.ics});
   else if(b.dataset.timer!=null) openTimer(w,+b.dataset.timer,b);
+  else if(b.dataset.exo!=null) openExo(w,+b.dataset.exo,b);
   else if(b.dataset.feel!=null) openFeel(w,+b.dataset.feel,b);
 });
+
+/* schémas des mouvements : silhouette de profil (tournée vers la droite) dessinée par angles, départ puis arrivée.
+   Angles en degrés : membres 0 = vers le bas, 90 = vers l'avant, 180 = vers le haut ; buste 0 = droit, 90 = penché vers l'avant, -90 = allongé tête en arrière.
+   a : point d'appui (cheville de la jambe avant, ou hanche si hip:1) ; l1/l2 : [cuisse, tibia] ; t : buste ; r/r2 : [bras, avant-bras] ; pr : accessoires */
+const XL={th:20,sh:19,to:26,ne:10,ua:14,fa:13,ft:7};
+const xv=(a,n)=>[Math.sin(a*Math.PI/180)*n,Math.cos(a*Math.PI/180)*n];
+const xadd=(p,v,k=1)=>[p[0]+v[0]*k,p[1]+v[1]*k];
+function exoPose(q){
+  const l1=q.l1||[0,0], l2=q.l2||l1, t=q.t||0, r=q.r||[0,0];
+  let hip; if(q.hip) hip=q.a; else { const k1=xadd(q.a,xv(l1[1],XL.sh),-1); hip=xadd(k1,xv(l1[0],XL.th),-1); }
+  const leg=l=>{ const k=xadd(hip,xv(l[0],XL.th)), a=xadd(k,xv(l[1],XL.sh)); return [k,a]; };
+  const [k1,a1]=leg(l1), [k2,a2]=leg(l2), sh=xadd(hip,[Math.sin(t*Math.PI/180)*XL.to,-Math.cos(t*Math.PI/180)*XL.to]);
+  const hd=xadd(sh,[Math.sin(t*Math.PI/180)*XL.ne,-Math.cos(t*Math.PI/180)*XL.ne]);
+  const arm=r=>{ const e=xadd(sh,xv(r[0],XL.ua)), h=xadd(e,xv(r[1],XL.fa)); return [e,h]; };
+  const [e1,h1]=arm(r), A2=q.r2? arm(q.r2) : null;
+  const fa=x=> q.ft!=null? q.ft : x+90;
+  return {hip,k1,a1,k2,a2,sh,hd,e1,h1,A2,f1:xadd(a1,xv(fa(l1[1]),XL.ft)),f2:xadd(a2,xv(fa(l2[1]),XL.ft))};
+}
+function exoSvg(q,lab){
+  const P_=exoPose(q), n=v=>Math.round(v*10)/10, pl=pts=>`<polyline points="${pts.map(p=>n(p[0])+","+n(p[1])).join(" ")}"/>`;
+  let pr="";
+  for(const it of q.pr||[]){
+    if(it==="db"){ const h=P_.h1; pr+=`<g class="xw"><line x1="${n(h[0]-5)}" y1="${n(h[1])}" x2="${n(h[0]+5)}" y2="${n(h[1])}"/><circle cx="${n(h[0]-5)}" cy="${n(h[1])}" r="3"/><circle cx="${n(h[0]+5)}" cy="${n(h[1])}" r="3"/></g>`; }
+    else if(it==="bar"){ const h=P_.h1; pr+=`<circle class="xw" cx="${n(h[0])}" cy="${n(h[1])}" r="7"/>`; }
+    else if(it==="barSh"){ const s=P_.sh; pr+=`<circle class="xw" cx="${n(s[0]+6)}" cy="${n(s[1])}" r="5"/>`; }
+    else if(it==="barHip"){ const s=P_.hip; pr+=`<circle class="xw" cx="${n(s[0])}" cy="${n(s[1]-7)}" r="7"/>`; }
+    else if(it==="pull"){ const h=P_.h1; pr+=`<line class="xp" x1="${n(h[0]-24)}" y1="${n(h[1])}" x2="${n(h[0]+24)}" y2="${n(h[1])}"/>`; }
+    else if(it==="benchBack"){ const a=P_.a2; pr+=`<rect class="xp" x="${n(a[0]-16)}" y="${n(a[1]+3)}" width="24" height="${n(Math.max(4,97-a[1]))}" rx="2"/>`; }
+    else if(it==="benchSh"){ const s=P_.sh; pr+=`<rect class="xp" x="${n(s[0]-14)}" y="${n(s[1]+4)}" width="22" height="${n(Math.max(4,97-s[1]))}" rx="2"/>`; }
+    else if(it==="benchTorso"){ const s=P_.sh, h=P_.hip; pr+=`<rect class="xp" x="${n(s[0]-6)}" y="${n(s[1]+4)}" width="${n(h[0]-s[0]+12)}" height="${n(Math.max(4,97-s[1]))}" rx="2"/>`; }
+    else if(it==="benchFeet"){ const a=P_.a1; pr+=`<rect class="xp" x="${n(a[0]-10)}" y="${n(a[1]+4)}" width="22" height="${n(Math.max(4,97-a[1]))}" rx="2"/>`; }
+    else if(it==="step"){ const a=P_.a1; pr+=`<rect class="xp" x="${n(a[0]-8)}" y="${n(a[1]+3)}" width="26" height="${n(Math.max(3,97-a[1]))}" rx="2"/>`; }
+    else if(it==="pole"){ const h=P_.h1; pr+=`<line class="xp" x1="${n(h[0]+3)}" y1="14" x2="${n(h[0]+3)}" y2="100"/>`; }
+    else if(it==="hold"){ const a=P_.a1; pr+=`<rect class="xp" x="${n(a[0]-9)}" y="${n(a[1]-8)}" width="12" height="6" rx="2"/>`; }
+  }
+  const back=pl([P_.hip,P_.k2,P_.a2,P_.f2])+(P_.A2? pl([P_.sh,P_.A2[0],P_.A2[1]]) : "");
+  // cadre rogné au-dessus de la silhouette (les positions allongées ne laissent pas un grand vide)
+  const ys=[P_.hd[1]-7,P_.h1[1]-8,P_.e1[1],P_.k1[1],P_.k2[1],P_.a2[1]-6,P_.A2?P_.A2[1][1]:104,q.fl===0?0:104], top=Math.max(0,Math.floor(Math.min(...ys)-6)), hh=104-top;
+  return `<figure class="xf"><svg viewBox="0 ${top} 120 ${hh}" width="120" height="${hh}" aria-hidden="true"><line class="xg" x1="4" y1="${q.fl||100}" x2="116" y2="${q.fl||100}"/>${pr}<g class="xb">${back}</g><g class="xs">${pl([P_.hip,P_.k1,P_.a1,P_.f1])}${pl([P_.hip,P_.sh])}${pl([P_.sh,P_.e1,P_.h1])}<circle cx="${n(P_.hd[0])}" cy="${n(P_.hd[1])}" r="6"/></g></svg><figcaption>${lab}</figcaption></figure>`;
+}
+const STAND={a:[56,97]}, ARMF=[85,90];
+// re : reconnaît le nom dans le texte du plan ; f : 1 ou 2 positions ; c : consignes
+const EXO=[
+  {id:"goblet",n:"Goblet squat",re:/goblet|gobelet/i,f:[{...STAND,r:[15,165],pr:["db"]},{a:[60,97],l1:[82,-18],t:28,r:[35,175],pr:["db"]}],c:["Un haltère tenu contre la poitrine, coudes vers le bas.","Descends en poussant les fesses en arrière, genoux dans l'axe des pieds.","Talons au sol, dos droit ; remonte en poussant dans le sol."]},
+  {id:"bulgare",n:"Split squat bulgare",re:/bulgare|split squat/i,f:[{a:[70,97],l1:[15,-2],l2:[-28,-95],t:5,pr:["benchBack"]},{a:[70,97],l1:[78,-12],l2:[-8,-147],t:12,pr:["benchBack"]}],c:["Pied arrière posé sur un banc, pied avant un grand pas devant.","Descends à la verticale jusqu'à ce que la cuisse avant soit presque horizontale.","Genou avant au-dessus du pied, pas vers l'intérieur."]},
+  {id:"pistol",n:"Pistol squat assisté",re:/pistol/i,f:[{a:[50,97],l2:[35,35],r:[70,85],pr:["pole"]},{a:[50,97],l1:[85,-22],l2:[88,88],t:35,r:[80,90],pr:["pole"]}],c:["Sur une jambe, l'autre tendue devant ; tiens un support (porte, barre).","Descends lentement aussi bas que tu contrôles.","Tire un peu sur le support pour remonter au début."]},
+  {id:"fsq",n:"Squat avant",re:/squat avant/i,f:[{...STAND,r:[60,175],pr:["barSh"]},{a:[60,97],l1:[82,-18],t:22,r:[80,175],pr:["barSh"]}],c:["Barre posée devant les épaules, coudes hauts.","Buste le plus droit possible pendant la descente.","Remonte en poussant dans tout le pied."]},
+  {id:"ohsq",n:"Squat bras tendus au-dessus de la tête",re:/overhead|bras tendus/i,f:[{...STAND,r:[165,170]},{a:[60,97],l1:[82,-18],t:20,r:[150,160]}],c:["Bâton ou haltère tenu bras tendus au-dessus de la tête.","Descends en gardant les bras alignés avec le buste.","Mouvement de technique : léger, sans forcer."]},
+  {id:"squat",n:"Squat",re:/squat|presse/i,f:[{...STAND,r:ARMF},{a:[60,97],l1:[84,-20],t:40,r:ARMF}],c:["Pieds largeur d'épaules, pointes un peu ouvertes.","Assieds-toi en arrière, genoux dans l'axe des pieds, talons au sol.","Avec barre : posée sur le haut du dos, regard droit devant."]},
+  {id:"rdl",n:"Soulevé de terre roumain",re:/roumain|soulevé de terre|tirage d.arraché|tirage d.épaulé|tirage haltères/i,f:[{...STAND,pr:["db"]},{a:[60,97],l1:[-12,6],t:75,r:[0,0],pr:["db"]}],c:["Genoux à peine fléchis, la charge glisse le long des cuisses.","Recule les fesses, dos bien droit, jusqu'à sentir l'arrière des cuisses.","Remonte en serrant les fesses, sans cambrer."]},
+  {id:"hipthrust",n:"Hip thrust",re:/hip thrust/i,f:[{a:[92,97],l1:[140,25],t:-62,r:[100,90],pr:["benchSh","barHip"]},{a:[92,97],l1:[100,15],t:-88,r:[100,90],pr:["benchSh","barHip"]}],c:["Haut du dos appuyé sur un banc, pieds à plat.","Monte les hanches jusqu'à l'alignement épaules, hanches, genoux.","Serre les fesses 1 s en haut, menton rentré."]},
+  {id:"pont",n:"Pont fessier",re:/pont fessier/i,f:[{a:[86,97],l1:[118,30],t:-90,r:[90,90]},{a:[86,97],l1:[100,20],t:-106,r:[90,90]}],c:["Allongé sur le dos, genoux pliés, pieds à plat.","Pousse dans les talons pour monter les hanches.","Garde 1 s en haut, fesses serrées, puis redescends lentement. Sur une jambe : l'autre tendue."]},
+  {id:"legcurl",n:"Curl ischios (talons sur une serviette)",re:/curl ischios|leg curl/i,f:[{a:[86,97],l1:[100,20],t:-106,r:[90,90]},{a:[104,97],l1:[98,95],t:-98,r:[90,90]}],c:["En position de pont, talons sur une serviette (sol lisse).","Fais glisser les pieds vers l'avant en gardant les hanches hautes.","Ramène les talons vers les fesses avec l'arrière des cuisses."]},
+  {id:"nordic",n:"Nordic curl",re:/nordic/i,f:[{a:[30,97],l1:[0,-90],t:0,r:[30,40],ft:-90,pr:["hold"]},{a:[30,97],l1:[-50,-90],t:50,r:[70,70],ft:-90,pr:["hold"]}],c:["À genoux, chevilles bloquées (partenaire ou meuble lourd).","Penche-toi en avant, corps droit, le plus lentement possible.","Rattrape-toi avec les mains et remonte en poussant un peu."]},
+  {id:"fente",n:"Fentes",re:/fente/i,f:[{...STAND},{a:[76,97],l1:[80,-12],l2:[-12,-70],t:5,r:[0,0]}],c:["Un grand pas (en avant ou en arrière).","Descends jusqu'à ce que le genou arrière frôle le sol.","Buste droit, genou avant au-dessus du pied."]},
+  {id:"mollets",n:"Mollets",re:/mollet/i,f:[{a:[56,94],pr:["step"]},{a:[56,85],ft:40,pr:["step"]}],c:["Avant du pied sur une marche, talons dans le vide.","Monte sur la pointe le plus haut possible, puis descends sous la marche.","Lentement ; sur une jambe quand c'est facile (assis : charge sur les genoux)."]},
+  {id:"plio",n:"Pliométrie (sauts)",re:/pliom|saut/i,f:[{a:[60,97],l1:[70,-20],t:35,r:[-40,-30]},{a:[58,82],r:[170,175],ft:40}],c:["Squat jump, sauts sur place ou bonds : toujours en forme, jamais fatigué.","Atterris souple sur l'avant du pied, genoux dans l'axe.","Peu de répétitions de qualité, récupère bien entre les séries."]},
+  {id:"copen",n:"Copenhague",re:/copenhague/i,f:[{a:[96,80],l1:[78,78],t:-72,r:[0,-90],r2:[180,180],ft:20,pr:["benchFeet"]}],c:["Sur le côté, avant-bras au sol, jambe du dessus posée sur un banc.","Monte les hanches pour aligner le corps et tiens.","Commence genou sur le banc (plus facile), puis pied."]},
+  {id:"lateral",n:"Gainage latéral",re:/gainage latéral/i,f:[{a:[98,95],l1:[72,72],t:-68,r:[0,-90],r2:[180,180],ft:20}],c:["Sur le côté, coude sous l'épaule.","Hanches hautes : le corps forme une ligne droite.","Respire normalement ; change de côté."]},
+  {id:"planche",n:"Gainage (planche)",re:/gainage/i,f:[{a:[100,95],l1:[78,78],t:-78,r:[0,-90],ft:10}],c:["Avant-bras au sol, coudes sous les épaules.","Corps droit de la tête aux talons, fesses ni trop hautes ni trop basses.","Rentre le ventre et respire calmement."]},
+  {id:"equilibre",n:"Équilibre sur une jambe",re:/équilibre/i,f:[{...STAND,l2:[80,0],r:[60,60]}],c:["Debout sur une jambe, genou un peu fléchi.","Regarde un point fixe ; puis les yeux fermés quand c'est facile.","Sur coussin ou serviette pliée pour corser."]},
+  {id:"pompes",n:"Pompes",re:/pompes/i,f:[{a:[100,95],l1:[70,70],t:-70,r:[0,0],ft:10},{a:[100,95],l1:[82,82],t:-82,r:[60,-30],ft:10}],c:["Mains sous les épaules, corps droit.","Descends la poitrine près du sol, coudes à 45°.","Plus facile : genoux au sol ou mains sur un meuble."]},
+  {id:"row",n:"Rowing",re:/rowing|tirage horizontal/i,f:[{a:[60,97],l1:[-15,8],t:62,r:[0,0],pr:["db"]},{a:[60,97],l1:[-15,8],t:62,r:[-70,0],pr:["db"]}],c:["Penché en avant, dos plat, genoux un peu fléchis.","Tire la charge vers le bas du ventre, coude le long du corps.","Serre les omoplates en haut, redescends lentement."]},
+  {id:"traction",n:"Tractions",re:/traction|tirage vertical/i,f:[{a:[60,78],hip:1,l1:[0,-30],r:[180,180],pr:["pull"],fl:0},{a:[60,52],hip:1,l1:[0,-30],r:[20,172],pr:["pull"],fl:0}],c:["Suspendu à une barre, mains un peu plus larges que les épaules.","Tire les coudes vers les hanches jusqu'au menton au-dessus de la barre.","Plus facile : élastique sous les pieds, ou tirage à la poulie."]},
+  {id:"couche",n:"Développé couché",re:/développé couché|développé incliné/i,f:[{a:[64,72],hip:1,l1:[90,0],t:-90,r:[180,180],pr:["benchTorso","bar"]},{a:[64,72],hip:1,l1:[90,0],t:-90,r:[60,180],pr:["benchTorso","bar"]}],c:["Allongé sur le banc, pieds à plat au sol.","Descends la charge jusqu'au bas de la poitrine, coudes à 45°.","Pousse vers le haut sans décoller les fesses."]},
+  {id:"militaire",n:"Développé épaules",re:/développé militaire|développé épaules|push press/i,f:[{...STAND,r:[30,170],pr:["bar"]},{...STAND,r:[178,180],pr:["bar"]}],c:["Debout, la charge devant les épaules.","Pousse au-dessus de la tête, bras tendus, ventre serré.","Ne cambre pas : serre les fesses."]},
+  {id:"curl",n:"Curl biceps",re:/curl/i,f:[{...STAND,r:[0,0],pr:["db"]},{...STAND,r:[0,160],pr:["db"]}],c:["Coudes collés au corps.","Monte la charge en pliant les bras, sans balancer le buste.","Redescends lentement."]},
+  {id:"triceps",n:"Extension triceps",re:/triceps|diamant/i,f:[{...STAND,r:[170,-20],pr:["db"]},{...STAND,r:[170,175],pr:["db"]}],c:["Haltère tenu derrière la tête, coudes vers le haut.","Tends les bras sans bouger les coudes.","Redescends lentement derrière la tête."]},
+  {id:"releve",n:"Relevé de jambes",re:/relevé de jambes/i,f:[{a:[60,94],hip:1,l1:[90,90],t:-90,r:[90,90],ft:180},{a:[60,94],hip:1,l1:[175,175],t:-90,r:[90,90],ft:270}],c:["Allongé sur le dos, bas du dos plaqué au sol.","Monte les jambes tendues (ou genoux pliés, plus facile).","Redescends lentement sans cambrer."]}
+];
+// exercices nommés dans une séance : chaque élément de liste (virgule, « ou », « et ») est rapproché du premier schéma qui correspond
+function exoOf(texts){
+  const ids=[], miss=[];
+  for(const t of texts) for(const part of String(t).replace(/\([^)]*\)/g,m=>/pliom|sauts|ischios/i.test(m)?m:"").split(/,| ou | et /)){
+    const s=part.trim(); if(!s||/^mêmes exercices|^pas de pliom/i.test(s)) continue;
+    const x=EXO.find(e=>e.re.test(s)); if(x){ if(!ids.includes(x.id)) ids.push(x.id); } else if(!miss.includes(s)) miss.push(s); }
+  return {ids,miss};
+}
+function dayExoTexts(d){ const t=[]; if(d.renfo) for(const r of d.renfo.rows) t.push(r[0]); if(d.run&&P.sport==="force") for(const b of d.run.blocks) if(b.l) t.push(b.l); return t; }
+function exoBtn(d){ return exoOf(dayExoTexts(d)).ids.length? `<button class="cbtn xo" type="button" data-exo="${d.i}" aria-haspopup="dialog">Voir les mouvements</button>` : ""; }
+function openExo(w,i,opener){
+  const d=plan[w-1]&&plan[w-1].days[i]; if(!d) return; const {ids,miss}=exoOf(dayExoTexts(d));
+  const card=x=>`<li class="xc"><h4>${esc(x.n)}</h4><div class="xfs">${x.f.length>1? exoSvg(x.f[0],"Départ")+'<span class="xar" aria-hidden="true">→</span>'+exoSvg(x.f[1],"Arrivée") : exoSvg(x.f[0],"Position")}</div><ul class="xcue">${x.c.map(c=>`<li>${esc(c)}</li>`).join("")}</ul></li>`;
+  openSheet({title:"Les mouvements",opener,kind:"exo",html:`<p class="note">Schémas simplifiés, vus de profil. Commence léger : la technique d'abord. Douleur vive : arrête l'exercice.</p><ul class="xlist">${ids.map(id=>card(EXO.find(e=>e.id===id))).join("")}</ul>${miss.length?`<p class="note">Sans schéma : ${esc(miss.join(", "))}. Demande au Coach ou à un entraîneur de te les montrer.</p>`:""}`});
+}
 
 /* glisser-déposer des séances (souris et doigt, Pointer Events) : appui long ~300 ms ou poignée, fantôme, zones de dépôt, défilement aux bords */
 let drag=null, dragEnd=0;
@@ -2180,8 +2349,12 @@ function dragAbort(say){ const g=dragClean(); if(g&&g.phase==="drag"){ dragEnd=D
 function dragStart(){ const g=drag, art=g.art; if(!document.contains(art)){ dragClean(); return; }
   clearTimeout(g.timer); g.phase="drag"; const r=art.getBoundingClientRect();
   g.dx=Math.max(0,Math.min(r.width,g.x0-r.left)); g.dy=Math.max(0,Math.min(140,g.y0-r.top));
-  const gh=art.cloneNode(true); gh.removeAttribute("id"); gh.querySelectorAll("[id]").forEach(x=>x.removeAttribute("id"));
-  gh.classList.add("dghost"); gh.classList.remove("today","dsrc","press","dz-ok","dz-no","dz-over"); gh.setAttribute("aria-hidden","true"); gh.inert=true; gh.style.width=r.width+"px";
+  let gh;
+  // souris : petite étiquette sous le curseur (la carte entière masquait les jours voisins sur ordinateur)
+  if(g.type==="mouse"){ gh=document.createElement("div"); gh.className="day dghost mini"; gh.textContent=DAYS[g.i]+" · "+g.what; g.dx=-14; g.dy=-14; }
+  else{ gh=art.cloneNode(true); gh.removeAttribute("id"); gh.querySelectorAll("[id]").forEach(x=>x.removeAttribute("id"));
+    gh.classList.add("dghost"); gh.classList.remove("today","dsrc","press","dz-ok","dz-no","dz-over"); gh.style.width=r.width+"px"; }
+  gh.setAttribute("aria-hidden","true"); gh.inert=true;
   const tag=document.createElement("div"); tag.className="gtag"; gh.appendChild(tag); g.tag=tag; document.body.appendChild(gh); g.ghost=gh;
   art.classList.remove("press"); art.classList.add("dsrc"); document.documentElement.classList.add("dragging");
   g.info=[]; document.querySelectorAll("#days article").forEach(a=>{ if(a===art) return; const j=a.dataset.day!=null? +a.dataset.day : null;
@@ -2192,7 +2365,9 @@ function dragStart(){ const g=drag, art=g.art; if(!document.contains(art)){ drag
   dragPos(); g.raf=requestAnimationFrame(dragScroll); }
 function dragPos(){ const g=drag; if(!g||g.phase!=="drag") return;
   g.ghost.style.transform=`translate(${Math.round(g.x-g.dx)}px,${Math.round(g.y-g.dy)}px)`;
-  const el=document.elementFromPoint(g.x,g.y), a=el&&el.closest("#days article"); g.hit=null;
+  const el=document.elementFromPoint(g.x,g.y); let a=el&&el.closest("#days article"); g.hit=null;
+  // entre deux cartes (hauteurs inégales sur ordinateur) : la carte la plus proche à moins de 48 px
+  if(!a){ let bd=48; for(const it of g.info){ const r=it.a.getBoundingClientRect(), dd=Math.hypot(Math.max(r.left-g.x,0,g.x-r.right),Math.max(r.top-g.y,0,g.y-r.bottom)); if(dd<bd){ bd=dd; a=it.a; } } }
   for(const it of g.info){ const on=it.a===a; it.a.classList.toggle("dz-over",on); if(on) g.hit=it; }
   const h=g.hit, day=h&&h.j!=null? DAYS[h.j].toLowerCase() : "";
   const t= !h? "Glisse sur un autre jour" : h.inf.block? "Impossible ici : "+h.inf.block : (h.inf.warn&&h.inf.warn.length? "Attention : "+h.inf.warn.join(", ") : "Échanger avec "+day);
@@ -2225,7 +2400,8 @@ window.addEventListener("pointerup",e=>{ const g=drag; if(!g||e.pointerId!==g.id
 window.addEventListener("pointercancel",e=>{ if(drag&&e.pointerId===drag.id) dragAbort(true); });
 // pendant le glisser au doigt, la page ne défile pas (sinon le navigateur annule le geste)
 document.addEventListener("touchmove",e=>{ if(drag&&drag.phase==="drag") e.preventDefault(); },{passive:false});
-document.addEventListener("selectstart",e=>{ if(drag&&drag.type!=="mouse") e.preventDefault(); });
+// à la souris aussi : sans ça, tirer une carte sélectionnait le texte de la page au lieu de la déplacer
+document.addEventListener("selectstart",e=>{ if(drag) e.preventDefault(); });
 document.addEventListener("contextmenu",e=>{ if(drag&&drag.type!=="mouse") e.preventDefault(); });
 document.addEventListener("keydown",e=>{ if(drag&&e.key==="Escape"){ e.preventDefault(); dragAbort(true); } });
 // le clic qui suit un dépôt n'active pas le bouton situé dessous
@@ -2631,7 +2807,7 @@ function planWeekTotals14(w){ const wk=plan[w-1]; if(!wk) return null; const f=d
   return {min,km,n}; }
 function renderImp(){
   const el=$("#impCard"); if(!el) return; const acts=actLive(), rh=liveOf(state.rhr);
-  let h=`<h3>Activités importées</h3><p class="note">Importe tes séances et tes pesées depuis Apple Santé ou Polar Flow pour comparer ce que tu as fait à ce qui était prévu. Le fichier est lu sur cet appareil, rien n'est envoyé. <b>Ces données ne changent jamais tes calories.</b></p><div class="impb"><button class="btn" type="button" id="impOpen" aria-haspopup="dialog">Importer un fichier</button>${acts.length||Object.keys(rh).length?`<button class="btn ghost" type="button" id="impClear" aria-haspopup="dialog">Tout retirer</button>`:""}</div>`;
+  let h=`<h3>Activités importées</h3><p class="note">Compare ce que tu as fait (Apple Santé, Polar Flow) à ce qui était prévu. <b>Ces données ne changent jamais tes calories.</b></p><details class="more why"><summary>Comment ça marche</summary><p class="note">Importe tes séances et tes pesées depuis Apple Santé ou Polar Flow. Le fichier est lu sur cet appareil, rien n'est envoyé.</p></details><div class="impb"><button class="btn" type="button" id="impOpen" aria-haspopup="dialog">Importer un fichier</button>${acts.length||Object.keys(rh).length?`<button class="btn ghost" type="button" id="impClear" aria-haspopup="dialog">Tout retirer</button>`:""}</div>`;
   // comparaison prévu / réalisé de la semaine affichée
   const wk=plan[state.week-1], rg=weekRange14(state.week);
   if(wk&&rg){ const pt=planWeekTotals14(state.week), inW=acts.filter(a=>a.date>=rg[0]&&a.date<=rg[1]);
@@ -2758,8 +2934,8 @@ function lrSport14(wk){
 const forceKey14=wk=>{ const n=wk.days.filter(d=>d.run).length; return n? n+" séance"+(n>1?"s":"")+" de force" : "–"; };
 function sportLead14(){
   const base="Trois semaines de montée, une semaine allégée : le volume monte doucement (6 % par semaine au plus) et la plus longue séance ne grandit jamais de plus de 10 %. ";
-  if(P.sport==="force") return "Chaque semaine suit le même schéma de séances ; ce qui progresse, c'est la charge, à l'effort perçu (RPE). Une semaine sur quatre est allégée (moins de séries, RPE plus bas). Avec une date d'objectif, la dernière semaine est un test et l'avant-dernière allège la charge. Touche une semaine pour l'ouvrir.";
-  return base+(P.sport==="vtt"?"Les durées sont en minutes puis en heures pour la sortie longue. ":"")+"Avec une date d'objectif, les deux dernières semaines allègent le volume en gardant un peu d'intensité. Touche une semaine pour l'ouvrir."; }
+  if(P.sport==="force") return "Chaque semaine suit le même schéma de séances ; ce qui progresse, c'est la charge, à l'effort perçu (RPE). Une semaine sur quatre est allégée (moins de séries, RPE plus bas). Avec une date d'objectif, la dernière semaine est un test et l'avant-dernière allège la charge.";
+  return base+(P.sport==="vtt"?"Les durées sont en minutes puis en heures pour la sortie longue. ":"")+"Avec une date d'objectif, les deux dernières semaines allègent le volume en gardant un peu d'intensité."; }
 // semaine de la dernière séance dure : avant la fin d'une semaine allégée, avertir sans bloquer
 function sportAlerts14(wk,f,tp){
   const al=[];
