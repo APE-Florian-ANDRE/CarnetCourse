@@ -28,5 +28,5 @@ const connections={"Webhook":{main:[[{node:"Préparer",type:"main",index:0}]]},"
  "Requête valide ?":{main:[[{node:"Vérifier le jeton Supabase",type:"main",index:0}],[{node:"Répondre (requête invalide)",type:"main",index:0}]]},
  "Vérifier le jeton Supabase":{main:[[{node:"Contrôle et limite",type:"main",index:0}]]},"Contrôle et limite":{main:[[{node:"Autorisé ?",type:"main",index:0}]]},
  "Autorisé ?":{main:[[{node:"Gemini",type:"main",index:0}],[{node:"Répondre (refus)",type:"main",index:0}]]},"Gemini":{main:[[{node:"Réponse",type:"main",index:0}]]},"Réponse":{main:[[{node:"Répondre (coach)",type:"main",index:0}]]}};
-const wf={name:"Carnet de course : Coach",nodes,connections,active:false,settings:{executionOrder:"v1",saveDataSuccessExecution:"none",saveDataErrorExecution:"none",saveManualExecutions:false},pinData:{},tags:[],meta:{templateCredsSetupCompleted:false}};
+const wf={name:"Pacebook : Coach",nodes,connections,active:false,settings:{executionOrder:"v1",saveDataSuccessExecution:"none",saveDataErrorExecution:"none",saveManualExecutions:false},pinData:{},tags:[],meta:{templateCredsSetupCompleted:false}};
 fs.writeFileSync(path.join(D,"workflow-coach.json"),JSON.stringify(wf,null,2)+"\n"); console.log("workflow-coach.json écrit :",nodes.length,"nœuds");

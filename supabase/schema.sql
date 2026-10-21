@@ -1,9 +1,9 @@
--- Carnet de course : schéma Supabase (Postgres). À exécuter une fois dans « SQL Editor ».
+-- Pacebook : schéma Supabase (Postgres). À exécuter une fois dans « SQL Editor ».
 -- Une ligne par utilisateur ; chacun ne voit et n'écrit que la sienne (Row Level Security).
 
 create table if not exists public.user_data (
   user_id    uuid primary key references auth.users (id) on delete cascade,   -- compte supprimé => données supprimées
-  doc        jsonb not null default '{}'::jsonb,                              -- le carnet (profil, suivi, coches...) : données de santé
+  doc        jsonb not null default '{}'::jsonb,                              -- Pacebook (profil, suivi, coches...) : données de santé
   consent    jsonb,                                                           -- accord horodaté : {cgu, privacy, health, age15, at}
   updated_at timestamptz not null default now(),
   constraint doc_is_object   check (jsonb_typeof(doc) = 'object'),
@@ -20,7 +20,7 @@ create table if not exists public.user_data (
 );
 
 -- NB : les anciens comptes de test créés avant la colonne « terms » doivent être supprimés ou mis à jour.
-comment on table public.user_data is 'Carnet de course : une ligne par utilisateur, protégée par RLS. Contient des données de santé (art. 9 RGPD).';
+comment on table public.user_data is 'Pacebook : une ligne par utilisateur, protégée par RLS. Contient des données de santé (art. 9 RGPD).';
 
 alter table public.user_data enable row level security;
 alter table public.user_data force row level security;

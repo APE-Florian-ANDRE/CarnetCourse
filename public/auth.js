@@ -1,5 +1,5 @@
 /* Couche « compte » : adaptateur Supabase (OAuth PKCE + une ligne par utilisateur protégée par RLS).
-   Le carnet reste local-first : sans configuration valide, ou sans session, tout fonctionne en mode invité.
+   Pacebook reste local-first : sans configuration valide, ou sans session, tout fonctionne en mode invité.
    supabase-js est HÉBERGÉ SUR CE SITE (vendor/, version exacte, empreinte vérifiée à la mise à jour) : aucun script de tiers,
    et il n'est chargé que si une session existe, ou au retour d'une connexion. Aucun secret ici. */
 (function(){

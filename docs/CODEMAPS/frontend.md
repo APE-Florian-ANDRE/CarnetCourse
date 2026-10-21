@@ -1,5 +1,5 @@
 <!-- Generated: 2026-10-16 | Files scanned: 44 | Token estimate: ~520 -->
-# Frontend — Carnet de course
+# Frontend — Pacebook
 
 Single-page app served as static HTML, no framework, no build step. `public/index.html` is the shell; `public/app.js` (3448 lines) holds nearly all logic.
 

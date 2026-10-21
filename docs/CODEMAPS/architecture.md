@@ -1,5 +1,5 @@
 <!-- Generated: 2026-10-16 | Files scanned: 44 | Token estimate: ~550 -->
-# Architecture — Carnet de course
+# Architecture — Pacebook
 
 Static, no-build, vanilla-JS training-log site. No framework, no bundler, no root package.json.
 Local-first: fully usable as a guest (localStorage only); Supabase account sync and an n8n/Claude coach are optional, config-gated add-ons.

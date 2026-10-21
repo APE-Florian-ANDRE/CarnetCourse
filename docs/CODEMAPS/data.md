@@ -1,5 +1,5 @@
 <!-- Generated: 2026-10-16 | Files scanned: 44 | Token estimate: ~430 -->
-# Data — Carnet de course
+# Data — Pacebook
 
 Single Postgres table in Supabase (`supabase/schema.sql`, 102 lines). No migration history/tooling — one hand-maintained SQL file, run manually in the Supabase SQL Editor.
 

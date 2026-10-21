@@ -1,5 +1,5 @@
 <!-- Generated: 2026-10-16 | Files scanned: 44 | Token estimate: ~380 -->
-# Dependencies — Carnet de course
+# Dependencies — Pacebook
 
 No root `package.json` — the deployed site has **zero npm dependencies**. All "dependencies" below are either vendored static files or external HTTPS services, each opt-in via `public/config.js`.
 

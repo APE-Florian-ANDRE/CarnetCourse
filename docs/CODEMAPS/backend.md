@@ -1,5 +1,5 @@
 <!-- Generated: 2026-10-16 | Files scanned: 44 | Token estimate: ~480 -->
-# Backend — Carnet de course
+# Backend — Pacebook
 
 No traditional app server. "Backend" = Supabase (DB + Auth, via REST/RPC called directly from the browser) plus an optional n8n workflow acting as a thin proxy to Claude.
 

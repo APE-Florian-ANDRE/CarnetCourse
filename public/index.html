@@ -7,7 +7,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark">
 <meta name="description" content="Plan de course à pied, allures et calories de chaque jour, calculés à partir de ton profil. Gratuit, sans publicité, tes données restent chez toi.">
-<title>Carnet de course – plan de course à pied gratuit</title>
+<title>Pacebook – plan de course à pied gratuit</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="canonical" href="https://carnetcourse.vercel.app/">
 <meta name="theme-color" content="#0E0F12">
@@ -16,17 +16,17 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Carnet">
+<meta name="apple-mobile-web-app-title" content="Pacebook">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Carnet de course">
+<meta property="og:site_name" content="Pacebook">
 <meta property="og:locale" content="fr_FR">
-<meta property="og:title" content="Carnet de course – plan de course à pied gratuit">
+<meta property="og:title" content="Pacebook – plan de course à pied gratuit">
 <meta property="og:description" content="Plan de course à pied, allures et calories de chaque jour, calculés à partir de ton profil. Gratuit, sans publicité, tes données restent chez toi.">
 <meta property="og:url" content="https://carnetcourse.vercel.app/">
 <meta property="og:image" content="https://carnetcourse.vercel.app/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Carnet de course : ton plan de course à pied, avec allures et calories au jour le jour.">
+<meta property="og:image:alt" content="Pacebook : ton plan de course à pied, avec allures et calories au jour le jour.">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preload" href="fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/dm-sans.woff2" as="font" type="font/woff2" crossorigin>
@@ -40,7 +40,7 @@
   <div class="apptop"><button class="linkbtn" type="button" data-act="home"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7M6 10v10h12V10"/></svg>Accueil</button><button class="av js-av" type="button" data-act="acct" aria-haspopup="dialog" aria-label="Compte"><span class="av-i" aria-hidden="true"></span><svg class="av-p" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c1-4 4-6 7.5-6s6.5 2 7.5 6"/></svg><span class="av-d" aria-hidden="true"></span></button></div>
   <header class="top">
     <div>
-      <h1>Carnet de course</h1>
+      <h1>Pacebook</h1>
       <p class="sub">Tes séances de la semaine, les allures et les calories de chaque jour. Ton objectif et tes données sont dans l'onglet Profil.</p>
     </div>
     <p class="store" id="store" role="status" aria-live="polite">Sauvegarde : en cours de connexion…</p>
@@ -254,7 +254,7 @@
   <!-- REPÈRES -->
   <section class="panel" id="p-reperes" role="tabpanel" aria-labelledby="tab-reperes" hidden>
     <h2>Repères</h2>
-    <p class="lead"><button class="linkbtn" type="button" data-news>Quoi de neuf dans le carnet ?</button></p>
+    <p class="lead"><button class="linkbtn" type="button" data-news>Quoi de neuf dans Pacebook ?</button></p>
     <p class="lead">Les règles derrière le plan, avec leur niveau de preuve : <span class="ev s">Solide</span> méta-analyses ou grandes études, <span class="ev m">Modéré</span> études isolées, <span class="ev p">Pratique</span> consensus d'entraîneurs. Elles s'appuient sur des méthodes d'entraînement reconnues et sur les recommandations de nutrition du sport.</p>
     <div class="tablewrap has-m"><table class="zonetab" id="zoneTable"></table></div>
     <ul class="mlist" id="zoneList" aria-label="Allures"></ul>
@@ -295,7 +295,7 @@
 </div>
 <main class="home" id="home" aria-labelledby="homeT" hidden>
   <div class="htop">
-    <span class="brand"><i aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="15" cy="4.5" r="1.8"/><path d="M6 20l3.5-5 3 1.5 1-4.5 3 3h3M8.5 11l3.5-3 3.5 1"/></svg></i>Carnet de course</span>
+    <span class="brand"><i aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="15" cy="4.5" r="1.8"/><path d="M6 20l3.5-5 3 1.5 1-4.5 3 3h3M8.5 11l3.5-3 3.5 1"/></svg></i>Pacebook</span>
     <nav class="hnav" aria-label="Sur cette page"><a href="#features">Fonctionnalités</a><a href="#how">Comment ça marche</a><a href="#data">Tes données</a></nav>
     <span class="hbar"><button class="au-login js-login" type="button" data-act="login" hidden>Se connecter</button><button class="av js-av" type="button" data-act="acct" aria-haspopup="dialog" aria-label="Compte"><span class="av-i" aria-hidden="true"></span><svg class="av-p" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c1-4 4-6 7.5-6s6.5 2 7.5 6"/></svg><span class="av-d" aria-hidden="true"></span></button></span>
   </div>
@@ -330,7 +330,7 @@
   <div class="marquee" aria-hidden="true"><div class="mq-i"><span>5 km</span><i></i><span>10 km</span><i></i><span>Semi</span><i></i><span>Marathon</span><i></i><span>Trail</span><i></i><span>VTT</span><i></i><span>Force</span><i></i><span>Remise en forme</span><i></i><span>5 km</span><i></i><span>10 km</span><i></i><span>Semi</span><i></i><span>Marathon</span><i></i><span>Trail</span><i></i><span>VTT</span><i></i><span>Force</span><i></i><span>Remise en forme</span><i></i></div></div>
   <section class="sec" id="features" aria-labelledby="homeB">
     <p class="kick">Fonctionnalités</p>
-    <h2 id="homeB">Ce que tu trouves dans le carnet</h2>
+    <h2 id="homeB">Ce que tu trouves dans Pacebook</h2>
     <ul class="bgrid">
       <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></span><h3>Un plan sur mesure</h3><p>De 4 à 52 semaines, calé sur ta date de course : montée progressive, semaines allégées, affûtage.</p></li>
       <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span><h3>Un déficit calorique sûr</h3><p>Planchers de sécurité, aucun déficit avant 18 ans ni sous un IMC de 18,5, macros pour chaque jour.</p></li>
@@ -339,7 +339,7 @@
       <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg></span><h3>Minuteur guidé</h3><p>Chaque bloc et chaque répétition à l'écran, avec vibration et écran gardé allumé.</p></li>
       <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg></span><h3>Un suivi qui t'ajuste</h3><p>Note ton poids chaque semaine : la courbe te dit s'il faut ajuster les calories ou alléger la semaine.</p></li>
       <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17l4-8h5l3 8M10 9L8 6h3"/></svg></span><h3>Course, trail, VTT, force</h3><p>Choisis ton sport : le plan, les séances, le minuteur et les calories s'adaptent. Haltérophilie, VTT, trail ou remise en forme.</p></li>
-      <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M3 9v6M6 7v10M18 7v10M21 9v6"/></svg></span><h3>Ressenti après séance</h3><p>Effort perçu, forme, douleur : le carnet repère la fatigue et te conseille du repos quand il le faut.</p></li>
+      <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M3 9v6M6 7v10M18 7v10M21 9v6"/></svg></span><h3>Ressenti après séance</h3><p>Effort perçu, forme, douleur : Pacebook repère la fatigue et te conseille du repos quand il le faut.</p></li>
       <li class="bcard"><span class="bi" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14"/></svg></span><h3>Import Santé et Polar</h3><p>Importe tes séances et tes pesées depuis un fichier d'Apple Santé ou de Polar Flow. Tout est lu sur ton appareil.</p></li>
     </ul>
   </section>
@@ -356,7 +356,7 @@
     <h2 id="homeS">Tes données, ta santé</h2>
     <ul class="tgrid">
       <li><span class="ti2 t1" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><b>Données privées</b><span>Elles restent sur ton appareil. Si tu te connectes, elles sont aussi enregistrées dans ton compte, protégées par des règles d'accès : toi seul peux les lire.</span></li>
-      <li><span class="ti2 t2" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><b>Ni pub, ni revente</b><span>Aucune publicité, aucune revente de données. Mesure d'audience anonyme, sans cookie, seulement si tu l'acceptes. Sans connexion à un compte, ton carnet ne quitte pas ton appareil. Tu peux exporter ou effacer tes données à tout moment.</span></li>
+      <li><span class="ti2 t2" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><b>Ni pub, ni revente</b><span>Aucune publicité, aucune revente de données. Mesure d'audience anonyme, sans cookie, seulement si tu l'acceptes. Sans connexion à un compte, tes données ne quittent pas ton appareil. Tu peux exporter ou effacer tes données à tout moment.</span></li>
       <li><span class="ti2 t3" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 17h-19z"/><path d="M12 10v4M12 17h.01"/></svg></span><b>Pas un avis médical</b><span>Les calories sont des estimations. Au moindre doute, une douleur qui dure ou un trouble alimentaire, demande l'avis d'un médecin.</span></li>
     </ul>
   </section>
@@ -364,7 +364,7 @@
     <h2 id="homeR">Prêt pour ta prochaine course ?</h2>
     <div class="cta cta2" id="homeCta2"></div>
   </section>
-  <footer class="hfoot"><span class="fbrand">Carnet de course</span><nav class="legalnav" aria-label="Informations légales"><a href="cgu.html" target="_blank" rel="noopener">CGU</a><a href="confidentialite.html" target="_blank" rel="noopener">Confidentialité</a><a href="cookies.html" target="_blank" rel="noopener">Stockage local</a><a href="mentions-legales.html" target="_blank" rel="noopener">Mentions légales</a><a href="contact.html" target="_blank" rel="noopener">Tes droits RGPD</a><button type="button" data-consent-open>Gérer les cookies</button></nav></footer>
+  <footer class="hfoot"><span class="fbrand">Pacebook</span><nav class="legalnav" aria-label="Informations légales"><a href="cgu.html" target="_blank" rel="noopener">CGU</a><a href="confidentialite.html" target="_blank" rel="noopener">Confidentialité</a><a href="cookies.html" target="_blank" rel="noopener">Stockage local</a><a href="mentions-legales.html" target="_blank" rel="noopener">Mentions légales</a><a href="contact.html" target="_blank" rel="noopener">Tes droits RGPD</a><button type="button" data-consent-open>Gérer les cookies</button></nav></footer>
 </main>
 <div class="wiz" id="wiz" role="dialog" aria-modal="true" aria-labelledby="wzT1" hidden>
   <div class="wz-top">
@@ -425,19 +425,19 @@
 <div class="auth" id="auth" role="dialog" aria-modal="true" aria-labelledby="auT" data-mode="login" hidden>
   <div class="au-main">
     <div class="au-top">
-      <span class="brand"><i aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="14" cy="4" r="2"/><path d="M8 21l3-6 3 2v5M6 12l3-4 4 1 3 4h3M11 15l-1-5"/></svg></i>Carnet de course</span>
+      <span class="brand"><i aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="14" cy="4" r="2"/><path d="M8 21l3-6 3 2v5M6 12l3-4 4 1 3 4h3M11 15l-1-5"/></svg></i>Pacebook</span>
       <button class="au-x" type="button" id="auClose" aria-label="Fermer"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
     <div class="au-box">
       <p class="au-k" id="auK">Gratuit · sans publicité</p>
-      <h2 id="auT" tabindex="-1">Retrouve ton carnet partout</h2>
+      <h2 id="auT" tabindex="-1">Retrouve tes données partout</h2>
       <p class="au-sub" id="auSub">Crée ton compte ou connecte-toi : c'est le même bouton. Ton plan et ton suivi te suivent sur tous tes appareils.</p>
       <fieldset class="au-cons" id="auCons">
         <legend>Avant de continuer</legend>
         <label class="au-chk"><input type="checkbox" id="accAge"><span>J'ai au moins 15 ans</span></label>
         <label class="au-chk"><input type="checkbox" id="accTerms"><span>J'accepte les <a href="cgu.html" target="_blank" rel="noopener">CGU</a> et la <a href="confidentialite.html" target="_blank" rel="noopener">politique de confidentialité</a></span></label>
         <label class="au-chk"><input type="checkbox" id="accHealth" aria-describedby="auHealthD"><span>J'accepte que mes <b>données de santé</b> soient enregistrées dans mon compte</span></label>
-        <details class="au-more"><summary>Quelles données ?</summary><p id="auHealthD">Âge, taille, poids, suivi, ressenti après séance, activités et pesées importées d'Apple Santé ou de Polar Flow, fréquence cardiaque de repos : seulement pour synchroniser ton carnet entre tes appareils. Tu peux retirer ce consentement à tout moment depuis l'écran Compte.</p></details>
+        <details class="au-more"><summary>Quelles données ?</summary><p id="auHealthD">Âge, taille, poids, suivi, ressenti après séance, activités et pesées importées d'Apple Santé ou de Polar Flow, fréquence cardiaque de repos : seulement pour synchroniser tes données entre tes appareils. Tu peux retirer ce consentement à tout moment depuis l'écran Compte.</p></details>
       </fieldset>
       <div class="au-provs" id="auProvs"></div>
       <form class="au-mail" id="auMail" novalidate hidden>

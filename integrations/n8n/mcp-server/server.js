@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Serveur MCP (stdio) en LECTURE SEULE pour Carnet de course. Aucune dépendance, aucun secret dans ce fichier.
+/* Serveur MCP (stdio) en LECTURE SEULE pour Pacebook. Aucune dépendance, aucun secret dans ce fichier.
    Il lit la ligne de l'utilisateur dans Supabase (table user_data) avec le JWT de CET utilisateur : les règles RLS du schéma garantissent qu'il ne voit que ses propres données.
    Environnement : SUPABASE_URL (https://xxxx.supabase.co), SUPABASE_ANON_KEY (clé publique « anon »), USER_JWT (jeton d'accès de l'utilisateur).
    Jamais d'écriture : seules des requêtes GET sont émises (vérifié par tests/n8n.js). Les notes libres du ressenti ne sont jamais renvoyées. */

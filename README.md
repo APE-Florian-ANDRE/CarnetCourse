@@ -1,4 +1,4 @@
-# Carnet de course : site statique
+# Pacebook : site statique
 
 Plan d'entraînement (course à pied, trail, VTT, haltérophilie et force, remise en forme), allures et calories, ressenti après séance, import de tes stats Apple Santé ou Polar Flow. **Local-first** : sans connexion, tout fonctionne dans le navigateur. Avec un compte (Google, Microsoft, GitHub, Apple en option), les données sont aussi enregistrées dans Supabase pour les retrouver sur tous tes appareils.
 
@@ -100,7 +100,7 @@ L'écran de connexion propose aussi « Créer un compte » / « J'ai déjà un c
 
 ## 7bis. v14 : nouvelles données de santé (à relire avant l'ouverture)
 - Nouvelles données, toutes saisies ou importées par la personne : sport choisi et heures par semaine ; ressenti après séance (effort, forme, douleur et zone, note libre de 200 caractères) ; activités importées (date, type, durée, distance, énergie, FC moyenne), pesées hebdomadaires et FC de repos issues d'un fichier Apple Santé ou Polar Flow.
-- Le fichier importé est lu dans le navigateur et n'est jamais envoyé ni conservé ; seules les valeurs extraites sont gardées (plafonds : 500 ressentis, 1 500 activités, 260 semaines de FC de repos). Elles suivent le régime des autres données de santé : appareil seul, ou compte avec le consentement santé existant (même finalité : synchroniser le carnet).
+- Le fichier importé est lu dans le navigateur et n'est jamais envoyé ni conservé ; seules les valeurs extraites sont gardées (plafonds : 500 ressentis, 1 500 activités, 260 semaines de FC de repos). Elles suivent le régime des autres données de santé : appareil seul, ou compte avec le consentement santé existant (même finalité : synchroniser Pacebook).
 - Les pages `confidentialite`, `cgu` et `cookies` sont mises à jour (les champs `[À COMPLÉTER]` restent ceux de `PLACEHOLDERS.md`). L'AIPD envisagée doit couvrir ces données. `CONSENT_V` vaut `2026-10-10` (accord redemandé aux comptes existants à cause des nouvelles données de santé) ; à changer de nouveau, avec la date des pages, à chaque modification des textes.
 - Aucun ajustement automatique des calories à partir de l'import ou du ressenti : planchers, disponibilité énergétique, mineurs et IMC bas restent absolus. Les messages de douleur ou de fatigue sont des rappels de prudence, jamais un diagnostic.
 

@@ -2,7 +2,7 @@
   "name": "carnet-coach-mcp",
   "version": "1.0.0",
   "private": true,
-  "description": "Serveur MCP en LECTURE SEULE pour Carnet de course : lit le profil, le suivi et le ressenti d'un utilisateur dans Supabase avec SON jeton (règles RLS). Aucune écriture, aucune dépendance.",
+  "description": "Serveur MCP en LECTURE SEULE pour Pacebook : lit le profil, le suivi et le ressenti d'un utilisateur dans Supabase avec SON jeton (règles RLS). Aucune écriture, aucune dépendance.",
   "license": "UNLICENSED",
   "bin": { "carnet-coach-mcp": "server.js" },
   "scripts": { "start": "node server.js", "test": "node ../../../tests/n8n.js" },

@@ -1,4 +1,4 @@
-/* Layout : refonte v16 « Carnet de course » d'après les maquettes app et web. Fond nuit, accent citron, titres Barlow Condensed, texte DM Sans ;
+/* Layout : refonte v16 « Pacebook » d'après les maquettes app et web. Fond nuit, accent citron, titres Barlow Condensed, texte DM Sans ;
    une couleur par type de séance (qualité citron, footing bleu, sortie longue orange, renfo violet, course menthe), zones d'effort bleu / orange / corail. */
 @font-face{font-family:"Barlow Condensed";font-style:normal;font-weight:600;font-display:swap;src:url(fonts/barlow-condensed-600.woff2) format("woff2")}
 @font-face{font-family:"Barlow Condensed";font-style:normal;font-weight:700;font-display:swap;src:url(fonts/barlow-condensed-700.woff2) format("woff2")}
@@ -930,7 +930,7 @@ details.psec>.pbody{padding:2px 18px 18px}
   .wrap{max-width:none;margin:0;padding:24px clamp(28px,3vw,48px) 56px calc(248px + clamp(28px,3vw,48px))}
   .wrap>:not(nav){max-width:1180px}
   nav.tabs{position:fixed;top:0;left:0;bottom:0;width:248px;margin:0;padding:24px 16px;display:flex;flex-direction:column;gap:28px;background:#0B0C0F;border-right:1px solid #1E2127;-webkit-backdrop-filter:none;backdrop-filter:none;z-index:20;overflow-y:auto}
-  nav.tabs::before{content:"Carnet de course";display:flex;align-items:center;min-height:38px;padding-left:52px;margin-left:4px;font:800 1.45rem/1 var(--f-display);color:var(--fg);background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 38 38'%3E%3Crect width='38' height='38' rx='12' fill='%23D4FF3A'/%3E%3Cg transform='translate(8 8) scale(.9167)' fill='none' stroke='%230E0F12' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='15' cy='4.5' r='1.8'/%3E%3Cpath d='M6 20l3.5-5 3 1.5 1-4.5 3 3h3M8.5 11l3.5-3 3.5 1'/%3E%3C/g%3E%3C/svg%3E") no-repeat 0 50%/38px 38px}
+  nav.tabs::before{content:"Pacebook";display:flex;align-items:center;min-height:38px;padding-left:52px;margin-left:4px;font:800 1.45rem/1 var(--f-display);color:var(--fg);background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 38 38'%3E%3Crect width='38' height='38' rx='12' fill='%23D4FF3A'/%3E%3Cg transform='translate(8 8) scale(.9167)' fill='none' stroke='%230E0F12' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='15' cy='4.5' r='1.8'/%3E%3Cpath d='M6 20l3.5-5 3 1.5 1-4.5 3 3h3M8.5 11l3.5-3 3.5 1'/%3E%3C/g%3E%3C/svg%3E") no-repeat 0 50%/38px 38px}
   nav.tabs.tabs-more::after{display:none}
   nav.tabs .segc{flex-direction:column;background:none;box-shadow:none;padding:0;gap:4px;max-width:none;overflow:visible}
   nav.tabs button,nav.tabs button[aria-selected="true"]{flex:none;display:flex;align-items:center;justify-content:flex-start;gap:12px;min-height:46px;padding:0 14px;font:500 .95rem var(--f-body);text-align:left;overflow:visible}
