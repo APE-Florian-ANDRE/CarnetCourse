@@ -46,6 +46,9 @@ const INJ=(fa)=>`(()=>{ const T=window.__T, n=T.profileNums(T.state.profile), p0
      out.fallbackUnreal=(()=>{ const pl=T.buildPlan(P({objectif:"42",volume:0,longest:6,seances:"4",raceDate:"2026-12-20",start:"2026-10-26"})); return !!pl.unreal; })();
      out.deb=check({niveau:"deb",objectif:"forme",seances:"3",volume:8,longest:4},all);
      out.trail=check({sport:"trail",objectif:"21",raceDate:"2027-03-14",volume:30,longest:14},all);
+     // préférences puis IA : l'« avant » est la séance affichée avant l'IA (préférences comprises) ; les footings des préférences n'ont pas d'avant / après
+     out.pref=(()=>{ const o={pref:"je n'aime pas les côtes, plutôt du fartlek"}, r=check(o,w=>w%2===0), pl=T.buildPlan({...P(o),noAi:true});
+       return {...r,prefN:pl.flatMap(w=>w.days).filter(d=>d.run&&d.run.pref).length,prefFrom:pl.flatMap(w=>w.days).filter(d=>d.run&&d.run.pref&&d.run.aiFrom).length}; })();
      out.noQ=(()=>{ const n=P({}), p0=T.buildPlan({...n,noAi:true}); return p0.filter(w=>!w.days.some(d=>d.run&&d.run.type==="q"&&d.run.kind)).map(w=>w.w); })();
      // changée puis allégée : l'avant de la séance allégée est la séance d'origine, pas la séance choisie par l'IA
      out.chain=(()=>{ const n=P({}), p0=T.buildPlan({...n,noAi:true}), wk={}; let tw=0;
@@ -73,6 +76,7 @@ const INJ=(fa)=>`(()=>{ const T=window.__T, n=T.profileNums(T.state.profile), p0
    ok(R.fallbackUnreal,"A5 objectif irréaliste : repli confirmé"); inv(R.fallback,"A5 objectif irréaliste (repli)");
    ok(R.deb.mods===0&&R.deb.N===0,"A6 débutant : aucune séance modifiée ni allégée, aucun avant / après",R.deb);
    inv(R.trail,"A7 trail");
+   inv(R.pref,"A13 préférences puis IA (« avant » = séance après préférences)"); ok(R.pref.prefN>0&&!R.pref.prefFrom&&R.pref.mods>0,"A14 séances changées par les préférences sans repère IA ; l'IA modifie ensuite le plan",R.pref);
    ok(true,"A8 semaines sans intensité dans le plan de test : "+JSON.stringify(R.noQ));
    ok(R.chain.light&&R.chain.from===R.chain.orig&&R.chain.count===R.chain.n,"A9 séance changée puis allégée : un seul repère, l'avant est la séance d'origine",R.chain);
    ok(R.sig,"A10 profil modifié ou IA coupée : aucun avant / après");

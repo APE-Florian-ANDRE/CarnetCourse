@@ -109,10 +109,18 @@ const seed=o=>JSON.stringify({profile:{...prof,...o},isExample:false,log:[],week
        T.aip={}; const p0=T.buildPlan({...n,noAi:true}), wk={};
        for(const w of p0){ const qs=w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind); wk[w.w]={f:"F"+w.w,c:"C"+w.w,q:qs.map(d=>{ const op=T.qOpts(d.run.kind,n), x=r(); return x<.15?"garder":x<.25?"vma":x<.3?"":op[Math.floor(r()*op.length)]; }),a:r()<.25?1:0}; }
        T.aip=T.cleanAip({p:{sig:T.planSig(n),at:Date.now(),cplx:n.cplx,resume:"r",wk}}); const p1=T.buildPlan(n);
-       out.push({base:JSON.stringify(p0.map(w=>w.days)),ai:JSON.stringify(p1.map(w=>[w.days,!!w.aiLight,w.aiTip||null])),n:p1.ai&&p1.ai.n}); }
+       // avant / après (mission C) : aiFrom / aiLight ignorés ; footing d'allègement comparé à part : sa distance (et donc son D+ en trail) est calculée sur la séance d'ORIGINE
+       // au dixième de km (main la calculait sur la séance déjà changée par l'IA, parfois plus longue que l'originale) : jamais au-dessus de l'originale, à moins de 0,2 km
+       // trail avec une semaine allégée : le D+ est réparti au prorata des distances et plafonné d'une semaine à l'autre, il suit donc la distance du footing (dplus et phrase du D+ ignorés dans ces plans seulement)
+       const DPV=/ ?Dénivelé positif visé : environ \d+ m \(le temps réel peut être de \d+ min plus long\)\. ?/; let tl=false;
+       const v=T.vmaOf(n).vma, lightKm=[], rp=function(k,x){ if(k==="aiFrom"||k==="aiLight") return undefined; if(tl&&k==="dplus") return undefined; if(tl&&k==="note"&&typeof x==="string") return x.replace(DPV,""); if(x&&typeof x==="object"&&x.title==="Footing facile (semaine allégée)"&&x.blocks){ lightKm.push([+T.sessionKm(x,v).toFixed(3),x.aiFrom?+x.aiFrom.km.toFixed(3):null]); return {title:x.title,type:x.type,ai:x.ai,note:String(x.note).replace(/ Dénivelé positif visé : environ \d+ m \(le temps réel peut être de \d+ min plus long\)\./,"")}; } return x; };
+       out.push({base:JSON.stringify(p0.map(w=>w.days)),ai:JSON.stringify(p1.map(w=>{ tl=n.sport==="trail"&&p1.some(x=>x.aiLight); return JSON.parse(JSON.stringify([w.days,!!w.aiLight,w.aiTip||null],rp)); })),n:p1.ai&&p1.ai.n,lightKm}); }
      T.aip={}; return out; },N);
    const [RB,RM]=[await run(pb,220),await run(pm,220)];
-   const dif=RB.map((x,i)=>[i,x,RM[i]]).filter(([i,x,y])=>JSON.stringify(x)!==JSON.stringify(y));
+   const strip=x=>x&&{...x,lightKm:undefined};
+   const dif=RB.map((x,i)=>[i,x,RM[i]]).filter(([i,x,y])=>JSON.stringify(strip(x))!==JSON.stringify(strip(y)));
+   const lk=RB.map((x,i)=>[i,x,RM[i]]).filter(([i,x,y])=>x&&y&&(x.lightKm.length!==y.lightKm.length||x.lightKm.some(([k,o])=>o==null||k>o+1e-9||k<o-.2)));
+   ok(RB.some(x=>x&&x.lightKm.length)&&!lk.length,"R4 allègement : mêmes séances allégées que main, footing calculé sur la séance d'origine (au plus sa distance, à moins de 0,2 km)",lk.slice(0,2).map(([i,x,y])=>({i,b:x.lightKm,m:y.lightKm})));
    const difBase=dif.filter(([i,x,y])=>x&&y&&x.base!==y.base).length;
    ok(RB.filter(Boolean).length>=150,"R1 échantillon : "+RB.filter(Boolean).length+" plans avec réponse IA simulée");
    ok(!difBase,"R2 sans préférences ni IA : plan identique à main",difBase);
