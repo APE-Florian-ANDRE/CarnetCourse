@@ -336,7 +336,7 @@ const IMP14=(function(){
 })();
 /*PURE14:end*/
 
-const EXAMPLE = {sexe:"H",age:32,taille:178,poids:82,cible:76,mg:"",activite:"1.25",niveau:"int",objectif:"10",volume:20,longest:10,ref:"none",refVal:"",fcmax:"",seances:"4",renfo:"2",longDay:"6",start:todayIso(),deficit:300,bonus:100,adj:0,lieu:"dehors",equip:"salle",types:["seuil","vma","cotes","fartlek","ld"],cross:"non",sport:"course",sObj:"",hSem:""};
+const EXAMPLE = {sexe:"H",age:32,taille:178,poids:82,cible:76,mg:"",activite:"1.25",niveau:"int",objectif:"10",volume:20,longest:10,ref:"none",refVal:"",fcmax:"",seances:"4",renfo:"2",longDay:"6",start:todayIso(),deficit:300,bonus:100,adj:0,lieu:"dehors",equip:"salle",types:["seuil","vma","cotes","fartlek","ld"],cross:"non",sport:"course",sObj:"",hSem:"",cplx:"standard"};
 
 let state = {profile:{...EXAMPLE}, isExample:true, log:[], week:1, feel:{}, acts:{}, rhr:{}};
 let save = ()=>{};
@@ -388,6 +388,8 @@ function profileNums(p){
   if(n.sexe!=="F") n.sexe="H";
   n.lieu=["dehors","tapis","mixte"].includes(p.lieu)?p.lieu:"dehors"; n.equip=["salle","maison","aucun"].includes(p.equip)?p.equip:"salle"; n.cross=Object.hasOwn(CROSS,p.cross)?p.cross:"non"; n.types=Array.isArray(p.types)?p.types.filter(t=>EXAMPLE.types.includes(t)):EXAMPLE.types;
   n.minor=n.age<18;
+  // complexité du plan : simple (une seule séance d'intensité, renforcement de base), standard, avancé (séances plus fournies, jamais pour un débutant)
+  n.cplx=["simple","standard","avance"].includes(p.cplx)?p.cplx:"standard";
   n.seances=+p.seances; n.renfo=+p.renfo; n.longDay=+p.longDay; n.activite=+p.activite;
   if(![3,4,5,6].includes(n.seances)) n.seances=4;
   if(![0,1,2].includes(n.renfo)) n.renfo=2;
@@ -477,9 +479,11 @@ function runWalk(w,total,maxBout){
     {l:"Retour au calme en marche",min:5,z:"walk"}]};
 }
 // o.short : échauffement 10 min et retour au calme 5 min ; o.fewer : répétitions en moins (volume limité, part de facile)
-function quality(kind,w,p,vma,phase,o){
+// séance de qualité : le type et les options de construction sont gardés (l'ajustement par l'IA reconstruit la séance avec les mêmes limites)
+function quality(kind,w,p,vma,phase,o){ const s=quality0(kind,w,p,vma,phase,o); if(s){ s.kind=kind; s.qo={short:!!(o&&o.short),fewer:(o&&o.fewer)||0}; } return s; }
+function quality0(kind,w,p,vma,phase,o){
   o=o||{}; const fw=o.fewer||0;
-  const lvl=p.niveau, conf=lvl==="conf", taper=phase==="taper"||phase==="race";
+  const lvl=p.niveau, conf=lvl==="conf"||(lvl==="int"&&p.cplx==="avance"), taper=phase==="taper"||phase==="race";
   const wu={l:"Échauffement : footing + gammes (montées de genoux, talons-fesses)",min:o.short?10:15,z:"z1",lo:E_LO,hi:E_HI};
   const cd={l:"Retour au calme",min:o.short?5:10,z:"z1",lo:E_LO,hi:E_HI};
   if(kind==="cotes"){
@@ -526,7 +530,8 @@ function qualityKinds(p,w,phase){
   return ["allure","seuil"]; // affûtage : intensité et fréquence gardées
 }
 const SUBST={seuil:["seuil","fartlek","vma"],vma:["vma","seuil","fartlek"],cotes:["cotes","seuil","fartlek"],fartlek:["fartlek","seuil","vma"],allure:["allure"]};
-function pickKind(k,p,avoid){ if(!k)return null; const ok=(SUBST[k]||[k]).filter(c=>c==="allure"||p.types.includes(c)); return ok.find(c=>c!==avoid) || (avoid?null:ok[0]) || null; }
+// plan simple : jamais de VMA, même en remplacement d'une séance décochée
+function pickKind(k,p,avoid){ if(!k)return null; const ok=(SUBST[k]||[k]).filter(c=>c==="allure"||p.types.includes(c)&&!(p.cplx==="simple"&&c==="vma")); return ok.find(c=>c!==avoid) || (avoid?null:ok[0]) || null; }
 const onTapis=(p,kind)=> p.lieu==="tapis" || (p.lieu==="mixte" && kind==="q");
 // MET d'un effort léger (Compendium 2011) : la séance remplace un footing facile
 const CROSS={velo:["Vélo facile",4.8],elliptique:["Elliptique facile",4.6],rameur:["Rameur facile",4.8],natation:["Natation facile",5.8]};
@@ -556,21 +561,62 @@ const LONG_NEED={5:3.5,10:7,21:16,42:28};
 // débutant : semi possible sur 30 semaines et plus, marathon sur un an ; la sortie longue doit toujours atteindre LONG_NEED
 const reachable=(o,wk,deb)=> !LONG_NEED[o] || (!(deb&&((o==="21"&&wk.length<30)||(o==="42"&&wk.length<52))) && wk.topLong>=LONG_NEED[o]-.05);
 function buildPlan(p){
-  if(evSport(p.sport)) return buildSportPlan(p);
-  const weeks=buildPlanRun(p); if(p.sport==="trail") trailize(weeks,p); return weeks;
+  if(evSport(p.sport)){ const w=buildSportPlan(p); applyAi(w,p); return w; }
+  const weeks=buildPlanRun(p); applyAi(weeks,p); if(p.sport==="trail") trailize(weeks,p); return weeks;
+}
+/* ---- ajustement par l'IA (api/plan.js) : appliqué sur le plan déjà construit, jamais au-delà de ses limites ----
+   L'IA choisit le type des séances d'intensité parmi les remplaçants permis, peut alléger une semaine (sa dernière séance d'intensité devient un footing
+   de même distance) et donne un conseil par semaine. Une séance n'est remplacée que si elle reste au plus aussi longue et aussi intense,
+   et si la part de facile de la semaine ne baisse pas. Rien ne change en affûtage ni la semaine de course. Le profil modifié depuis : ajustement ignoré. */
+function planSig(p){ const t=JSON.stringify([p.sport,p.sObj,p.objectif,p.runObjectif,p.niveau,p.seances,p.renfo,p.longDay,p.raceDate||"",p.start||"",p.volume,p.longest,p.ref,p.refVal,(p.types||[]).join(","),p.lieu,p.equip,p.cross,p.cplx,p.hSem,p.startIdx,!!p.minor]);
+  let h=5381; for(let i=0;i<t.length;i++) h=((h*33)^t.charCodeAt(i))>>>0; return h.toString(36); }
+function aiOf(p){ if(p.noAi) return null; const a=state&&state.aip&&state.aip.p; return a&&!a.x&&a.sig===planSig(p)? a : null; }
+// remplaçants permis : les séances cochées dans le profil, proches de celle du plan (SUBST) ; l'allure course et les séances d'un débutant ne changent pas
+function qOpts(k,p){ if(p.niveau==="deb"||k==="allure"||!SUBST[k]) return [k]; return [k,...SUBST[k].filter(c=>c!==k&&c!=="allure"&&p.types.includes(c)&&!(p.cplx==="simple"&&c==="vma"))]; }
+function applyAi(weeks,p){
+  const a=aiOf(p); if(!a) return; const run=!evSport(p.sport), vma=run? vmaOf(p).vma : 0, mod=new Set();   // séances modifiées (une séance changée puis allégée compte une fois)
+  for(const wk of weeks){ const x=a.wk[wk.w]; if(!x) continue;
+    if(x.f||x.c) wk.aiTip={f:x.f,c:x.c};
+    if(!run||wk.phase==="taper"||wk.phase==="race") continue;
+    const qd=()=>wk.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind&&d.kind!=="before");
+    qd().forEach((d,j)=>{ const k=x.q[j], old=d.run; if(!k||k===old.kind||!qOpts(old.kind,p).includes(k)||qd().some(o=>o!==d&&o.run.kind===k)) return;   // pas deux fois le même type dans la semaine
+      const km0=sessionKm(old,vma), h0=old.hardMin||0, z0=zoneMins(wk.days).easy, i=wk.days.indexOf(d); let o={...old.qo};
+      for(let t=0;t<4;t++){ const s=quality(k,wk.w,p,vma,wk.phase,o);
+        if(s&&sessionKm(s,vma)<=km0*1.05+.3&&(s.hardMin||0)<=h0*1.1+.5){ wk.days[i]={...d,run:{...s,ai:1,note:(s.note?s.note+" ":"")+"Séance choisie par l'IA pour cette semaine."}};
+          if(zoneMins(wk.days).easy>=Math.min(z0,.8)-1e-9){ mod.add(wk.w+":"+i); return; } wk.days[i]=d; }
+        o= o.short? {...o,fewer:(o.fewer||0)+1} : {...o,short:true}; } });
+    // allègement : jamais pour un débutant (ses séances sont déjà en facile continu) ; le footing ne dépasse jamais la distance de la séance remplacée
+    if(x.a&&p.niveau!=="deb"){ const qs=qd(), d=qs[qs.length-1]; if(d){ const i=wk.days.indexOf(d), km=sessionKm(d.run,vma); let k2=Math.max(1.5,Math.floor(km*2)/2); while(k2>1.5&&sessionKm(easyRun(k2,vma),vma)>km+1e-9) k2-=.5;
+      wk.days[i]={...d,run:{...easyRun(k2,vma,"Footing facile (semaine allégée)",0),ai:1,note:"Allégée par l'IA d'après ton ressenti ou ta demande : même distance, sans intensité."},kind:"easy"}; wk.aiLight=true; mod.add(wk.w+":"+i); } }
+  }
+  weeks.ai={n:mod.size,at:a.at};
 }
 function buildPlanRun(p){
   const o=p.objectif, deb=p.niveau==="deb";
+  // la distance doit être atteignable avec la complexité choisie ET en standard : la complexité ne fait jamais viser plus loin que le plan standard
+  const ok=(c,w)=> reachable(c,w,deb) && (!p.cplx||p.cplx==="standard"||!LONG_NEED[c]||reachable(c,buildPlanFor({...p,cplx:"standard",objectif:c}),deb));
   let weeks=buildPlanFor(p);
-  if(!reachable(o,weeks,deb)){
+  if(!ok(o,weeks)){
     // repli sur la distance atteignable la plus proche : marathon → semi → 10 km → 5 km → forme
     const asked=o, top=weeks.topLong, chain=["42","21","10","5","forme"];
     for(const c of chain.slice(chain.indexOf(o)+1)){
       const w2= c==="forme"? null : buildPlanFor({...p,objectif:c});
-      if(c==="forme"||reachable(c,w2,deb)){ weeks= w2||buildPlanFor({...p,objectif:"forme"}); weeks.unreal={asked,used:c,top}; break; }
+      if(c==="forme"||ok(c,w2)){ weeks= w2||buildPlanFor({...p,objectif:"forme"}); weeks.unreal={asked,used:c,top}; break; }
     }
   }
+  capSimple(weeks,weeks.unreal? {...p,objectif:weeks.unreal.used} : p);
   return weeks;
+}
+// plan simple : chaque semaine reste au plus aussi intense que la même semaine en standard (quand le volume est faible, le standard raccourcit
+// ses deux séances alors que la séance unique du simple resterait longue) ; sinon la séance est raccourcie, ou devient un footing de même distance
+function capSimple(weeks,p){
+  if(p.cplx!=="simple") return; const std=buildPlanFor({...p,cplx:"standard"}), {vma}=vmaOf(p), hard=wk=>wk.days.reduce((a,d)=>a+(d.run&&d.run.type==="q"?d.run.hardMin||0:0),0);
+  weeks.forEach((wk,i)=>{ const sw=std[i]; if(!sw) return; let cap=hard(sw);
+    wk.days.forEach((d,j)=>{ if(!d.run||d.run.type!=="q"||!d.run.kind) return; const h=d.run.hardMin||0; if(h<=cap+1e-9){ cap-=h; return; }
+      let o={...d.run.qo}, s=null;
+      for(let t=0;t<4&&!s;t++){ o= o.short? {...o,fewer:(o.fewer||0)+1} : {...o,short:true}; const c=quality(d.run.kind,wk.w,p,vma,wk.phase,o); if(c&&(c.hardMin||0)<=cap+1e-9&&sessionKm(c,vma)<=sessionKm(d.run,vma)+1e-9) s=c; }
+      if(s){ wk.days[j]={...d,run:s}; cap-=s.hardMin||0; }
+      else wk.days[j]={...d,run:easyRun(Math.max(1.5,Math.floor(sessionKm(d.run,vma)*2)/2),vma,null,p.types.includes("ld")?4:0),kind:"easy"}; }); });
 }
 // première semaine du plan, avant la mise à jour des repères de progression (sinon la semaine 2 part d'une séance jamais faite) :
 // les jours d'avant le début sont au maintien, sans séance ; la première séance n'est jamais dure ni la sortie longue, mais un footing facile
@@ -693,7 +739,7 @@ function buildLongPlan(p,N){
     if(first[11]) first[11].deload=true;
     const normals=first.filter(wk=>!wk.deload), vol=kmW(normals[normals.length-1]), lg=Math.max(0,...first.map(lrKm));
     // même VMA que le débutant (sinon la valeur type « intermédiaire » changerait les allures)
-    const rest=buildPlanFor({...p,niveau:"int",ref:"vma",refVal:String(vma),nWeeks:N-12,volume:Math.max(8,Math.round(vol)),longest:Math.floor(lg*2)/2,vmax:true,noFirst:true});
+    const rest=buildPlanFor({...p,niveau:"int",cplx:p.cplx==="avance"?"standard":p.cplx,ref:"vma",refVal:String(vma),nWeeks:N-12,volume:Math.max(8,Math.round(vol)),longest:Math.floor(lg*2)/2,vmax:true,noFirst:true});
     rest.forEach(wk=>{ if(wk.tw==null) wk.tw=99; });
     return join(first,rest);
   }
@@ -759,6 +805,8 @@ function buildWeek(p,w,phase,deload,V,L,vma,ctx){
   // débutant : jamais de qualité dans les 8 premières semaines réelles, même sur un plan court (semaine du modèle étirée)
   let [k1,k2]=qualityKinds(p,deb?Math.min(w,wt):wt,phase);
   if(deload && k2) k2=null; // semaine allégée : une seule séance de qualité
+  // plan simple : une seule séance d'intensité par semaine, et du fartlek plutôt que de la VMA
+  if(p.cplx==="simple"){ k2=null; if(k1==="vma") k1="fartlek"; }
   if(p.seances===3) k2=null;
   // débutant : durées réduites en affûtage, pas de nouveau palier de course après la semaine 10
   const debF= phase==="taper"?.7 : phase==="race"?.6 : 1, maxBout= wt>10&&ctx.debBout? ctx.debBout : 0;
@@ -783,7 +831,7 @@ function buildWeek(p,w,phase,deload,V,L,vma,ctx){
   // qualité
   const q=[]; if(slot.q1!=null) q.push([shiftIdx(slot.q1,p),k1]); if(slot.q2!=null) q.push([shiftIdx(slot.q2,p),k2]);
   let easyIdx=slot.e.map(i=>shiftIdx(i,p));
-  const qPlan=[]; { let prevK=null; for(const [idx,k0] of q){ const k=pickKind(k0,p,prevK); if(k){ qPlan.push({idx,k,fewer:0}); prevK=k; } else easyIdx.push(idx); } }
+  const qPlan=[]; { let prevK=null; for(const [idx,k0] of q){ const k=pickKind(k0,p,prevK); if(k){ qPlan.push({idx,k,fewer:p.cplx==="simple"?1:0}); prevK=k; } else easyIdx.push(idx); } }
   // aucune séance ne dépasse la sortie longue ni +10 % de la plus longue faite
   const longKm=days[longIdx].run&&days[longIdx].run.type==="long"? kmOf(days[longIdx].run) : 0;
   const sessCap= deb? (ctx.debLong>0? Math.max(longKm,ctx.debLong*1.1) : Infinity) : Math.min(ctx.lim, (normal||deload)&&longKm? longKm : ctx.ref);
@@ -889,7 +937,7 @@ function buildWeek(p,w,phase,deload,V,L,vma,ctx){
     .filter((v,i,a)=>a.indexOf(v)===i && v!==eveLong && v!==longIdx);
   const placed=[];
   for(const i of cand){ if(placed.length>=nR)break; if(placed.some(j=>Math.abs(j-i)<2))continue; placed.push(i); }
-  const rtype = deb?"deb": (deload||phase==="taper")?"light":"heavy";
+  const rtype = deb||p.cplx==="simple"?"deb": (deload||phase==="taper")?"light":"heavy";
   let rt=renfoText(rtype,p.equip);
   // lourd dès la semaine 1 : rappel de la progression pour qui débute en musculation
   if(rtype==="heavy"&&w<=3) rt={...rt,note:(rt.note?rt.note+" ":"")+"Si tu débutes en musculation : charges modérées et technique pendant 4 à 6 semaines, pliométrie 2 × 6 contacts."};
@@ -1328,7 +1376,7 @@ function recompute(){
   if(plan.unreal) P={...P,objectif:plan.unreal.used}; // objectif trop loin : le plan prépare la distance atteignable
   E=energy(P,plan);
   if(state.week>plan.length) state.week=plan.length;
-  syncSportUI14(); renderPsec(); renderRegen(); renderSummary(); psecSum(); renderWeek(); renderNext(); renderPlan(); renderLog(); renderReg(); renderZones(); renderRaceHint(); syncLongDay();
+  syncSportUI14(); renderPsec(); renderRegen(); renderAip(); renderSummary(); psecSum(); renderWeek(); renderNext(); renderPlan(); renderLog(); renderReg(); renderZones(); renderRaceHint(); syncLongDay();
   try{ renderFeel(); renderImp(); }catch(e){ console.warn("v14",e); }
   $("#exampleBanner").hidden=!state.isExample&&!P.incomplete;
   $("#exampleTxt").textContent= P.incomplete&&!state.isExample? "Ton profil est incomplet (âge, taille ou poids manquant) : des valeurs d'exemple sont utilisées à la place. Complète ton profil pour que le plan et les calories soient justes." : "Ce sont des données d'exemple. Remplis l'onglet « Profil » avec les tiennes pour que le plan et les calories soient justes.";
@@ -1453,6 +1501,7 @@ function renderWeek(){
   if(runSport()&&P.niveau==="deb"&&tplWeek(wk.w,P.objectif!=="forme",plan.length)<=8&&wk.phase!=="race") al.push(`<div class="alert warn">Débutant : ${plan.length===12?"pendant les 8 premières semaines":"au début du plan"}, tout est en facile. Tes tendons et tes os ont besoin de ce temps, même si ton souffle suit déjà.</div>`);
   if(wk.L && P.longest>0 && wk.w===1 && wk.L>P.longest*1.1+1e-9) al.push(`<div class="alert warn">La sortie longue dépasse de plus de 10 % ta plus longue sortie du mois. Vérifie le champ « plus longue sortie » de ton profil.</div>`);
   al.unshift(...feelAlerts14(wk,tp)); al.push(...sportAlerts14(wk,f,tp));
+  if(wk.aiTip&&wk.aiTip.c) al.push(`<div class="alert ok aitip"><span><b>Conseil de l'IA${wk.aiTip.f?" · "+esc(wk.aiTip.f):""}</b> ${esc(wk.aiTip.c)}</span></div>`);
   $("#weekAlerts").innerHTML=al.join("");
   const fp=$("#followedPlan"); if(fp) fp.addEventListener("click",()=>{ followed=realStart(); try{localStorage.setItem("carnet.suivi",followed);}catch(e){} recompute(); $("#weekTitle").focus({preventScroll:true}); });
   const rm=$("#resetMoves"); if(rm) rm.addEventListener("click",()=>resetWeekMoves(wk.w));
@@ -1591,7 +1640,7 @@ function unrealAlert(){
 }
 function renderPlan(){
   { const ld=$("#planLead"); if(ld){ if(!ld.dataset.o) ld.dataset.o=ld.textContent; setT(ld,runSport()?ld.dataset.o:sportLead14()); } }
-  $("#planAlerts").innerHTML=plan.unreal?unrealAlert():"";
+  $("#planAlerts").innerHTML=(plan.unreal?unrealAlert():"")+(plan.ai&&state.aip&&state.aip.p&&!state.aip.p.x? `<div class="alert ok aitip"><span><b>Plan ajusté par l'IA</b> (${esc(CPLX_LAB[state.aip.p.cplx]||"Standard").toLowerCase()}) : ${plan.ai.n? plan.ai.n+" séance"+(plan.ai.n>1?"s":"")+" modifiée"+(plan.ai.n>1?"s":"") : "séances gardées"}, un conseil par semaine dans l'onglet Semaine.${state.aip.p.resume?" "+esc(state.aip.p.resume):""}</span></div>` : "");
   const nPrep=plan.filter(w=>w.phase==="prep").length, pl=$("#planLong"); pl.hidden=!nPrep;
   if(nPrep) setT(pl,"Plan long : d'abord "+nPrep+" semaines de préparation générale (volume qui monte de 3 à 5 % par semaine, sortie longue qui s'allonge, une séance de qualité qui change toutes les 4 semaines), puis "+(plan.length-nPrep)+" semaines de préparation à ta course.");
   const rows=plan.map(wk=>{const f=dayFuel(P,E,wk);const km=planVol14(wk,f);return {wk,f,km};});
@@ -1824,7 +1873,7 @@ function renderPerf(log){
 
 /* ---------- formulaire ---------- */
 const FIELDS=["age","taille","poids","cible","mg","activite","objectif","volume","longest","ref","refVal","fcmax","start","adj","deficit","bonus","cross","raceDate","hSem"];
-const RADIOS=["sexe","niveau","seances","renfo","longDay","lieu","equip"];
+const RADIOS=["sexe","niveau","seances","renfo","longDay","lieu","equip","cplx"];
 function syncSeances(){ // débutant : 4 séances au plus, aussi au chargement
   const deb=document.querySelector('input[name="niveau"]:checked')?.value==="deb";
   document.querySelectorAll('input[name="seances"]').forEach(r=>{r.disabled=(deb&&+r.value>4)||(isForce14()&&+r.value>5);});
@@ -1917,7 +1966,7 @@ $("#profileForm").addEventListener("change",e=>{
 $("#resetEx").addEventListener("click",()=>{$("#resetConfirm").hidden=false;});
 $("#resetNo").addEventListener("click",()=>{$("#resetConfirm").hidden=true;});
 $("#resetYes").addEventListener("click",()=>{hideToast(); $("#logMsg").innerHTML=""; // un « Annuler » de retrait ne survit pas à la remise à zéro
-  state={profile:{...EXAMPLE},isExample:true,log:[],week:1,appliedByDate:{},deleted:{},moves:{},done:{},feel:{},acts:{},rhr:{},seen:state.seen,savedAtLocal:Date.now()};localSaved=false;$("#resetConfirm").hidden=true;fillForm();persist();recompute();setStore(lsOK?EXAMPLE_MSG:LS_BLOCKED);});
+  state={profile:{...EXAMPLE},isExample:true,log:[],week:1,appliedByDate:{},deleted:{},moves:{},done:{},feel:{},acts:{},rhr:{},aip:cleanAip({p:{x:1,at:Date.now()}}),seen:state.seen,savedAtLocal:Date.now()};localSaved=false;$("#resetConfirm").hidden=true;fillForm();persist();recompute();setStore(lsOK?EXAMPLE_MSG:LS_BLOCKED);});
 
 // erreur de saisie reliée au champ : aria-invalid + message sous le champ (aria-describedby) ; msg vide = erreur retirée
 function fieldErr(el,msg){ if(!el) return; const id=el.id+"Err", f=el.closest(".field")||el.parentElement; let n=document.getElementById(id);
@@ -2688,7 +2737,15 @@ function cleanRhr(o){ if(!o||typeof o!=="object"||Array.isArray(o)) return {};
     if(v.x===1||v.x===true){ if(at) out.push([k,{x:1,at}]); continue; }
     const b=numIn(v.bpm,25,150); if(b==null) continue; out.push([k,{bpm:Math.round(b),at}]); }
   return Object.fromEntries(out.sort((a,b)=>a[0]<b[0]?1:-1).slice(0,RHR_MAX)); }
-const X14={feel:cleanFeel,acts:cleanActs,rhr:cleanRhr};
+// ajustement du plan par l'IA : {p: {sig: empreinte du profil, at, cplx, resume, wk: {numéro de semaine: {f: but, c: conseil, q: [type|""], a: 0|1}}}} ou {p: {x:1, at}} (retiré)
+function cleanAip(o){ if(!o||typeof o!=="object"||Array.isArray(o)) return {}; const v=o.p; if(!v||typeof v!=="object"||Array.isArray(v)) return {};
+  const at=atOf(v); if(!at) return {}; if(v.x===1||v.x===true) return {p:{x:1,at}};
+  const sig=typeof v.sig==="string"&&/^[0-9a-z]{1,12}$/.test(v.sig)? v.sig : ""; if(!sig) return {};
+  const t=(x,m)=>typeof x==="string"? x.replace(/[\u0000-\u001f\u007f<>]/g,"").replace(/\s+/g," ").trim().slice(0,m) : "";
+  const wk={}; if(v.wk&&typeof v.wk==="object"&&!Array.isArray(v.wk)) for(const [k,x] of Object.entries(v.wk).slice(0,60)){ if(!/^[1-9]\d?$/.test(k)||!x||typeof x!=="object"||Array.isArray(x)) continue;
+    wk[k]={f:t(x.f,60),c:t(x.c,220),q:Array.isArray(x.q)? x.q.slice(0,3).map(q=>Object.hasOwn(SUBST,q)?q:"") : [],a:x.a===1||x.a===true?1:0}; }
+  return {p:{sig,at,cplx:["simple","standard","avance"].includes(v.cplx)?v.cplx:"standard",resume:t(v.resume,320),wk}}; }
+const X14={feel:cleanFeel,acts:cleanActs,rhr:cleanRhr,aip:cleanAip};
 const x14Keys=Object.keys(X14);
 const x14Clean=d=>{ const o={}; for(const k of x14Keys) o[k]=X14[k](d&&typeof d==="object"&&Object.hasOwn(d,k)? d[k] : undefined); return o; };
 const x14Merge=(a,b)=>{ const o={}; for(const k of x14Keys) o[k]=mergeStamped(a&&typeof a==="object"?a[k]:undefined,b&&typeof b==="object"?b[k]:undefined,X14[k]); return o; };
@@ -3073,10 +3130,80 @@ $("#rgGo").addEventListener("click",e=>{ const v=regenPreview(), keep=$("#rgMove
   if(!v.n){ toast("Complète d'abord ton profil : âge, taille et poids."); return; }
   openSheet({title:"Regénérer mon plan",opener:e.currentTarget,kind:"regen",closeLabel:"Annuler",firstClose:true,
     html:`<p class="note">Ton plan sera recréé avec ton profil actuel : <b>${v.n} semaine${v.n>1?"s":""}</b>, du ${esc(df(v.st))} au ${esc(df(v.end))}${v.race?", jusqu'à ta course":""}.</p>
-      <ul class="rg-list"><li><b>Repart</b> de la semaine 1${keep?", séances déplacées remises à leur place":""}.</li><li><b>Conservés</b> : suivi, pesées, séances cochées, ressenti et activités importées.</li></ul>`,
+      <ul class="rg-list"><li><b>Repart</b> de la semaine 1${keep?", séances déplacées remises à leur place":""}.</li><li><b>Conservés</b> : suivi, pesées, séances cochées, ressenti et activités importées.</li>${state.aip&&state.aip.p&&!state.aip.p.x?"<li><b>Ajustement de l'IA</b> : il ne s'appliquera plus au nouveau plan ; relance-le ensuite dans le Profil.</li>":""}</ul>`,
     foot:`<button class="btn" type="button" id="rgOk">Regénérer</button>`,
     onReady:sh=>{ sh.querySelector("#rgOk").addEventListener("click",()=>{ const r=regenPlan(keep); closeSheet(true); selectTab("semaine"); window.scrollTo(0,0);
       toast("Plan regénéré : "+r.n+" semaine"+(r.n>1?"s":"")+", à partir du "+longDate(r.st)+(r.nm?" · "+r.nm+" séance"+(r.nm>1?"s":"")+" remise"+(r.nm>1?"s":"")+" en place":"")+"."); }); }}); });
+/* ---- ajustement du plan par l'IA (api/plan.js) : rien n'est envoyé sans un accord donné à chaque envoi, réservé aux adultes connectés ----
+   Envoyé : âge, sport, niveau, objectif, séances par semaine, la structure des semaines à venir du plan de base (phase, km, minutes, séances d'intensité
+   et leurs remplaçants permis), la complexité choisie ; si coché, les 8 derniers ressentis (sans notes) ; si écrit, une demande de 300 caractères au plus. */
+const PLAN_AI_URL=(()=>{ const u=String((window.APP_CONFIG||{}).PLAN_AI_URL||"").trim(), loc=["localhost","127.0.0.1"].includes(location.hostname);
+  return u.length<=300&&(/^https:\/\/[a-z0-9]([a-z0-9.-]{0,120})(:\d{2,5})?(\/[A-Za-z0-9._~\/-]{0,120})?$/i.test(u)||(loc&&/^http:\/\/(localhost|127\.0\.0\.1)(:\d{2,5})?(\/[A-Za-z0-9._~\/-]{0,120})?$/.test(u)))? u : ""; })();
+const CPLX_LAB={simple:"Simple",standard:"Standard",avance:"Avancé"};
+let aipBusy=false;
+function aipBody(feel,wish){
+  const n=profileNums(state.profile), base=buildPlan({...n,noAi:true}), tp=todayPos(), w0=tp?tp.w:1, run=!evSport(n.sport), vma=run? vmaOf(n).vma : 0, r1=v=>Math.round(v*10)/10;
+  const semaines=base.filter(wk=>wk.w>=w0).slice(0,52).map(wk=>{ const ds=wk.days.filter(d=>d.run&&d.kind!=="before"&&Array.isArray(d.run.blocks));
+    const o={s:wk.w,phase:wk.phase,allegee:!!wk.deload,minutes:Math.round(ds.reduce((a,d)=>a+sessionMin(d.run),0))};
+    if(run){ o.km=r1(ds.reduce((a,d)=>a+(d.run.type!=="race"?sessionKm(d.run,vma):0),0)); o.qualite=ds.filter(d=>d.run.type==="q"&&d.run.kind).map(d=>({type:d.run.kind,options:qOpts(d.run.kind,n)})); }
+    return o; });
+  const b={v:1,complexite:n.cplx,profil:{age:n.age,sport:n.sport,niveau:n.niveau,objectif:n.runObjectif||n.objectif,seances:n.seances,renfo:n.renfo,semaines_plan:base.length},semaines};
+  if(feel){ const f=(window.CarnetBridge.summary({feel:true}).ressenti||[]).map(x=>({effort:x.effort,forme:x.forme,douleur:x.douleur})); if(f.length) b.ressenti=f; }
+  if(wish) b.souhait=wish;
+  return b; }
+async function aipCall(body){
+  let tk=null;
+  try{ tk=window.CarnetAuth&&window.CarnetAuth.accessToken? await window.CarnetAuth.accessToken() : null; }catch(e){}
+  if(typeof tk!=="string"||!/^[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}$/.test(tk)||tk.length>=4096) throw {m:"Connecte-toi à ton compte pour utiliser l'IA : le serveur vérifie qui tu es. Sans connexion, rien n'est envoyé."};
+  // l'appel réseau est dans planai.js (app.js n'ouvre aucune connexion)
+  const net=window.CarnetPlanAI; if(!net) throw {m:"L'IA n'est pas disponible pour le moment. Recharge la page puis réessaie."};
+  const r=await net.send(PLAN_AI_URL,body,tk);
+  if(!r.status) throw {m:r.slow? "L'IA met trop de temps à répondre. Réessaie dans un moment." : "Impossible de joindre le serveur. Vérifie ta connexion."};
+  let o=null; try{ o=JSON.parse(r.text); }catch(e){}
+  if(r.status>=200&&r.status<300&&o&&o.plan&&typeof o.plan==="object"&&Array.isArray(o.plan.semaines)) return o.plan;
+  throw {m: o&&typeof o.reply==="string"? o.reply.replace(/[\u0000-\u001f\u007f]/g," ").slice(0,600) : r.status===429? "Trop de demandes pour le moment : réessaie dans quelques minutes." : r.status===401||r.status===403? "Connexion requise : reconnecte-toi puis réessaie." : "L'IA n'a pas pu ajuster ton plan. Réessaie dans un moment.",safe:!!(o&&o.safe)}; }
+// sig : empreinte du profil au moment de l'envoi ; un profil changé pendant l'attente rend la réponse caduque (elle n'est pas enregistrée)
+function aipSave(r,cplx,sig){ if(sig!==planSig(profileNums(state.profile))) return false; const wk={};
+  for(const x of r.semaines.slice(0,60)) if(x&&Number.isInteger(x.s)&&x.s>=1&&x.s<=60) wk[x.s]={f:x.focus,c:x.conseil,q:Array.isArray(x.q)? x.q.map(k=>k==="garder"?"":k) : [],a:x.allege===true?1:0};
+  state.aip=cleanAip({p:{sig,at:Date.now(),cplx,resume:r.resume,wk}}); persist(); recompute(); return true; }
+function aipSheet(opener){
+  const host=(()=>{ try{ return new URL(PLAN_AI_URL).host; }catch(e){ return ""; } })(), prov=esc(String((window.APP_CONFIG||{}).CHAT_PROVIDER_NAME||"un fournisseur d'IA").replace(/[\u0000-\u001f<>]/g,"").slice(0,60));
+  const chk=(id,t,d)=>`<label class="chk"><input type="checkbox" id="${id}"><span>${t}<small>${d}</small></span></label>`;
+  openSheet({title:"Ajuster mon plan avec l'IA",opener,kind:"aip",
+    html:`<p class="note">Pour ajuster ton plan, Pacebook envoie à la fonction du site (<b>${esc(host)}</b>) puis à <b>${prov}</b> : ton âge, ton sport, ton niveau, ton objectif, tes séances de sport et de renforcement par semaine, la durée de ton plan, la complexité choisie (<b>${esc(CPLX_LAB[P.cplx]||"Standard")}</b>) et la structure des semaines à venir (phase, semaine allégée ou non, kilomètres, minutes, séances d'intensité). Ni ton nom, ni ton poids, ni tes notes ne sont envoyés. Ces données sortent de ton appareil et peuvent sortir de l'Union européenne. Rien n'est envoyé sans ton accord.</p>
+<div class="field"><label for="aipWish">Ta demande (facultatif)</label><textarea id="aipWish" maxlength="300" rows="3" placeholder="ex. je préfère les côtes au fractionné ; mes semaines sont chargées en ce moment" aria-describedby="aipWishH"></textarea><span class="hint" id="aipWishH">N'écris ni ton nom ni de détail médical. 300 caractères au plus.</span></div>
+<div class="grp" role="group" aria-label="Ce qui est envoyé">${chk("aipFeel","Inclure mon ressenti après séance","Les 8 derniers : effort perçu, forme, douleur (sans tes notes). Décoché par défaut.")}
+${chk("aipOk","J'accepte cet envoi","Obligatoire, pour cet ajustement seulement.")}</div>
+<div class="alert warn">L'IA ne touche ni aux volumes ni aux jours : elle choisit parmi les séances que le plan permet. C'est une aide générale, <b>pas un avis médical</b>.</div>
+<p class="note" id="aipErr" role="alert" hidden></p>`,
+    foot:`<button class="btn" type="button" id="aipSend">Envoyer</button>`,
+    onReady:sh=>{ const go=sh.querySelector("#aipSend"), err=sh.querySelector("#aipErr"), ok=sh.querySelector("#aipOk"); ok.setAttribute("data-first","");
+      // message d'erreur rendu visible (il est en bas de la feuille) ; le focus reste dans la feuille
+      const show=m=>{ err.hidden=false; err.textContent=m; try{ err.scrollIntoView({block:"nearest"}); }catch(e){} };
+      go.addEventListener("click",async()=>{ if(aipBusy){ show("Un ajustement est déjà en cours : attends sa réponse."); return; }
+        if(!ok.checked){ show("Coche « J'accepte cet envoi » pour lancer l'ajustement."); ok.focus(); return; }
+        const wish=sh.querySelector("#aipWish").value.replace(/\s+/g," ").trim().slice(0,300);
+        // filet de sécurité du Coach, avant tout envoi : un sujet grave n'est jamais envoyé
+        let k=""; try{ k=wish&&window.CarnetCoach? window.CarnetCoach.guard(wish) : ""; }catch(e){}
+        if(k){ show("Ce que tu écris peut être sérieux et je ne l'ai envoyé à aucun serveur. En cas de détresse, appelle le 3114 (24 h sur 24) ; en cas d'urgence, le 15 ou le 112. Pour une douleur ou un malaise, arrête l'effort et consulte un médecin."); return; }
+        // bouton « occupé » sans disabled : il garde le focus (Échap et Tab restent dans la feuille pendant l'attente)
+        const cplx=P.cplx, sig=planSig(profileNums(state.profile)); aipBusy=true; go.setAttribute("aria-disabled","true"); go.textContent="L'IA prépare ton plan…"; err.hidden=true;
+        try{ const r=await aipCall(aipBody(sh.querySelector("#aipFeel").checked,wish)), mine=sh.isConnected;
+          if(!aipSave(r,cplx,sig)){ const m="Ton profil a changé pendant l'ajustement : la réponse de l'IA n'est pas appliquée. Relance-le."; if(mine) show(m); else toast(m); return; }
+          if(mine) closeSheet(true);   // une réponse tardive ne ferme jamais une autre feuille ouverte entre-temps
+          const n=plan.ai? plan.ai.n : 0; toast("Plan ajusté par l'IA : "+(n? n+" séance"+(n>1?"s":"")+" modifiée"+(n>1?"s":"")+", " : "séances gardées, ")+"un conseil par semaine.");
+          const g=$("#aipGo"); if(mine&&g) g.focus({preventScroll:true}); }
+        catch(e){ const m=e&&e.m||"L'IA n'a pas pu ajuster ton plan. Réessaie dans un moment."; if(sh.isConnected) show(m); else toast(m); }
+        finally{ aipBusy=false; if(go.isConnected){ go.removeAttribute("aria-disabled"); go.textContent="Envoyer"; } } }); }}); }
+function renderAip(){ const box=$("#aiPlan"); if(!box) return;
+  const n=P, show=!!PLAN_AI_URL&&!state.isExample&&!n.incomplete&&!n.minor; box.hidden=!show; if(!show) return;
+  setT($("#aipCplx"),CPLX_LAB[n.cplx]||"Standard");
+  const a=state.aip&&state.aip.p, on=!!(a&&!a.x), cur=on&&!!aiOf(profileNums(state.profile)), dt=on? new Date(a.at).toLocaleDateString("fr-FR",{day:"numeric",month:"long"}) : "", k=plan.ai? plan.ai.n : 0;
+  const guest=acct.st==="guest";
+  setT($("#aipSt"), guest&&!on? "Connecte-toi à ton compte pour utiliser l'IA : le serveur vérifie qui tu es avant tout envoi." : !on? "Pas encore d'ajustement : ton plan suit les règles du site." : cur? "Ajusté le "+dt+" en "+(CPLX_LAB[a.cplx]||"Standard").toLowerCase()+" : "+(k? k+" séance"+(k>1?"s":"")+" modifiée"+(k>1?"s":"") : "séances gardées")+", un conseil par semaine."+(a.resume?" "+a.resume:"") : "Ton profil a changé depuis l'ajustement du "+dt+" : il n'est plus appliqué. Relance-le pour l'adapter.");
+  setT($("#aipGo"),guest?"Se connecter":on?"Relancer l'ajustement":"Ajuster avec l'IA"); $("#aipOff").hidden=!on; }
+{ const g=$("#aipGo"); if(g) g.addEventListener("click",e=>{ if(!PLAN_AI_URL) return; if(acct.st==="guest"){ openAuth("login",e.currentTarget); return; } aipSheet(e.currentTarget); });
+  const o=$("#aipOff"); if(o) o.addEventListener("click",()=>{ state.aip=cleanAip({p:{x:1,at:Date.now()}}); persist(); recompute(); toast("Ajustement de l'IA retiré : ton plan suit de nouveau les règles du site."); $("#aipGo").focus({preventScroll:true}); }); }
 function renderPsec(){
   const p=P, sp=p.sport||"course", SX={H:"Homme",F:"Femme"};
   const dt=p.raceDate&&okIso(p.raceDate)? " · le "+dfmt(new Date(p.raceDate+"T12:00:00")) : "";
@@ -3085,7 +3212,7 @@ function renderPsec(){
   // valeurs SAISIES : une valeur hors limites n'est jamais écrêtée en silence, elle est montrée telle quelle avec un avertissement
   const raw=(k,u,fm)=>{ const r=state.profile[k]; if(r==null||String(r).trim()==="") return ""; const v=numOf(r), B=BOUNDS[k], c=psClamp[k]; if(isNaN(v)||v<B[0]||v>B[1]) return String(r).trim().slice(0,12)+" "+u+" (hors limites "+B[0]+" à "+B[1]+")"; if(c&&c.to===v) return (fm?fm(v):v)+" "+u+" (saisi : "+c.typed+", ramené au "+(c.typed>v?"maximum":"minimum")+")"; if(c) delete psClamp[k]; return (fm?fm(v):v)+" "+u; };
   psecLine("psl-me",[SX[state.profile.sexe]||"",raw("age","ans"),raw("taille","cm"),raw("poids","kg",fmt1)].filter(Boolean).join(" · "));
-  const tr=[p.seances?p.seances+(sp==="force"?" séances de force":" séances")+" par semaine":"", sp==="course"||sp==="trail"? ({dehors:"dehors",tapis:"tapis",mixte:"dehors et tapis"}[p.lieu]||""):"", p.renfo>0&&sp!=="force"?p.renfo+" de renforcement":""];
+  const tr=[p.seances?p.seances+(sp==="force"?" séances de force":" séances")+" par semaine":"", sp==="course"||sp==="trail"? ({dehors:"dehors",tapis:"tapis",mixte:"dehors et tapis"}[p.lieu]||""):"", p.renfo>0&&sp!=="force"?p.renfo+" de renforcement":"", p.cplx&&p.cplx!=="standard"? "plan "+CPLX_LAB[p.cplx].toLowerCase() : ""];
   psecLine("psl-trn",tr.filter(Boolean).join(" · "));
   psecLine("psl-nut",[p.deficit>0?"déficit "+fmt0(p.deficit)+" kcal":"maintien", p.bonus>0?"+ "+fmt0(p.bonus)+" kcal les jours faciles":"", p.adj?(p.adj>0?"déficit réduit de ":"déficit augmenté de ")+fmt0(Math.abs(p.adj))+" kcal (ajustement)":""].filter(Boolean).join(" · "));
 }
@@ -3141,7 +3268,7 @@ function persistLocal(){ try{
   state.savedAtLocal=Date.now(); const out=JSON.stringify(state); localStorage.setItem(LS,out); lastRaw=out; lsOK=true; return true; }catch(e){ lsOK=false; return false; } }
 // fusion de données d'un autre appareil ou onglet : suivi en union, coches et déplacements par date de modification, profil le plus récent ; tout est nettoyé
 function mergeInto(d,srcT){
-  const snap=()=>JSON.stringify([state.profile,state.isExample,state.log,state.done,state.moves,state.deleted,state.seen,state.feel,state.acts,state.rhr]), before=snap();
+  const snap=()=>JSON.stringify([state.profile,state.isExample,state.log,state.done,state.moves,state.deleted,state.seen,state.feel,state.acts,state.rhr,state.aip]), before=snap();
   const del=mergeDeleted(state.deleted,d.deleted), week=state.week;
   const hasP=!!(d.profile&&typeof d.profile==="object"&&!Array.isArray(d.profile)), pl=+state.profileAt||0, pr=+d.profileAt||0;
   const prof= hasP&&((state.isExample&&!d.isExample&&!pl)||((pl||pr)? pr>pl : (+srcT||0)>(+state.savedAtLocal||0)));
@@ -3208,7 +3335,7 @@ async function flush(){
     if(hasEpoch(rd)&&state.eid!==undefined&&ep!==state.eid){ writing=false; pending=false; erasedElsewhere(!rd.erased); return; }   // le compte a changé d'époque (effacement) depuis notre dernière synchro : on n'écrit rien
     if(hasEpoch(rd)&&state.eid!==ep){ state.eid=ep; persistLocal(); } else if(state.eid===undefined) state.eid="";
     if(rd&&!rd.erased&&rd.profile&&typeof rd.profile==="object"&&!Array.isArray(rd.profile)){ const r=mergeInto(rd,+rd.savedAt||0); if(r.changed){ persistLocal(); rerender(r); } }
-    await dbRef.set(JSON.parse(JSON.stringify({profile:state.profile,isExample:state.isExample,log:state.log,week:state.week,appliedByDate:state.appliedByDate||{},deleted:state.deleted||{},moves:state.moves||{},done:state.done||{},feel:state.feel||{},acts:state.acts||{},rhr:state.rhr||{},seen:+state.seen||0,profileAt:+state.profileAt||0,pAt:cleanPAt(state.pAt),eid:state.eid||"",savedAt:state.savedAtLocal||Date.now()}))); flushFailed=false; acct.lastAt=Date.now(); setStore(state.isExample&&!localSaved? EXAMPLE_MSG : ACCOUNT_OK); }
+    await dbRef.set(JSON.parse(JSON.stringify({profile:state.profile,isExample:state.isExample,log:state.log,week:state.week,appliedByDate:state.appliedByDate||{},deleted:state.deleted||{},moves:state.moves||{},done:state.done||{},feel:state.feel||{},acts:state.acts||{},rhr:state.rhr||{},aip:state.aip||{},seen:+state.seen||0,profileAt:+state.profileAt||0,pAt:cleanPAt(state.pAt),eid:state.eid||"",savedAt:state.savedAtLocal||Date.now()}))); flushFailed=false; acct.lastAt=Date.now(); setStore(state.isExample&&!localSaved? EXAMPLE_MSG : ACCOUNT_OK); }
   catch(e){ if(e&&e.code==="NOROW"){ writing=false; pending=false; consentLost(); return; }
     flushFailed=true;
     setStore(lsOK? "impossible dans le compte, gardé sur cet appareil seulement." : "impossible dans le compte, et le stockage de ce navigateur est bloqué. Tes changements seront perdus en fermant la page."); }
@@ -3227,7 +3354,7 @@ const cleanLog=l=>{ if(!Array.isArray(l)) return []; const m=new Map();
   return [...m.values()].sort((a,b)=>a.date<b.date?-1:1).slice(-520); };
 const cleanApplied=o=>{ if(!o||typeof o!=="object"||Array.isArray(o)) return {}; const out={}; for(const [k,v] of Object.entries(o).slice(0,600)){ const n=numIn(v,-600,600); if(okIso(k)&&n!=null) out[k]=n; } return out; };
 // profil : seulement les champs connus, avec leur type et leurs valeurs permises (le reste vient de l'exemple)
-const PENUM={sexe:["H","F"],niveau:["deb","int","conf"],ref:["none","vma","5","10"],seances:["3","4","5","6"],renfo:["0","1","2"],longDay:["5","6"],lieu:["dehors","tapis","mixte"],equip:["salle","maison","aucun"],sport:SPORTS,sObj:["court","moyen","long","ppl","oly"]};
+const PENUM={sexe:["H","F"],niveau:["deb","int","conf"],ref:["none","vma","5","10"],seances:["3","4","5","6"],renfo:["0","1","2"],longDay:["5","6"],lieu:["dehors","tapis","mixte"],equip:["salle","maison","aucun"],sport:SPORTS,sObj:["court","moyen","long","ppl","oly"],cplx:["simple","standard","avance"]};
 const PNUM=["age","taille","poids","cible","mg","volume","longest","fcmax","adj","deficit","bonus","hSem"];
 function cleanProfile(p){ const out={start:"",raceDate:""}; if(!p||typeof p!=="object"||Array.isArray(p)) return out;
   const own=k=> Object.prototype.hasOwnProperty.call(p,k)? p[k] : undefined, sc=v=> typeof v==="string"||typeof v==="number";
@@ -3293,7 +3420,7 @@ function renderHome(){
   const b= has==="1"? `<button class="btn" type="button" data-act="open">Ouvrir Pacebook</button>` : `<button class="btn" type="button" data-act="wizard">Créer mon plan gratuit</button>`;
   $("#homeCta").innerHTML=b+(has==="1"? `<button class="linkbtn" type="button" data-act="wizard">Refaire mon profil</button>` : `<button class="linkbtn" type="button" data-act="example">Voir un exemple</button>`); $("#homeCta2").innerHTML=b;
 }
-function renderAcct(){
+function renderAcct(){ try{ if(P) renderAip(); }catch(e){}
   document.querySelectorAll(".js-av").forEach(b=>{ b.dataset.st=acct.st; b.setAttribute("aria-label","Compte : "+acctText().toLowerCase()); const i=b.querySelector(".av-i"); if(i) i.textContent=acct.name? acct.name.charAt(0).toUpperCase():""; });
   renderHome(); const sh=sheetEl&&sheetEl.querySelector('.sheet[data-kind="acct"]'); if(sh) fillAcct(sh);
   const can=!!(window.CarnetAuth&&window.CarnetAuth.canLogin); document.querySelectorAll(".js-login").forEach(b=>{ b.hidden=!(can&&acct.st==="guest"); });
@@ -3787,7 +3914,7 @@ async function initAccount(){
       const mp= lo&&!d.isExample? mergeProfile(d.profile,d.pAt,local.profile,local.pAt) : {profile:d.profile,pAt:cleanPAt(d.pAt)}, pmerged=JSON.stringify(mp.profile)!==JSON.stringify(d.profile);
       const ok=safeStart({...x14Merge(d,lo?local:null),profile:mp.profile,pAt:mp.pAt,profileAt:Math.max(+d.profileAt||0,pmerged?+(local&&local.profileAt)||0:0),isExample:d.isExample,log,week:d.week,appliedByDate:d.appliedByDate,deleted:del,moves,done,seen,eid:ep});
       const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
-      if(ok){ persistLocal(); if(pmerged||log.length!==cleanLog(d.log).length||Object.keys(del).length!==Object.keys(cleanDeleted(d.deleted)).length||!same(done,cleanDone(d.done))||!same(moves,cleanMoves(d.moves))||!same(cleanFeel(d.feel),state.feel)||!same(cleanActs(d.acts),state.acts)||!same(cleanRhr(d.rhr),state.rhr)) flush(); setStore(ACCOUNT_OK); }
+      if(ok){ persistLocal(); if(pmerged||log.length!==cleanLog(d.log).length||Object.keys(del).length!==Object.keys(cleanDeleted(d.deleted)).length||!same(done,cleanDone(d.done))||!same(moves,cleanMoves(d.moves))||!same(cleanFeel(d.feel),state.feel)||!same(cleanActs(d.acts),state.acts)||!same(cleanRhr(d.rhr),state.rhr)||!same(cleanAip(d.aip),cleanAip(state.aip))) flush(); setStore(ACCOUNT_OK); }
       else setStore("données du compte illisibles, rien n'a été écrasé.");
     }else if(local && !local.isExample){
       if(remoteOk){ state.deleted=del; state.log=dropDeleted(cleanLog([...cleanLog(d.log),...state.log]),del); state.done=mergeStamped(d.done,state.done,cleanDone); state.moves=mergeStamped(d.moves,state.moves,cleanMoves); Object.assign(state,x14Merge(d,state)); state.seen=Math.max(+state.seen||0,Math.min(APP_V,+d.seen||0)); recompute(); persistLocal(); }

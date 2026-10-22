@@ -60,6 +60,7 @@ ok(/sb-carnet-auth-code-verifier/.test(fs.readFileSync(R+"/cookies.html","utf8")
   ok(/dans ton navigateur, sur ton appareil/.test(pr)&&/jamais/.test(pr),"v14 confidentialité : le fichier importé est lu sur l'appareil et ne modifie jamais les calories");
   ok(/trail, VTT, haltérophilie/.test(cg)&&/Apple Santé ou Polar Flow/.test(cg)&&/jamais un diagnostic/.test(cg),"v14 CGU : sports, import, ressenti sans diagnostic");
   ok(/ressenti après séance/.test(ck),"v14 stockage local : ressenti et activités importées dans carnet-course.v1");
+  { const pa=fs.readFileSync(R+"/planai.js","utf8"); ok((pa.match(/\bfetch\s*\(/g)||[]).length===1&&/credentials:"omit"/.test(pa)&&/referrerPolicy:"no-referrer"/.test(pa)&&/redirect:"error"/.test(pa)&&!/innerHTML|eval\(|new Function/.test(pa),"plan IA : planai.js fait un seul appel réseau, sans cookies ni référent, sans HTML"); }
   ok(!/\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|EventSource/.test(js.slice(js.indexOf("/*PURE14:start*/"),js.indexOf("/*PURE14:end*/"))),"v14 import : le module de lecture n'a aucun accès réseau");
   ok(!/innerHTML\s*=\s*[^;]*(\.note|\.src|\.name)\b/.test(js.slice(js.indexOf("/*PURE14:start*/"),js.indexOf("/*PURE14:end*/"))),"v14 import : pas d'innerHTML dans le module de lecture"); }
 // v15 Coach : aucun secret ni clé d'IA, texte seulement, réseau limité au webhook configuré, consentement avant tout envoi

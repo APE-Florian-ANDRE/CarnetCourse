@@ -26,10 +26,10 @@ const JWT="aaaaaaaaaa.bbbbbbbbbb.cccccccccc"; const GOOD={...L.SESSION(),access_
      send(200,JSON.stringify({reply:"ok"})); }); });
  await new Promise(r=>hook.listen(0,"127.0.0.1",r)); const HOOK="http://127.0.0.1:"+hook.address().port+"/webhook/carnet-coach"; L.EXTRA.v=" http://127.0.0.1:"+hook.address().port;
  const b=await chromium.launch(); const E=[], CSPV=[];
- const mk=async(S,{session=GOOD,sd=seed(),width=390,hist,ls}={})=>{ const ctx=await b.newContext({viewport:{width,height:844},locale:"fr-FR"}); const p=await ctx.newPage();
+ const mk=async(S,{session=GOOD,sd=seed(),width=390,hist,ls,db=L.makeDb()}={})=>{ const ctx=await b.newContext({viewport:{width,height:844},locale:"fr-FR"}); const p=await ctx.newPage();
   p.on("pageerror",e=>E.push("PE "+e.message)); p.on("console",m=>{ if(["error","warning"].includes(m.type())&&!/Failed to load resource|net::ERR|CORS|status of (4|5)\d\d/.test(m.text())) E.push(m.type()+" "+m.text().slice(0,160)); });
-  await L.fake(p,L.makeDb(),{session}); await p.addInitScript(({sd,hist,pend})=>{ window.__csp=[]; document.addEventListener("securitypolicyviolation",e=>window.__csp.push(e.violatedDirective+" "+e.blockedURI));
-    if(!sessionStorage.__seed){ sessionStorage.__seed=1; localStorage.setItem("carnet-course.v1",sd); localStorage.setItem("carnet.hv","1"); localStorage.setItem("carnet.vu","15"); if(pend) localStorage.setItem("carnet.consent",pend); if(hist) localStorage.setItem("carnet.coach.hist",hist); } },{sd,hist,pend:session?JSON.stringify({cgu:"2026-10-10",privacy:"2026-10-10",terms:true,health:true,age15:true,at:new Date().toISOString()}):null});
+  await L.fake(p,db,{session}); await p.addInitScript(({sd,hist,pend})=>{ window.__csp=[]; document.addEventListener("securitypolicyviolation",e=>window.__csp.push(e.violatedDirective+" "+e.blockedURI));
+    if(!sessionStorage.__seed){ sessionStorage.__seed=1; localStorage.setItem("carnet-course.v1",sd); localStorage.setItem("carnet.hv","1"); localStorage.setItem("carnet.cookies",JSON.stringify({v:1,analytics:false,at:new Date().toISOString()})); localStorage.setItem("carnet.vu","15"); if(pend) localStorage.setItem("carnet.consent",pend); if(hist) localStorage.setItem("carnet.coach.hist",hist); } },{sd,hist,pend:session?JSON.stringify({cgu:"2026-10-10",privacy:"2026-10-10",terms:true,health:true,age15:true,at:new Date().toISOString()}):null});
   await p.goto(S.url+"/"); await p.waitForTimeout(900); p.ctx=ctx; return p; };
  const csp=async p=>{ const v=await p.evaluate(()=>window.__csp||[]); if(v.length) CSPV.push(...v); };
  const open=async p=>{ await p.click("#tab-coach"); if(await p.evaluate(()=>document.querySelector("#coachPop").hidden)) await p.click("#coachFab"); await p.waitForTimeout(150); };   // onglet = historique ; la conversation est dans la bulle
@@ -189,4 +189,16 @@ const JWT="aaaaaaaaaa.bbbbbbbbbb.cccccccccc"; const GOOD={...L.SESSION(),access_
   await p.click("#coachClearAll"); ok(await p.evaluate(()=>!localStorage.getItem("carnet.coach.hist")&&!document.querySelector("#coachConvs [data-conv]")),"C10 tout effacer");
   await csp(p); await p.ctx.close(); }
  console.log("erreurs console",E,"violations CSP",CSPV); fails+=E.length+CSPV.length; ok(E.length===0&&CSPV.length===0,"console propre, aucune violation CSP");
+ // C11 : deux onglets — chacun garde sa conversation ouverte ; un envoi en cours n'efface pas ce que l'autre onglet a écrit
+ { const h2=JSON.stringify({v:2,cur:"ca",convs:[{id:"ca",at:Date.now()-5000,m:[{r:"u",t:"QUESTION A"},{r:"a",t:"rep A"}]},{id:"cb",at:Date.now()-4000,m:[{r:"u",t:"QUESTION B"},{r:"a",t:"rep B"}]}]});
+   const db2=L.makeDb(); const A=await mk(S,{hist:h2,width:1280,db:db2}); const B=await A.ctx.newPage(); await L.fake(B,db2,{session:GOOD}); await B.goto(S.url+"/"); await B.waitForTimeout(900);
+   await A.click("#tab-coach"); await A.click('[data-conv="ca"]'); await A.waitForTimeout(150);
+   await B.click("#tab-coach"); await B.click('[data-conv="cb"]'); await B.waitForTimeout(300);
+   ok(await A.evaluate(()=>/QUESTION A/.test(document.querySelector("#coachLog").textContent)&&!/QUESTION B/.test(document.querySelector("#coachLog").textContent)),"C11 rouvrir une conversation dans un onglet ne change pas celle de l'autre");
+   await say(B,"lent B"); await B.waitForTimeout(100); if(await B.evaluate(()=>!!document.querySelector(".sheet #coAccept"))) await consent(B);
+   await A.waitForTimeout(150); await A.click('[data-delconv="ca"]'); await A.waitForTimeout(2000);
+   const st=await B.evaluate(()=>JSON.parse(localStorage.getItem("carnet.coach.hist")));
+   const ids=st.convs.map(c=>c.id), cb=st.convs.find(c=>c.id==="cb");
+   ok(!ids.includes("ca")&&cb&&cb.m.some(m=>m.t==="lent B")&&cb.m.length===4,"C11 envoi en cours dans un onglet, suppression dans l'autre : rien n'est perdu ni ressuscité",st.convs.map(c=>[c.id,c.m.length]));
+   await A.ctx.close(); }
  console.log(fails?"ECHECS "+fails:"TOUT OK"); await b.close(); S.close(); hook.close(); process.exit(fails?1:0); })();

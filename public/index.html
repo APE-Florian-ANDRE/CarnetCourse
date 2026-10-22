@@ -207,6 +207,9 @@
         <div class="field" data-sp="course trail vtt forme"><span class="lbl" id="lbl-longDay">Jour de sortie longue</span>
           <div class="seg" id="segLongDay" role="radiogroup" aria-labelledby="lbl-longDay" aria-describedby="longDayHint"><label><input type="radio" name="longDay" value="6"><span>Dimanche</span></label><label><input type="radio" name="longDay" value="5"><span>Samedi</span></label></div>
           <span class="hint" id="longDayHint" aria-live="polite" hidden></span></div>
+        <div class="field"><span class="lbl" id="lbl-cplx">Complexité du plan</span>
+          <div class="seg" role="radiogroup" aria-labelledby="lbl-cplx" aria-describedby="cplxHint"><label><input type="radio" name="cplx" value="simple"><span>Simple</span></label><label><input type="radio" name="cplx" value="standard"><span>Standard</span></label><label><input type="radio" name="cplx" value="avance"><span>Avancé</span></label></div>
+          <span class="hint" id="cplxHint">Simple : une seule séance d'intensité par semaine et un renforcement de base. Avancé : des séances d'intensité plus fournies (sans effet pour un débutant). L'IA suit aussi ce réglage quand tu lui demandes d'ajuster ton plan.</span></div>
         </div>
       </details>
       <details class="psec" id="ps-nut">
@@ -227,6 +230,12 @@
       <label class="ack rg-opt"><input type="checkbox" id="rgMoves" checked><span>Remettre à leur place les séances que j'ai déplacées</span></label>
       <p class="rg-keep"><b>Conservés :</b> ton suivi, tes pesées, tes séances cochées et ton ressenti.</p>
       <button class="btn" type="button" id="rgGo" aria-haspopup="dialog">Regénérer mon plan</button>
+    </section>
+    <section class="regen aip" id="aiPlan" aria-labelledby="aipT" hidden>
+      <div class="rg-h"><span class="rg-i" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></span>
+        <div><h3 id="aipT">Ajuster mon plan avec l'IA</h3><p class="rg-sub">L'IA choisit tes séances d'intensité selon la complexité choisie (<b id="aipCplx">Standard</b>) et ton ressenti, allège les semaines difficiles et ajoute un conseil par semaine. Les volumes et les garde-fous du plan ne changent pas.</p></div></div>
+      <p class="rg-keep" id="aipSt" aria-live="polite"></p>
+      <div class="aip-act"><button class="btn" type="button" id="aipGo" aria-haspopup="dialog">Ajuster avec l'IA</button><button class="btn ghost" type="button" id="aipOff" hidden>Retirer l'ajustement</button></div>
     </section>
     <div class="resetrow">
       <button class="btn ghost" type="button" id="resetEx">Revenir aux données d'exemple</button>
@@ -485,6 +494,7 @@
 <script src="auth.js"></script>
 <script src="app.js"></script>
 <script src="coach.js"></script>
+<script src="planai.js"></script>
 <script src="consent.js"></script>
 </body>
 </html>

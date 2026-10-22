@@ -13,6 +13,8 @@ window.APP_CONFIG = Object.freeze({
        (ajoute l'origine exacte à connect-src). JAMAIS de clé d'IA ni de secret ici : la clé reste dans n8n. --- */
   CHAT_WEBHOOK_URL: "https://carnetcourse.vercel.app/api/coach",      // ex. https://n8n.example.org/webhook/carnet-coach  ou, sans n8n, https://ton-site.example.org/api/coach (integrations/vercel/README.md)
   CHAT_PROVIDER_NAME: "Google Gemini, États-Unis",    // fournisseur d'IA appelé par n8n, affiché dans la feuille de consentement (ex. "Google Gemini, États-Unis")
+  /* --- Ajustement du plan par l'IA (optionnel) : adresse de la fonction api/plan.js du site (integrations/vercel/README.md). Vide : le bloc est caché. --- */
+  PLAN_AI_URL: "https://carnetcourse.vercel.app/api/plan",
 
   /* --- Informations légales à compléter par l'éditeur (affichées dans les pages légales) --- */
   LEGAL: Object.freeze({

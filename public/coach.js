@@ -49,7 +49,7 @@ const FIXED={
   urgence:"Ce que tu décris peut être sérieux. Arrête l'effort. Si la douleur est forte, si elle touche la poitrine, si tu as du mal à respirer ou si tu as eu un malaise, appelle le 15 ou le 112. Sinon, consulte un médecin avant de reprendre le sport. Je n'ai envoyé ce message à aucun serveur et je ne modifie pas ton plan.",
   tca:"Ce que tu décris peut toucher à ton rapport à l'alimentation. Je ne peux pas te conseiller là-dessus : parles-en à ton médecin traitant ou à un professionnel de santé, qui pourra t'aider sans jugement. En attendant, ne réduis pas ton alimentation et ne t'entraîne pas à jeun. Je n'ai envoyé ce message à aucun serveur."
 };
-function guard(text){ const t=norm(text).slice(0,4000); for(const r of RULES) if(r.re.test(t)) return r.k; const c=t.replace(/ /g,""); if(/sui?cid|killmyself|selfharm|automutil|scarifi|medepeche/.test(c)) return "detresse"; if(/anorex|boulim/.test(c)) return "tca"; return ""; }
+function guard(text){ const raw=String(text); for(const t of [norm(raw).slice(0,4000),norm(raw.replace(/[<>*_~`|^\\]/g,"")).slice(0,4000)]) for(const r of RULES) if(r.re.test(t)) return r.k; const t=norm(raw).slice(0,4000); const c=t.replace(/ /g,""); if(/sui?cid|killmyself|selfharm|automutil|scarifi|medepeche/.test(c)) return "detresse"; if(/anorex|boulim/.test(c)) return "tca"; return ""; }
 
 /* ---- affichage sûr : du texte, jamais du HTML. Mini-markdown : paragraphes, listes, **gras**, `code`. Aucun lien, aucune image. ---- */
 function inline(el,s){ const re=/(\*\*[^*\n]{1,200}\*\*|`[^`\n]{1,200}`)/g; let i=0,m; while((m=re.exec(s))){ if(m.index>i) el.append(s.slice(i,m.index)); const t=m[0], n=document.createElement(t[0]==="*"?"strong":"code"); n.textContent=t.slice(t[0]==="*"?2:1,t[0]==="*"?-2:-1); el.append(n); i=m.index+t.length; } if(i<s.length) el.append(s.slice(i)); }
@@ -80,18 +80,27 @@ function cleanMsgs(a){ const out=[]; if(!Array.isArray(a)) return out;
 function loadStore(){ let o=null; try{ o=JSON.parse(ls.get(K_HIST)||"null"); }catch(e){}
   if(Array.isArray(o)) o={cur:"c0",convs:[{id:"c0",at:Date.now(),m:o}]};   // ancien format : une seule conversation
   const convs=[];
-  if(o&&typeof o==="object"&&Array.isArray(o.convs)) for(const c of o.convs.slice(-MAX_CONV)){ if(!c||typeof c!=="object") continue;
+  if(o&&typeof o==="object"&&Array.isArray(o.convs)) for(const c of o.convs.slice(-60)){ if(!c||typeof c!=="object") continue;
     const id=typeof c.id==="string"&&/^c[0-9a-z]{1,16}$/.test(c.id)? c.id : "", m=cleanMsgs(c.m); if(!id||!m.length||convs.some(x=>x.id===id)) continue;
-    convs.push({id,at:Number.isFinite(+c.at)&&+c.at>0? +c.at : 0,m}); }
-  return {cur:o&&typeof o.cur==="string"&&convs.some(c=>c.id===o.cur)? o.cur : null,convs}; }
+    convs.push({id,at:Number.isFinite(+c.at)&&+c.at>0? Math.min(+c.at,Date.now()) : 0,m}); }
+  convs.sort((a,b)=>a.at-b.at); convs.splice(0,Math.max(0,convs.length-MAX_CONV));   // les moins récemment utilisées partent en premier
+  const del=o&&Array.isArray(o.del)? o.del.filter(x=>typeof x==="string"&&/^c[0-9a-z]{1,16}$/.test(x)).slice(-30) : [];   // conversations supprimées (et non évincées)
+  return {cur:o&&typeof o.cur==="string"&&convs.some(c=>c.id===o.cur)? o.cur : null,convs,del}; }
 let store=loadStore();
 const curConv=()=>store.convs.find(c=>c.id===store.cur)||null;
 let hist=curConv()? curConv().m : [];
+const gone=new Set();   // conversations supprimées dans cet onglet : une fusion ne les fait pas revenir
 function saveHist(touch){ hist=hist.slice(-MAX_HIST); let c=curConv();   // touch=false : rouvrir une conversation ne la fait pas remonter dans la liste
   if(!c&&hist.length){ c={id:"c"+Date.now().toString(36),at:0,m:[]}; store.convs.push(c); store.cur=c.id; }
   if(c){ c.m=hist; if(touch!==false||!c.at) c.at=Date.now(); }
-  store.convs=store.convs.filter(x=>x.m.length).slice(-MAX_CONV);
-  if(store.convs.length) ls.set(K_HIST,JSON.stringify({v:2,cur:store.cur,convs:store.convs})); else ls.del(K_HIST);
+  // fusion avec ce qu'un autre onglet a écrit depuis : ses conversations sont gardées ; la conversation ouverte ici reste celle de cet onglet
+  const disk=loadStore(); for(const x of disk.del) gone.add(x);
+  const byId=new Map(); for(const x of disk.convs) if(!gone.has(x.id)) byId.set(x.id,x);
+  for(const x of store.convs){ const o=byId.get(x.id); if(!o||x.id===store.cur||x.at>=o.at) byId.set(x.id,x); }
+  const all=[...byId.values()].filter(x=>x.m.length).sort((a,b)=>a.at-b.at);
+  while(all.length>MAX_CONV){ const i=all.findIndex(x=>x.id!==store.cur); all.splice(i,1); }   // la moins récemment utilisée part, jamais celle qui est ouverte
+  store.convs=all;
+  if(store.convs.length) ls.set(K_HIST,JSON.stringify({v:2,cur:store.cur,convs:store.convs,del:[...gone].slice(-30)})); else ls.del(K_HIST);
   renderConvs(); }
 
 /* ---- limite de fréquence côté navigateur (la vraie limite est dans n8n : 20 messages par heure et par personne) ---- */
@@ -133,7 +142,7 @@ async function callHook(userText,cons){
 function bubble(role,text,err){ const log=$("#coachLog"), d=document.createElement("div"); d.className="cmsg "+(role==="u"?"me":"bot")+(err?" err":""); const w=document.createElement("span"); w.className="cwho"; w.textContent=role==="u"?"Toi":err?"Coach (erreur)":"Coach"; const b=document.createElement("div"); b.className="cbody";
   if(role==="u"||err) b.textContent=text; else renderMd(b,text); d.append(w,b); log.append(d); log.scrollTop=log.scrollHeight; return d; }
 function paint(){ const log=$("#coachLog"); if(!log) return; log.textContent=""; if(!hist.length){ const p=document.createElement("p"); p.className="muted"; p.textContent="Pose une question sur ton entraînement, tes séances ou ton alimentation. Le coach ne remplace pas un avis médical."; log.append(p); } for(const m of hist) bubble(m.r,m.t,m.e===1); log.scrollTop=log.scrollHeight; }
-function setBusy(v){ busy=v; $("#coachSend").disabled=v; $("#coachIn").readOnly=v; $("#coachCancel").hidden=!v; $("#coachWait").hidden=!v; $("#coachForm").setAttribute("aria-busy",String(v)); }
+function setBusy(v){ const had=document.activeElement===$("#coachSend"); busy=v; $("#coachSend").disabled=v; $("#coachIn").readOnly=v; $("#coachCancel").hidden=!v; $("#coachWait").hidden=!v; $("#coachForm").setAttribute("aria-busy",String(v)); if(v&&had) $("#coachCancel").focus(); }
 function gateState(){
   const g=$("#coachGate"); let msg="";
   if(!B.ready()) msg="Remplis d'abord ton profil (âge compris) : le coach est réservé aux personnes qui l'ont fait.";
@@ -162,7 +171,7 @@ ${chk("coStat",cur&&cur.stats,"Inclure mes statistiques importées","Durée et d
 function renderCfg(){ const c=getConsent(), el=$("#coachCfgTxt"); if(!c){ el.textContent="Rien n'est envoyé tant que tu n'as pas accepté."; return; }
   const inc=[c.profile&&"profil",c.feel&&"ressenti",c.stats&&"statistiques"].filter(Boolean); el.textContent="Envoyé avec tes messages : "+(inc.length?inc.join(", "):"rien d'autre que tes messages")+"."; }
 // effacement des données (ou changement de compte) : mémoire, historique, écran vidés ; la requête en vol est annulée et sa réponse jetée
-function wipe(){ epoch++; hist=[]; store={cur:null,convs:[]}; ls.del(K_HIST); renderConvs(); userCancel=true; if(ctl){ try{ ctl.abort(); }catch(e){} } if($("#coachLog")){ paint(); setBusy(false); const i=$("#coachIn"); if(i){ i.value=""; } const c=$("#coachCount"); if(c) c.textContent="0 / "+MAX_IN; } }
+function wipe(){ epoch++; if($("#coachPop")&&popOpen()) closePop(); hist=[]; store={cur:null,convs:[]}; ls.del(K_HIST); renderConvs(); userCancel=true; if(ctl){ try{ ctl.abort(); }catch(e){} } if($("#coachLog")){ paint(); setBusy(false); const i=$("#coachIn"); if(i){ i.value=""; } const c=$("#coachCount"); if(c) c.textContent="0 / "+MAX_IN; } }
 async function send(text){
   if(busy) return; text=String(text).replace(/\s+/g," ").trim().slice(0,MAX_IN); if(!text) return;
   const now=Date.now(); if(now-lastSend<MIN_GAP){ $("#coachLive").textContent="Patiente un instant avant d'envoyer un autre message."; return; } lastSend=now;
@@ -180,7 +189,7 @@ async function send(text){
   finally{ if(ep===epoch){ setBusy(false); $("#coachIn").focus(); } }
 }
 /* ---- onglet Coach : liste des conversations ; bulle : la conversation ouverte, au-dessus de tous les onglets ---- */
-const when=t=>{ if(!t) return ""; const d=new Date(t), now=new Date(), same=d.toDateString()===now.toDateString();
+const when=t=>{ if(!t||!Number.isFinite(t)||t<0||t>Date.now()+864e5) return ""; const d=new Date(t), now=new Date(), same=d.toDateString()===now.toDateString();
   return same? "aujourd'hui à "+d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}) : d.toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"}); };
 function renderConvs(){ const ul=$("#coachConvs"); if(!ul) return; ul.textContent=""; const ca=$("#coachClearAll"); if(ca) ca.hidden=!store.convs.length;
   if(!store.convs.length){ const li=document.createElement("li"); li.className="cempty"; li.textContent="Aucune conversation pour l'instant. Pose ta première question au coach."; ul.append(li); return; }
@@ -189,27 +198,33 @@ function renderConvs(){ const ul=$("#coachConvs"); if(!ul) return; ul.textConten
     const first=(c.m.find(m=>m.r==="u")||c.m[0]).t, n=c.m.length;
     btn.type="button"; btn.className="cconv"; btn.dataset.conv=c.id; if(c.id===store.cur) li.className="cur";
     main.className="m-main"; t.className="m-t"; t.textContent=first.length>90? first.slice(0,88)+"…" : first;   // texte seulement
-    sub.className="m-s"; sub.textContent=when(c.at)+" · "+n+" message"+(n>1?"s":"")+(c.id===store.cur?" · en cours":"");
+    sub.className="m-s"; sub.textContent=(when(c.at)?when(c.at)+" · ":"")+n+" message"+(n>1?"s":"")+(c.id===store.cur?" · en cours":"");
     main.append(t,sub); btn.append(main); btn.setAttribute("aria-label","Rouvrir la conversation : "+t.textContent+", "+sub.textContent);
     del.type="button"; del.className="del"; del.dataset.delconv=c.id; del.textContent="×"; del.setAttribute("aria-label","Supprimer la conversation : "+t.textContent);
     li.append(btn,del); ul.append(li); } }
 const popOpen=()=>!$("#coachPop").hidden;
-function openPop(focusIn){ const p=$("#coachPop"), f=$("#coachFab"); p.hidden=false; f.setAttribute("aria-expanded","true"); f.setAttribute("aria-label","Fermer le coach"); document.documentElement.classList.add("cpop-on");
+const fullPop=()=>window.matchMedia("(max-width:720px)").matches;
+function openPop(focusIn){ const p=$("#coachPop"), f=$("#coachFab"); p.hidden=false; p.setAttribute("aria-modal",String(fullPop())); f.setAttribute("aria-expanded","true"); f.setAttribute("aria-label","Fermer le coach"); document.documentElement.classList.add("cpop-on");
   const ok=gateState(); paint(); renderCfg(); if(focusIn!==false) setTimeout(()=>{ const i=$("#coachIn"); if(ok&&i&&!i.disabled) i.focus(); else $("#coachClose").focus(); },0); }
 function closePop(){ const p=$("#coachPop"), f=$("#coachFab"); if(p.hidden) return; const back=p.contains(document.activeElement); p.hidden=true; f.setAttribute("aria-expanded","false"); f.setAttribute("aria-label","Ouvrir le coach"); document.documentElement.classList.remove("cpop-on"); if(back) f.focus(); }
-function openConv(id){ if(busy) return; const c=store.convs.find(x=>x.id===id); if(!c) return; store.cur=id; hist=c.m; saveHist(false); openPop(); }
-function newConv(){ if(busy) return; store.cur=null; hist=[]; saveHist(false); const i=$("#coachIn"); if(i){ i.value=""; $("#coachCount").textContent="0 / "+MAX_IN; } openPop(); $("#coachLive").textContent="Nouvelle conversation."; }
-function delConv(id){ if(busy&&id===store.cur) return; store.convs=store.convs.filter(x=>x.id!==id); if(store.cur===id){ store.cur=null; hist=[]; } saveHist(); if(popOpen()) paint(); $("#coachLive").textContent="Conversation supprimée."; }
+const busyMsg=()=>{ $("#coachLive").textContent="Attends la réponse du coach (ou annule l'envoi) avant de changer de conversation."; if(!popOpen()) openPop(false); };
+function openConv(id){ if(busy){ if(id!==store.cur) busyMsg(); else openPop(); return; } const c=store.convs.find(x=>x.id===id); if(!c) return; store.cur=id; hist=c.m; saveHist(false); openPop(); }
+function newConv(){ if(busy){ busyMsg(); return; } store.cur=null; hist=[]; saveHist(false); const i=$("#coachIn"); if(i){ i.value=""; $("#coachCount").textContent="0 / "+MAX_IN; } openPop(); $("#coachLive").textContent="Nouvelle conversation."; }
+function delConv(id){ if(busy&&id===store.cur) return; gone.add(id); store.convs=store.convs.filter(x=>x.id!==id); if(store.cur===id){ store.cur=null; hist=[]; } saveHist(false); if(popOpen()) paint(); $("#coachLive").textContent="Conversation supprimée."; }
 function init(){
   const tab=$("#tab-coach"), panel=$("#p-coach"); if(!tab||!panel||!B) return;
   if(!URL_OK){ tab.hidden=true; panel.remove(); tab.remove(); for(const id of ["#coachFab","#coachPop"]){ const x=$(id); if(x) x.remove(); } return; }   // non configuré : onglet caché, rien ne tourne
   tab.hidden=false; paint(); renderCfg(); renderConvs();
-  const fab=$("#coachFab"); fab.hidden=false;
+  const fab=$("#coachFab"); fab.hidden=false; document.documentElement.classList.add("cfab-on");
   fab.addEventListener("click",()=>popOpen()? closePop() : openPop());
   $("#coachClose").addEventListener("click",closePop);
-  $("#coachPop").addEventListener("keydown",e=>{ if(e.key==="Escape"&&!document.querySelector(".sheet-bg")){ e.preventDefault(); closePop(); } });
+  document.addEventListener("keydown",e=>{ if(!popOpen()||document.querySelector(".sheet-bg")) return;
+    if(e.key==="Escape"){ e.preventDefault(); closePop(); return; }
+    if(e.key==="Tab"&&fullPop()){ const p=$("#coachPop"), f=[...p.querySelectorAll('button,textarea,input,select,a[href],[tabindex]:not([tabindex="-1"])')].filter(x=>!x.disabled&&!x.hidden&&x.offsetParent!==null); if(!f.length) return;
+      const a=document.activeElement, i=f.indexOf(a);
+      if(!p.contains(a)||(e.shiftKey&&i===0)||(!e.shiftKey&&i===f.length-1)){ e.preventDefault(); (e.shiftKey? f[f.length-1] : f[0]).focus(); } } },true);   // phase de capture : une feuille ouverte est vue avant qu'Échap ne la ferme
   $("#coachNew").addEventListener("click",newConv); $("#coachNew2").addEventListener("click",newConv);
-  $("#coachClearAll").addEventListener("click",()=>{ if(busy) return; store={cur:null,convs:[]}; hist=[]; ls.del(K_HIST); renderConvs(); paint(); $("#coachLive").textContent="Toutes les conversations sont effacées."; });
+  $("#coachClearAll").addEventListener("click",()=>{ if(busy){ busyMsg(); return; } store={cur:null,convs:[]}; hist=[]; ls.del(K_HIST); renderConvs(); paint(); $("#coachLive").textContent="Toutes les conversations sont effacées."; });
   $("#coachConvs").addEventListener("click",e=>{ const d=e.target.closest("[data-delconv]"); if(d){ delConv(d.dataset.delconv); return; } const b=e.target.closest("[data-conv]"); if(b) openConv(b.dataset.conv); });
   { const nav=document.querySelector("nav.tabs"), seg=nav&&nav.querySelector(".segc");   // barre d'onglets défilante : indice visible (chevron) et onglet actif ramené à l'écran
     if(seg){ const more=()=>nav.classList.toggle("tabs-more",seg.scrollWidth>seg.clientWidth+2&&seg.scrollLeft+seg.clientWidth<seg.scrollWidth-2);
@@ -223,7 +238,13 @@ function init(){
   $("#coachCfg").addEventListener("click",e=>consentSheet(e.currentTarget));
   $("#coachClear").addEventListener("click",()=>{ if(busy) return; delConv(store.cur); $("#coachLive").textContent="Conversation effacée."; });
   new MutationObserver(()=>{ if(!panel.hidden) gateState(); }).observe(panel,{attributes:true,attributeFilter:["hidden"]});
-  window.addEventListener("storage",e=>{ if(e.storageArea!==localStorage) return; if(e.key===null||e.key===K_HIST&&e.newValue===null) wipe(); else if(e.key===K_HIST&&!busy){ store=loadStore(); hist=curConv()? curConv().m : []; renderConvs(); if(popOpen()) paint(); } });
+  window.addEventListener("storage",e=>{ if(e.storageArea!==localStorage) return; if(e.key===null||e.key===K_HIST&&e.newValue===null) wipe(); else if(e.key===K_HIST){
+    // autre onglet : la liste suit, mais la conversation ouverte ici ne change pas (sauf si elle a été supprimée là-bas, hors envoi en cours)
+    const d=loadStore(), mine=curConv(); store={cur:null,convs:d.convs};
+    // conversation ouverte ici absente là-bas : supprimée dans l'autre onglet => on la quitte (sauf envoi en cours) ; seulement évincée (plus de 12) => on la garde
+    for(const x of d.del) gone.add(x);
+    if(mine){ const o=d.convs.find(c=>c.id===mine.id); if(o){ if(busy||mine.m.length>o.m.length) o.m=mine.m; store.cur=o.id; } else if(busy||!gone.has(mine.id)){ gone.delete(mine.id); store.convs.push(mine); store.cur=mine.id; } }
+    hist=curConv()? curConv().m : []; renderConvs(); if(popOpen()&&!busy) paint(); } });
   window.addEventListener("pagehide",()=>{ if(ctl) ctl.abort(); });
 }
 window.CarnetCoach=Object.freeze({guard,renderMd,cleanReply,hookUrl,wipe,enabled:()=>!!URL_OK,COACH_V});

@@ -20,7 +20,7 @@ const FAKE_KEY=b64({alg:"HS256",typ:"JWT"})+"."+b64({role:"anon",iss:"supabase",
 const SERVICE_KEY=b64({alg:"HS256",typ:"JWT"})+"."+b64({role:"service_role",iss:"supabase"})+"."+"signaturesignaturesig";
 // config.js de test : valeurs valides (aucun réseau : le client est simulé)
 const cfgJs=(extra={})=>()=>{ const c=fs.readFileSync(path.join(ROOT,"config.js"),"utf8");
-  const o={SUPABASE_URL:"https://abcdefghij.supabase.co",SUPABASE_ANON_KEY:FAKE_KEY,PROVIDERS:["google","azure","github"],CHAT_WEBHOOK_URL:"",CHAT_PROVIDER_NAME:"",EMAIL_LOGIN:false,...extra};   // Coach coupé par défaut, quelle que soit la config de production
+  const o={SUPABASE_URL:"https://abcdefghij.supabase.co",SUPABASE_ANON_KEY:FAKE_KEY,PROVIDERS:["google","azure","github"],CHAT_WEBHOOK_URL:"",CHAT_PROVIDER_NAME:"",PLAN_AI_URL:"",EMAIL_LOGIN:false,...extra};   // Coach coupé par défaut, quelle que soit la config de production
   let s=c; for(const [k,v] of Object.entries(o)) s=s.replace(new RegExp(k+':\\s*(?:"[^"]*"|\\[[^\\]]*\\]|true|false)'),k+": "+JSON.stringify(v)); return s; };
 // config.js de test « non configuré » (site 100 % invité), indépendant des valeurs de production
 const blankCfgJs=()=>cfgJs({SUPABASE_URL:"",SUPABASE_ANON_KEY:""})();

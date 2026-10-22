@@ -1183,3 +1183,25 @@ html.cpop-on .cfab{background:var(--raise);color:var(--fg)}
 .csos{margin:12px 0 0;font-size:.95rem}
 .cconvs[hidden]{display:none}
 .cpop .sh-x{width:40px;height:40px;flex:none;border-radius:50%;border:0;background:var(--fill);color:var(--fg);font-size:1.4rem;line-height:1;cursor:pointer;display:grid;place-items:center}
+/* ajustement du plan par l'IA */
+.aip-act{display:flex;flex-wrap:wrap;gap:10px}
+.aip-act .btn{min-height:48px;padding-inline:20px}
+.aitip b{margin-right:4px}
+#aipWish{width:100%;resize:vertical;min-height:72px}
+/* bulle du Coach : jamais par-dessus la bannière cookies ni sur l'accueil (le coach y est inutilisable) ; toasts au-dessus d'elle */
+.wrap[hidden]~.cfab{display:none}
+html.ck-on .cfab:not([aria-expanded="true"]){z-index:33}   /* sous la bannière cookies (z-index 34) : ses boutons restent cliquables */
+#toasts{z-index:40}
+@media (max-width:720px){
+  html.cfab-on .wrap:not([hidden])~#toasts{bottom:calc(132px + env(safe-area-inset-bottom,0px))}
+  html.cpop-on,html.cpop-on body{overflow:hidden}
+}
+/* ordinateur : la fenêtre du Coach laisse visibles les boutons de la liste des conversations */
+@media (min-width:1000px){ html.cpop-on #p-coach{padding-right:460px} }
+/* écrans moyens : la fenêtre recouvrirait la droite de la liste ; les boutons de suppression passent à gauche */
+@media (min-width:721px) and (max-width:999px){ html.cpop-on .cconvs li{padding:0 0 0 8px} html.cpop-on .cconvs .del{order:-1} }
+/* textes longs sans espaces (conseils de l'IA) : jamais de débordement horizontal */
+.alert,.rg-keep,.rg-sub{overflow-wrap:anywhere}
+.btn[aria-disabled="true"]{opacity:.65;cursor:progress}
+.sheet .grp .chk{padding-inline:12px}
+@media (max-width:720px){ .aip-act .btn{flex:1 1 100%} }

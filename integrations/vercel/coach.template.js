@@ -27,7 +27,7 @@ module.exports = async function handler(req, res) {
   const h = req.headers || {};
   if (req.method !== "POST") { res.setHeader("Allow", "POST"); return send(res, 405, "Méthode non autorisée."); }
   // même origine seulement : un autre site ne peut pas appeler cette fonction depuis un navigateur
-  if (h.origin) { let o = ""; try { o = new URL(h.origin).host; } catch (e) {} if (!o || o !== String(h["x-forwarded-host"] || h.host || "").split(",")[0].trim()) return send(res, 403, "Origine refusée."); }
+  if (h.origin) { let o = ""; try { o = new URL(h.origin).host; } catch (e) {} if (!o || o !== String(h["x-forwarded-host"] || h.host || "").split(",")[0].trim().toLowerCase()) return send(res, 403, "Origine refusée."); }
   const SUPA = String(process.env.SUPABASE_URL || "").trim().replace(/\/$/, ""), ANON = String(process.env.SUPABASE_ANON_KEY || "").trim(), KEY = String(process.env.GEMINI_API_KEY || "").trim();
   if (!/^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(SUPA) || !ANON || !KEY) return send(res, 500, "Le coach n'est pas configuré.");
   // le nom du modèle va dans l'URL de l'API : seuls minuscules, chiffres, points et tirets
