@@ -6,7 +6,8 @@ const EXPOSE="window.__T={buildPlan,profileNums,planSig,qOpts,sessionKm,zoneMins
 const expose=(src,extra)=>{ const s=src.replace(/initAccount\(\);\n\}\)\(\);\s*$/,"initAccount();\n"+EXPOSE+(extra||"")+"};\n})();\n"); if(s===src) throw new Error("exposition impossible"); return s; };
 const appB=()=>expose(fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8"),",prefParse,prefClean");
 // app.js de main (avant la fonctionnalité) : référence pour l'ajustement IA
-let mainSrc=null; try{ mainSrc=execSync("git show main:public/app.js",{cwd:L.ROOT,encoding:"utf8",maxBuffer:1<<26}); }catch(e){}
+// référence : dernier commit avant le refactor applyAi/swapQ (son app.js ET son index.html, pour comparer à l'identique)
+const REF="a45501c"; let mainSrc=null, mainHtml=null; try{ mainSrc=execSync("git show "+REF+":public/app.js",{cwd:L.ROOT,encoding:"utf8",maxBuffer:1<<26}); mainHtml=execSync("git show "+REF+":public/index.html",{cwd:L.ROOT,encoding:"utf8",maxBuffer:1<<26}); }catch(e){}
 const appM=()=>expose(mainSrc,"");
 const prof={sexe:"H",age:35,taille:178,poids:80,cible:"75",niveau:"int",objectif:"10",volume:25,longest:10,seances:"5",renfo:"2",longDay:"6",start:"2026-09-28",deficit:300,bonus:100,adj:0,lieu:"dehors",equip:"salle",types:["seuil","vma","cotes","fartlek","ld"],cross:"non",raceDate:""};
 const seed=o=>JSON.stringify({profile:{...prof,...o},isExample:false,log:[],week:2,seen:15});
@@ -98,8 +99,8 @@ const seed=o=>JSON.stringify({profile:{...prof,...o},isExample:false,log:[],week
  if(FZ.easyDown.length) console.log("     info : part de facile en baisse (mais ≥ 80 %) dans "+FZ.easyDown.length+"+ cas, ex. "+JSON.stringify(FZ.easyDown[0]).slice(0,300));
 
  /* ---- 3. ajustement IA : même résultat que main (refactor autour de swapQ) ---- */
- if(!mainSrc) ok(false,"R0 main:public/app.js introuvable");
- else { const SM=await L.serve({"/config.js":L.cfgJs(),"/app.js":appM}); const pm=await mk(SM);
+ if(!mainSrc) ok(false,"R0 "+REF+":public/app.js introuvable");
+ else { const SM=await L.serve({"/config.js":L.cfgJs(),"/app.js":appM,"/":()=>mainHtml,"/index.html":()=>mainHtml}); const pm=await mk(SM);
    const run=(pg,N)=>pg.evaluate(N=>{ const T=window.__T; T.aip={}; let s=777; const r=()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; }, pick=a=>a[Math.floor(r()*a.length)]; const out=[];
      for(let i=0;i<N;i++){ const obj=pick(["forme","5","10","21","42"]), o={sport:r()<.8?"course":"trail",niveau:pick(["deb","int","conf"]),objectif:obj,seances:String(pick([3,4,5,6])),renfo:String(pick([0,1,2])),volume:Math.round(8+r()*55),longest:Math.round(4+r()*22),cplx:pick(["simple","standard","avance"]),lieu:pick(["dehors","mixte","tapis"]),
        types:["seuil","vma","cotes","fartlek","ld"].filter(()=>r()<.8),start:pick(["2026-09-28","2026-10-26"]),raceDate:obj!=="forme"&&r()<.7?"2027-0"+pick([2,4,6])+"-14":""};
