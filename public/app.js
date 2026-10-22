@@ -336,7 +336,7 @@ const IMP14=(function(){
 })();
 /*PURE14:end*/
 
-const EXAMPLE = {sexe:"H",age:32,taille:178,poids:82,cible:76,mg:"",activite:"1.25",niveau:"int",objectif:"10",volume:20,longest:10,ref:"none",refVal:"",fcmax:"",seances:"4",renfo:"2",longDay:"6",start:todayIso(),deficit:300,bonus:100,adj:0,lieu:"dehors",equip:"salle",types:["seuil","vma","cotes","fartlek","ld"],cross:"non",sport:"course",sObj:"",hSem:"",cplx:"standard"};
+const EXAMPLE = {sexe:"H",age:32,taille:178,poids:82,cible:76,mg:"",activite:"1.25",niveau:"int",objectif:"10",volume:20,longest:10,ref:"none",refVal:"",fcmax:"",seances:"4",renfo:"2",longDay:"6",start:todayIso(),deficit:300,bonus:100,adj:0,lieu:"dehors",equip:"salle",types:["seuil","vma","cotes","fartlek","ld"],cross:"non",sport:"course",sObj:"",hSem:"",cplx:"standard",pref:""};
 
 let state = {profile:{...EXAMPLE}, isExample:true, log:[], week:1, feel:{}, acts:{}, rhr:{}};
 let save = ()=>{};
@@ -390,6 +390,8 @@ function profileNums(p){
   n.minor=n.age<18;
   // complexité du plan : simple (une seule séance d'intensité, renforcement de base), standard, avancé (séances plus fournies, jamais pour un débutant)
   n.cplx=["simple","standard","avance"].includes(p.cplx)?p.cplx:"standard";
+  // préférences de séances en texte libre : envoyées à l'IA (ajustement du plan) ; sans IA, seuls quelques motifs simples et sûrs s'appliquent (prefParse)
+  n.pref=prefClean(p.pref).replace(/\s+/g," ").trim(); n.prefK=prefParse(n.pref);
   n.seances=+p.seances; n.renfo=+p.renfo; n.longDay=+p.longDay; n.activite=+p.activite;
   if(![3,4,5,6].includes(n.seances)) n.seances=4;
   if(![0,1,2].includes(n.renfo)) n.renfo=2;
@@ -532,6 +534,48 @@ function qualityKinds(p,w,phase){
 const SUBST={seuil:["seuil","fartlek","vma"],vma:["vma","seuil","fartlek"],cotes:["cotes","seuil","fartlek"],fartlek:["fartlek","seuil","vma"],allure:["allure"]};
 // plan simple : jamais de VMA, même en remplacement d'une séance décochée
 function pickKind(k,p,avoid){ if(!k)return null; const ok=(SUBST[k]||[k]).filter(c=>c==="allure"||p.types.includes(c)&&!(p.cplx==="simple"&&c==="vma")); return ok.find(c=>c!==avoid) || (avoid?null:ok[0]) || null; }
+/* ---- préférences de séances (profil, texte libre de 300 caractères au plus) ----
+   L'ajustement par l'IA reçoit le texte tel quel (donnée, jamais instruction). Sans IA, seuls ces motifs sont reconnus (accents et majuscules ignorés),
+   phrase par phrase (coupure sur . ; ! ? et retour à la ligne), puis proposition par proposition (coupure sur , : « mais » et « et ») :
+   - types : côtes (« côtes », « montées », « la côte », « en côte », « une côte », « des côtes »), fartlek, seuil (« seuil », « tempo »),
+     VMA (« VMA », « fractionné », « intervalles »). L'allure course n'est jamais concernée.
+   - refus, mot placé AVANT le type : « pas » (sauf « pas que », « pas seulement », « pas uniquement »), « pas trop », « sans », « jamais », « aucun(e) »,
+     « évite(r) », « déteste », « horreur », « ne … plus », « n'en … plus »
+     (« pas de côtes », « sans VMA », « je n'aime pas le fractionné », « je ne veux plus de côtes ») : le type n'est plus proposé à l'IA comme
+     remplaçant et, sans IA, une séance de ce type est remplacée par un autre remplaçant permis (un type aimé d'abord).
+   - envie, mot placé AVANT le type : « aime », « adore », « préfère », « plutôt », « privilégie », « favorise », « envie » (« j'aime le fartlek »,
+     « plutôt du seuil ») : sans IA, une séance plus dure dont ce type fait partie des remplaçants permis passe à ce type (une fois par semaine
+     au plus, jamais deux fois le même type dans la semaine). « Je préfère A à B », « A plutôt que B » : seul A compte.
+   - une proposition sans mot de refus ni d'envie reprend celui de la proposition précédente reliée par « , » ou « et » (« j'aime les côtes et le
+     fartlek »), jamais à travers « mais ». Refus et envie sur le même type : refus.
+   - ignoré (laissé à l'IA) : une proposition qui cite un jour ou un moment (lundi…, semaine, week-end, matin, soir) ou une gêne (peur, douleur,
+     mal, souci, problème, blessure) ; une condition (si, quand, lorsque, sauf) neutralise sa proposition et toute la suite de la phrase
+     (« si je suis fatigué, pas de VMA »).
+   Garde-fous du changement sans IA (prefApply) : jamais pour un débutant, ni en affûtage, ni la semaine de course ; seulement vers un type plus
+   doux (fartlek < côtes < seuil < VMA) ; la séance changée n'est ni plus longue (km) ni plus intense (minutes dures, aucune marge), et la part de
+   facile de la semaine ne baisse pas. Un type REFUSÉ sans remplaçant valide (les sprints en côte comptent moins de minutes dures que toute autre
+   séance ; rien n'est plus doux que le fartlek) devient un footing facile de distance au plus égale, avec lignes droites si elles sont cochées :
+   moins de minutes dures, plus de facile. Une envie seule ne change rien si aucun remplaçant n'est valide. Seule « j'aime le fartlek » peut agir
+   parmi les envies (PREF_LIVE). Les volumes, les jours et le nombre de séances ne changent jamais. */
+const PREF0={no:[],like:[]}, PREF_HARD={fartlek:1,cotes:1.5,seuil:2,vma:3}, PREF_LIVE={like:["fartlek"]};
+// caractères de contrôle et invisibles SUPPRIMÉS (comme CLEAN côté serveur : « fi\u200bnir » redevient « finir » pour le filet de sécurité) ; tabulation et retours à la ligne → espace
+const prefClean=v=> typeof v==="string"? Array.from(v.replace(/[\t\n\r]/g," ").replace(/[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g,"")).slice(0,300).join("") : "";
+const PREF_KIND=[["cotes",/\b(cotes|montees?|(la|en|une|des) cotes?)\b/],["fartlek",/\bfartleks?\b/],["seuil",/\b(seuils?|tempo)\b/],["vma",/\b(vma|fractionnes?|intervalles?)\b/]];
+function prefParse(t){ const out={no:[],like:[]}; if(!t) return out;
+  const s=t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[’`]/g,"'");
+  for(const sent of s.split(/[.;!?\n]+/)){ const parts=sent.split(/(,|:|\bmais\b|\bet\b)/); let carry=null;
+    for(let j=0;j<parts.length;j+=2){ const c=parts[j]; if(j&&parts[j-1]==="mais") carry=null;
+      if(/\b(si|s'il|s'ils|quand|lorsque|lorsqu|sauf)\b/.test(c)) break;   // condition : la suite de la phrase en dépend
+      if(/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|semaines?|week ?-?ends?|matins?|soirs?|midi|peur|douleurs?|mal|souci|problemes?|blessures?|blesse\w*|gene\w*|derange\w*)\b/.test(c)){ carry=null; continue; }
+      const at=re=>{ const m=re.exec(c); return m? m.index : -1; };
+      let neg=at(/\bpas\b(?! (que|qu'|seulement|uniquement)\b)|\b(sans|jamais|aucune?|evit\w*|detest\w*|horreur)\b|\bne \w+ plus\b|\bn'(en )?\w+ plus\b/), yes=at(/\b(aime|adore|prefere\w*|plutot|privilegi\w*|favoris\w*|envie)\b/);
+      const cmp=at(/\b(au|aux|a la|a l'|que)\b/);
+      if(neg<0&&yes<0){ if(carry==="no") neg=-.5; else if(carry==="yes") yes=-.5; }   // « … et le fartlek » : même sens que la proposition précédente
+      else carry= neg>=0&&(yes<0||neg<yes)? "no" : "yes";
+      for(const [k,re] of PREF_KIND){ const i=at(re); if(i<0) continue;
+        if(neg!==-1&&neg<i){ if(!out.no.includes(k)) out.no.push(k); }
+        else if(yes!==-1&&yes<i&&!(cmp>yes&&cmp<i)&&!out.like.includes(k)) out.like.push(k); } } }
+  out.like=out.like.filter(k=>!out.no.includes(k)); return out; }
 const onTapis=(p,kind)=> p.lieu==="tapis" || (p.lieu==="mixte" && kind==="q");
 // MET d'un effort léger (Compendium 2011) : la séance remplace un footing facile
 const CROSS={velo:["Vélo facile",4.8],elliptique:["Elliptique facile",4.6],rameur:["Rameur facile",4.8],natation:["Natation facile",5.8]};
@@ -562,18 +606,43 @@ const LONG_NEED={5:3.5,10:7,21:16,42:28};
 const reachable=(o,wk,deb)=> !LONG_NEED[o] || (!(deb&&((o==="21"&&wk.length<30)||(o==="42"&&wk.length<52))) && wk.topLong>=LONG_NEED[o]-.05);
 function buildPlan(p){
   if(evSport(p.sport)){ const w=buildSportPlan(p); applyAi(w,p); return w; }
-  const weeks=buildPlanRun(p); applyAi(weeks,p); if(p.sport==="trail") trailize(weeks,p); return weeks;
+  const weeks=buildPlanRun(p); prefApply(weeks,p); applyAi(weeks,p); if(p.sport==="trail") trailize(weeks,p); return weeks;
 }
 /* ---- ajustement par l'IA (api/plan.js) : appliqué sur le plan déjà construit, jamais au-delà de ses limites ----
    L'IA choisit le type des séances d'intensité parmi les remplaçants permis, peut alléger une semaine (sa dernière séance d'intensité devient un footing
    de même distance) et donne un conseil par semaine. Une séance n'est remplacée que si elle reste au plus aussi longue et aussi intense,
    et si la part de facile de la semaine ne baisse pas. Rien ne change en affûtage ni la semaine de course. Le profil modifié depuis : ajustement ignoré. */
-function planSig(p){ const t=JSON.stringify([p.sport,p.sObj,p.objectif,p.runObjectif,p.niveau,p.seances,p.renfo,p.longDay,p.raceDate||"",p.start||"",p.volume,p.longest,p.ref,p.refVal,(p.types||[]).join(","),p.lieu,p.equip,p.cross,p.cplx,p.hSem,p.startIdx,!!p.minor]);
+// préférences ajoutées seulement si écrites : les ajustements déjà enregistrés sans préférences restent valables
+function planSig(p){ const a=[p.sport,p.sObj,p.objectif,p.runObjectif,p.niveau,p.seances,p.renfo,p.longDay,p.raceDate||"",p.start||"",p.volume,p.longest,p.ref,p.refVal,(p.types||[]).join(","),p.lieu,p.equip,p.cross,p.cplx,p.hSem,p.startIdx,!!p.minor];
+  if(p.pref) a.push(p.pref); const t=JSON.stringify(a);
   let h=5381; for(let i=0;i<t.length;i++) h=((h*33)^t.charCodeAt(i))>>>0; return h.toString(36); }
 function aiOf(p){ if(p.noAi) return null; const a=state&&state.aip&&state.aip.p; return a&&!a.x&&a.sig===planSig(p)? a : null; }
 // remplaçants permis : les séances cochées dans le profil, proches de celle du plan (SUBST) ; l'allure course et les séances d'un débutant ne changent pas
-function qOpts(k,p){ if(p.niveau==="deb"||k==="allure"||!SUBST[k]) return [k]; return [k,...SUBST[k].filter(c=>c!==k&&c!=="allure"&&p.types.includes(c)&&!(p.cplx==="simple"&&c==="vma"))]; }
-// avant / après : résumé de la séance du plan remplacée par l'IA, gardé sur la séance (run.aiFrom) ; recalculé à chaque construction du plan, jamais enregistré
+// un type refusé dans les préférences n'est pas proposé à l'IA
+function qOpts(k,p){ if(p.niveau==="deb"||k==="allure"||!SUBST[k]) return [k]; const no=(p.prefK||PREF0).no; return [k,...SUBST[k].filter(c=>c!==k&&c!=="allure"&&p.types.includes(c)&&!(p.cplx==="simple"&&c==="vma")&&!no.includes(c))]; }
+// remplace la séance d'intensité d de la semaine par le type k, raccourcie au besoin, dans les marges t (km, minutes dures, part de facile) ; renvoie son jour ou -1
+// préférences : aucune marge (jamais plus long, jamais plus de minutes dures, part de facile jamais en baisse)
+const AI_TOL={km:1.05,kmA:.3,h:1.1,hA:.5,z:.8}, PREF_TOL={km:1,kmA:.01,h:1,hA:1e-9,z:1};
+function swapQ(wk,d,k,p,vma,t,mark,note){ const old=d.run, km0=sessionKm(old,vma), h0=old.hardMin||0, z0=zoneMins(wk.days).easy, i=wk.days.indexOf(d); let o={...old.qo};
+  for(let n=0;n<4;n++){ const s=quality(k,wk.w,p,vma,wk.phase,o);
+    if(s&&sessionKm(s,vma)<=km0*t.km+t.kmA&&(s.hardMin||0)<=h0*t.h+t.hA){ wk.days[i]={...d,run:{...s,...mark,note:(s.note?s.note+" ":"")+note}};
+      if(zoneMins(wk.days).easy>=Math.min(z0,t.z)-1e-9) return i; wk.days[i]=d; }
+    o= o.short? {...o,fewer:(o.fewer||0)+1} : {...o,short:true}; }
+  return -1; }
+// préférences de séances, sans IA (motifs de prefParse) : type refusé remplacé (type plus doux, sinon footing facile), type aimé choisi ; jamais plus long ni plus intense
+function prefApply(weeks,p){ const pf=p.prefK; if(!pf||(!pf.no.length&&!pf.like.length)||p.niveau==="deb"||evSport(p.sport)) return; const vma=vmaOf(p).vma;
+  for(const wk of weeks){ if(wk.phase==="taper"||wk.phase==="race") continue;
+    const qd=()=>wk.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind&&d.kind!=="before");
+    for(const d of qd()){ const k0=d.run.kind; if(!PREF_HARD[k0]) continue;
+      const used=qd().filter(o=>o!==d).map(o=>o.run.kind); if(!pf.no.includes(k0)&&used.some(c=>pf.like.includes(c))) continue;   // un type aimé une fois par semaine suffit
+      const opts=qOpts(k0,p).filter(c=>c!==k0&&!used.includes(c)&&PREF_HARD[c]<PREF_HARD[k0]), rank=c=>{ const i=pf.like.indexOf(c); return i<0? 9 : i; };
+      const want= pf.no.includes(k0)? opts.sort((a,b)=>rank(a)-rank(b)) : pf.like.includes(k0)? [] : opts.filter(c=>pf.like.includes(c)).sort((a,b)=>rank(a)-rank(b));
+      let done=false; for(const k of want) if(swapQ(wk,d,k,p,vma,PREF_TOL,{pref:1},"Type choisi d'après tes préférences de séances.")>=0){ done=true; break; }
+      // refus explicite sans remplaçant valide : footing facile de même distance au plus (comme l'allègement de l'IA)
+      if(!done&&pf.no.includes(k0)){ const i=wk.days.indexOf(d), km=sessionKm(d.run,vma); let k2=Math.max(1.5,Math.floor(km*2)/2); while(k2>1.5&&sessionKm(easyRun(k2,vma),vma)>km+1e-9) k2-=.5;
+        if(sessionKm(easyRun(k2,vma),vma)<=km+1e-9){ const L={cotes:"côtes",fartlek:"fartlek",seuil:"seuil",vma:"VMA"}[k0];
+          wk.days[i]={...d,run:{...easyRun(k2,vma,"Footing facile",p.types.includes("ld")?4:0),pref:1,note:"Préférence : pas de "+L+". Footing facile à la place, même distance au plus."},kind:"easy"}; } } } } }
+// avant / après : résumé de la séance remplacée par l'IA (celle affichée avant l'IA, préférences comprises), gardé sur la séance (run.aiFrom) ; recalculé à chaque construction du plan, jamais enregistré
 const runSum=r=>r.blocks.map(b=>b.l+(b.min&&!b.mix&&b.z!=="walk"&&b.work==null?" "+fmt0(b.min)+" min":"")).join(" · ");
 const aiSnap=(r,vma,trail)=>({t:trail? trailTitle(r.title) : r.title,s:runSum(r),km:sessionKm(r,vma),min:sessionDur(r)});   // trail : titre tel que trailize l'affichera
 function applyAi(weeks,p){
@@ -588,14 +657,10 @@ function applyAi(weeks,p){
     if(x.f||x.c) wk.aiTip={f:x.f,c:x.c};
     if(!run||wk.phase==="taper"||wk.phase==="race") continue;
     const qa=()=>wk.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind&&d.kind!=="before");   // toutes : l'IA a reçu les options dans cet ordre
-    const lk=new Set(wk.days.filter(d=>lockedDay(wk.w,d)).map(d=>d.i));   // verrous évalués sur les séances d'origine, avant toute modification
+    const lk=new Set(wk.days.filter(d=>lockedDay(wk.w,d)).map(d=>d.i));   // verrous évalués sur les séances d'origine (avant l'IA), avant toute modification
     const qd=()=>qa().filter(d=>!lk.has(d.i));
     qa().forEach((d,j)=>{ const k=x.q[j], old=d.run; if(lk.has(d.i)||!k||k===old.kind||!qOpts(old.kind,p).includes(k)||qa().some(o=>o!==d&&o.run.kind===k)) return;   // pas deux fois le même type dans la semaine
-      const km0=sessionKm(old,vma), h0=old.hardMin||0, z0=zoneMins(wk.days).easy, i=wk.days.indexOf(d); let o={...old.qo};
-      for(let t=0;t<4;t++){ const s=quality(k,wk.w,p,vma,wk.phase,o);
-        if(s&&sessionKm(s,vma)<=km0*1.05+.3&&(s.hardMin||0)<=h0*1.1+.5){ wk.days[i]={...d,run:{...s,ai:1,aiFrom:old.aiFrom||aiSnap(old,vma,trail),note:(s.note?s.note+" ":"")+"Séance choisie par l'IA pour cette semaine."}};
-          if(zoneMins(wk.days).easy>=Math.min(z0,.8)-1e-9){ mod.add(wk.w+":"+i); return; } wk.days[i]=d; }
-        o= o.short? {...o,fewer:(o.fewer||0)+1} : {...o,short:true}; } });
+      const i=swapQ(wk,d,k,p,vma,AI_TOL,{ai:1,aiFrom:old.aiFrom||aiSnap(old,vma,trail)},"Séance choisie par l'IA pour cette semaine."); if(i>=0) mod.add(wk.w+":"+i); });
     // allègement : jamais pour un débutant (ses séances sont déjà en facile continu) ; le footing ne dépasse jamais la distance de la séance remplacée
     if(x.a&&p.niveau!=="deb"){ const qs=qd(), d=qs[qs.length-1]; if(d){ const i=wk.days.indexOf(d), km=d.run.aiFrom? d.run.aiFrom.km : sessionKm(d.run,vma); let k2=Math.max(1.5,Math.floor(km*10)/10); while(k2>1.5&&sessionKm(easyRun(k2,vma),vma)>km+1e-9) k2=Math.round((k2-.1)*10)/10;
       wk.days[i]={...d,run:{...easyRun(k2,vma,"Footing facile (semaine allégée)",0),ai:1,aiLight:1,aiFrom:d.run.aiFrom||aiSnap(d.run,vma,trail),note:"Allégée par l'IA d'après ton ressenti ou ta demande : même distance, sans intensité."},kind:"easy"}; wk.aiLight=true; mod.add(wk.w+":"+i); } }
@@ -1484,9 +1549,8 @@ function renderWeek(){
   // aria-disabled plutôt que disabled : le bouton garde le focus quand on arrive au bout du plan
   $("#prevW").setAttribute("aria-disabled",String(wk.w===1)); $("#nextW").setAttribute("aria-disabled",String(wk.w===plan.length));
   const tb=$("#todayW"); tb.hidden=!tp;
-  // alertes
-  const al=[];
-  if(plan.unreal) al.push(unrealAlert());
+  // alertes : la sécurité (santé, déplacements) reste en haut de la semaine ; le reste va dans le panneau Notifications (passif)
+  const al=[], keep=[];
   const tdy=todayIso(), st0=effStart(state.profile), endD=st0? addDays(st0,plan.length*7-1) : null;
   if(st0&&endD<tdy) al.push(`<div class="alert bad act"><span><b>Ce plan est terminé</b> depuis le ${longDate(endD)} (il a commencé le ${longDate(realStart())}). Pour en démarrer un nouveau, change le début du plan dans ton profil, ou recommence-le aujourd'hui.</span><button class="btn" type="button" id="restartPlan">Recommencer aujourd'hui</button></div>`);
   else if(st0&&realStart()>=addDays(tdy,7)) al.push(`<div class="alert ok">Ton plan commence le ${longDate(realStart())}. D'ici là, cours 2 à 3 fois par semaine en facile et fais ton renforcement, sans chercher à progresser vite.</div>`);
@@ -1494,36 +1558,37 @@ function renderWeek(){
   if(tp&&tp.w===wk.w&&wk.w>2&&realStart()<tdy&&followedOf()!==realStart()){   // dès la 3e semaine : la 2e dépasse normalement un peu le volume déclaré
     const decl= P.volume>0? P.volume : P.niveau==="deb"? 8 : 0, lrD=f.days.find(d=>d.run&&d.run.type==="long"), lk=lrD?lrD.km:0;
     const overV= decl>0&&totKm>decl*1.1, overL= P.longest>0&&lk>P.longest*1.1;
-    if(overV||overL) al.push(`<div class="alert warn act"><span><b>Ton plan a commencé le ${longDate(realStart())}.</b> La semaine en cours suppose que tu as suivi les semaines d'avant : ${[overV?fmt0(totKm)+" km cette semaine, pour "+fmt0(decl)+" km par semaine dans ton profil":"",overL?"une sortie longue de "+fmt1(lk)+" km, pour "+fmt1(P.longest)+" km au plus dans ton profil":""].filter(Boolean).join(", et ")}. Si ce n'est pas le cas, recommence le plan aujourd'hui pour repartir de ton niveau actuel.</span><button class="btn" type="button" id="restartPlan">Recommencer aujourd'hui</button><button class="btn ghost sm" type="button" id="followedPlan">J'ai suivi le plan</button></div>`);
+    if(overV||overL) keep.push(`<div class="alert warn act"><span><b>Ton plan a commencé le ${longDate(realStart())}.</b> La semaine en cours suppose que tu as suivi les semaines d'avant : ${[overV?fmt0(totKm)+" km cette semaine, pour "+fmt0(decl)+" km par semaine dans ton profil":"",overL?"une sortie longue de "+fmt1(lk)+" km, pour "+fmt1(P.longest)+" km au plus dans ton profil":""].filter(Boolean).join(", et ")}. Si ce n'est pas le cas, recommence le plan aujourd'hui pour repartir de ton niveau actuel.</span><button class="btn" type="button" id="restartPlan">Recommencer aujourd'hui</button><button class="btn ghost sm" type="button" id="followedPlan">J'ai suivi le plan</button></div>`);
   }
   // séances déplacées : garde-fous (avertir sans bloquer) et retour au plan prévu
   if(wk.moved||wk.moveBad){
     const mi=wk.days.filter(d=>d.movedFrom!=null).map(d=>d.i), ws=wk.moved? hardWarn(wk.days,mi,wk.w) : [];
     const txt= wk.moveBad&&!wk.moved? "Un déplacement enregistré ne correspond plus au plan (profil modifié) : il est ignoré." : ws.length? "<b>Attention</b> : "+ws.join(", ")+". Garde au moins un jour facile entre deux séances dures si tu peux." : "Tu as déplacé des séances cette semaine : les calories et l'équilibre suivent les jours réels.";
-    al.push(`<div class="alert ${ws.length?"warn":"ok"} act"><span>${txt}</span><button class="btn ghost sm" type="button" id="resetMoves">Rétablir la semaine</button></div>`);
+    keep.push(`<div class="alert ${ws.length?"warn":"ok"} act"><span>${txt}</span><button class="btn ghost sm" type="button" id="resetMoves">Rétablir la semaine</button></div>`);
   }
   if(d6&&iso(d6)<tdy&&!(endD&&endD<tdy)) al.push(`<div class="alert warn">Cette semaine est déjà passée. Reprends à la semaine en cours sans rattraper les séances manquées.</div>`);
-  if(f.minor) al.push(`<div class="alert bad">Tu as moins de 18 ans : l'outil ne met <b>aucun déficit</b> (maintien). À ton âge, perdre du poids en s'entraînant se fait seulement avec l'avis d'un médecin.</div>`);
-  else if(f.lowBmi) al.push(`<div class="alert bad">Ton IMC est de ${fmt1(E.bmi)}, sous 18,5 : l'outil ne met <b>aucun déficit</b> (maintien), quel que soit le réglage du profil. Perdre du poids n'est pas conseillé ici ; demande l'avis d'un médecin.</div>`);
+  if(f.minor) keep.push(`<div class="alert bad">Tu as moins de 18 ans : l'outil ne met <b>aucun déficit</b> (maintien). À ton âge, perdre du poids en s'entraînant se fait seulement avec l'avis d'un médecin.</div>`);
+  else if(f.lowBmi) keep.push(`<div class="alert bad">Ton IMC est de ${fmt1(E.bmi)}, sous 18,5 : l'outil ne met <b>aucun déficit</b> (maintien), quel que soit le réglage du profil. Perdre du poids n'est pas conseillé ici ; demande l'avis d'un médecin.</div>`);
   else if(!isNaN(P.cible)&&P.cible>=P.poids&&!f.noDef) al.push(`<div class="alert warn">Ton poids visé (${fmt1(P.cible)} kg) n'est pas sous ton poids actuel (${fmt1(P.poids)} kg) : mets le déficit fixe et le supplément à 0 pour rester au maintien, ou corrige le poids visé.</div>`);
   const longRace= P.objectif==="21"||P.objectif==="42";
   if(f.taper&&runSport()) al.push(`<div class="alert ok">${wk.phase==="race"?"Semaine de course":"Affûtage"} : le déficit fixe est gardé, mais sans supplément les jours faciles${wk.phase==="race"?", et le jour de la course est à l'équilibre":""}. ${wk.phase==="race"&&longRace?"Les 2 jours avant la course sont aussi à l'équilibre, avec des féculents à chaque repas.":"Si tu te sens à plat, repasse à l'équilibre les 2 jours avant la course."}</div>`);
   const absMinK=P.sexe==="F"?1200:1500;
-  if(f.floorHit&&Math.max(0,f.realDef)<15) al.push(`<div class="alert bad">Aucun déficit possible cette semaine : ${f.maintAvg<=absMinK+100?"ton maintien est déjà sous "+(P.sexe==="F"?"1 200":"1 500")+" kcal environ":"une fois le sport payé, il te resterait moins de 25 kcal par kg de masse maigre"}. L'objectif reste au maintien.${E.mgEst?" Ta masse grasse est estimée à "+E.mg+" % ; renseigne-la dans ton profil si tu la connais.":""}</div>`);
-  else if(f.floorHit) al.push(`<div class="alert bad">Déficit limité à ${fmt0(Math.max(0,f.realDef))} kcal/jour au lieu de ${fmt0(f.wanted)} : au-delà, il te resterait moins de 25 kcal par kg de masse maigre une fois le sport payé, ce qui est trop peu pour s'entraîner sans risque.${f.adj<0?" L'ajustement manuel est compris dans ce calcul.":""} ${E.mgEst?"Ta masse grasse est estimée à "+E.mg+" % ; renseigne-la dans ton profil si tu la connais.":""}</div>`);
+  if(f.floorHit&&Math.max(0,f.realDef)<15) keep.push(`<div class="alert bad">Aucun déficit possible cette semaine : ${f.maintAvg<=absMinK+100?"ton maintien est déjà sous "+(P.sexe==="F"?"1 200":"1 500")+" kcal environ":"une fois le sport payé, il te resterait moins de 25 kcal par kg de masse maigre"}. L'objectif reste au maintien.${E.mgEst?" Ta masse grasse est estimée à "+E.mg+" % ; renseigne-la dans ton profil si tu la connais.":""}</div>`);
+  else if(f.floorHit) keep.push(`<div class="alert bad">Déficit limité à ${fmt0(Math.max(0,f.realDef))} kcal/jour au lieu de ${fmt0(f.wanted)} : au-delà, il te resterait moins de 25 kcal par kg de masse maigre une fois le sport payé, ce qui est trop peu pour s'entraîner sans risque.${f.adj<0?" L'ajustement manuel est compris dans ce calcul.":""} ${E.mgEst?"Ta masse grasse est estimée à "+E.mg+" % ; renseigne-la dans ton profil si tu la connais.":""}</div>`);
   else if(!f.noDef && f.ea<30) al.push(`<div class="alert ${f.ea<28?"warn":"ok"}">Énergie disponible : <b>${fmt1(f.ea)} kcal/kg</b> de masse maigre, ${f.ea<28?"sous":"juste sous"} le repère de 30. <details><summary>Pourquoi ?</summary><p>C'est ce qui reste à ton corps une fois le sport payé, rapporté à ta masse maigre. Sous 30, la récupération peut souffrir ; l'outil bloque sous 25. Surveille fatigue et sommeil dans l'onglet Suivi, et remonte un peu si les séances deviennent difficiles.</p></details></div>`);
-  if(f.absHit) al.push(`<div class="alert bad">Certains jours, l'objectif est remonté à ${P.sexe==="F"?"1 200":"1 500"} kcal : en dessous, seulement avec un suivi médical. Le déficit réel de ces jours est plus petit que celui demandé.</div>`);
+  if(f.absHit) keep.push(`<div class="alert bad">Certains jours, l'objectif est remonté à ${P.sexe==="F"?"1 200":"1 500"} kcal : en dessous, seulement avec un suivi médical. Le déficit réel de ces jours est plus petit que celui demandé.</div>`);
   else if(f.bmrHit && !f.floorHit) al.push(`<div class="alert warn">Certains jours, l'objectif est remonté à ton métabolisme de base (${fmt0(E.bmr)} kcal) : le déficit réel de ces jours est plus petit que celui demandé.</div>`);
-  if(E.bmi>=35||P.age>=65) al.push(`<div class="alert warn">${E.bmi>=35&&P.age>=65?"À "+P.age+" ans et avec un IMC de "+fmt1(E.bmi):E.bmi>=35?"Avec un IMC de "+fmt1(E.bmi):"À "+P.age+" ans"}, demande l'avis d'un médecin avant de commencer ce plan, surtout pour les séances intenses.</div>`);
+  if(E.bmi>=35||P.age>=65) keep.push(`<div class="alert warn">${E.bmi>=35&&P.age>=65?"À "+P.age+" ans et avec un IMC de "+fmt1(E.bmi):E.bmi>=35?"Avec un IMC de "+fmt1(E.bmi):"À "+P.age+" ans"}, demande l'avis d'un médecin avant de commencer ce plan, surtout pour les séances intenses.</div>`);
   if(runSport()&&P.niveau!=="deb"&&!(P.volume>0)&&wk.w===1) al.push(isNaN(P.volume)? `<div class="alert warn">Tu n'as pas indiqué ton volume actuel : le plan démarre prudemment. Renseigne « km par semaine » dans ton profil pour un plan adapté.</div>` : `<div class="alert warn">Tu pars de zéro : le plan démarre prudemment. Si tu cours déjà un peu, indique tes km par semaine dans ton profil.</div>`);
   if(runSport()&&P.niveau==="deb"&&tplWeek(wk.w,P.objectif!=="forme",plan.length)<=8&&wk.phase!=="race") al.push(`<div class="alert warn">Débutant : ${plan.length===12?"pendant les 8 premières semaines":"au début du plan"}, tout est en facile. Tes tendons et tes os ont besoin de ce temps, même si ton souffle suit déjà.</div>`);
   if(wk.L && P.longest>0 && wk.w===1 && wk.L>P.longest*1.1+1e-9) al.push(`<div class="alert warn">La sortie longue dépasse de plus de 10 % ta plus longue sortie du mois. Vérifie le champ « plus longue sortie » de ton profil.</div>`);
-  al.unshift(...feelAlerts14(wk,tp)); al.push(...sportAlerts14(wk,f,tp));
-  if(wk.aiTip&&wk.aiTip.c) al.push(`<div class="alert ok aitip"><span><b>Conseil de l'IA${wk.aiTip.f?" · "+esc(wk.aiTip.f):""}</b> ${esc(wk.aiTip.c)}</span></div>`);
-  $("#weekAlerts").innerHTML=al.join("");
-  const fp=$("#followedPlan"); if(fp) fp.addEventListener("click",()=>{ followed=realStart(); try{localStorage.setItem("carnet.suivi",followed);}catch(e){} recompute(); $("#weekTitle").focus({preventScroll:true}); });
+  keep.unshift(...feelAlerts14(wk,tp)); al.push(...sportAlerts14(wk,f,tp,keep));
+  if(wk.aiTip&&wk.aiTip.c) al.unshift(`<div class="alert ok aitip"><span><b>Conseil de l'IA${wk.aiTip.f?" · "+esc(wk.aiTip.f):""}</b> ${esc(wk.aiTip.c)}</span></div>`);
+  $("#weekAlerts").innerHTML=keep.join("");
+  notif.week={w:wk.w,items:al}; refreshNotif();
   const rm=$("#resetMoves"); if(rm) rm.addEventListener("click",()=>resetWeekMoves(wk.w));
-  const rs=$("#restartPlan"); if(rs) rs.addEventListener("click",()=>{ regenPlan(false); $("#weekTitle").focus({preventScroll:true}); });
+  const fp=$("#weekAlerts #followedPlan"); if(fp) fp.addEventListener("click",()=>{ followed=realStart(); try{localStorage.setItem("carnet.suivi",followed);}catch(e){} recompute(); $("#weekTitle").focus({preventScroll:true}); });
+  const rs=$("#weekAlerts #restartPlan"); if(rs) rs.addEventListener("click",()=>{ regenPlan(false); $("#weekTitle").focus({preventScroll:true}); });
   // jours
   // jours d'avant le début : une seule carte compacte (la carte du jour reste près du haut sur téléphone)
   const bef=f.days.filter(d=>d.kind==="before"), bLast=bef.length?bef[bef.length-1].i:-1;
@@ -1659,7 +1724,7 @@ function unrealAlert(){
 }
 function renderPlan(){
   { const ld=$("#planLead"); if(ld){ if(!ld.dataset.o) ld.dataset.o=ld.textContent; setT(ld,runSport()?ld.dataset.o:sportLead14()); } }
-  $("#planAlerts").innerHTML=(plan.unreal?unrealAlert():"")+(plan.ai&&state.aip&&state.aip.p&&!state.aip.p.x? `<div class="alert ok aitip"><span><b>Plan ajusté par l'IA</b> (${esc(CPLX_LAB[state.aip.p.cplx]||"Standard").toLowerCase()}) : ${plan.ai.n? plan.ai.n+" séance"+(plan.ai.n>1?"s":"")+" modifiée"+(plan.ai.n>1?"s":"") : "séances gardées"}, un conseil par semaine dans l'onglet Semaine.${state.aip.p.resume?" "+esc(state.aip.p.resume):""}</span></div>` : "");
+  notif.plan=[plan.unreal?unrealAlert():"", plan.ai&&state.aip&&state.aip.p&&!state.aip.p.x? `<div class="alert ok aitip"><span><b>Plan ajusté par l'IA</b> (${esc(CPLX_LAB[state.aip.p.cplx]||"Standard").toLowerCase()}) : ${plan.ai.n? plan.ai.n+" séance"+(plan.ai.n>1?"s":"")+" modifiée"+(plan.ai.n>1?"s":"") : "séances gardées"}, un conseil par semaine dans les notifications.${state.aip.p.resume?" "+esc(state.aip.p.resume):""}</span></div>` : ""].filter(Boolean); refreshNotif();
   const nPrep=plan.filter(w=>w.phase==="prep").length, pl=$("#planLong"); pl.hidden=!nPrep;
   if(nPrep) setT(pl,"Plan long : d'abord "+nPrep+" semaines de préparation générale (volume qui monte de 3 à 5 % par semaine, sortie longue qui s'allonge, une séance de qualité qui change toutes les 4 semaines), puis "+(plan.length-nPrep)+" semaines de préparation à ta course.");
   const rows=plan.map(wk=>{const f=dayFuel(P,E,wk);const km=planVol14(wk,f);return {wk,f,km};});
@@ -1911,19 +1976,29 @@ function fillForm(){
   const ty=Array.isArray(p.types)?p.types:EXAMPLE.types;
   document.querySelectorAll('input[name="types"]').forEach(c=>c.checked=ty.includes(c.value));
   if(!p.cross) $("#cross").value="non";
+  const pf=$("#pref"); if(pf){ pf.value=prefClean(p.pref); prefUi(); }
   syncSeances();
 }
+// préférences de séances : compteur et rappel de ce qui s'applique sans IA
+function prefUi(){ const el=$("#pref"); if(!el) return; setT($("#prefCnt"),Array.from(el.value).length+" / 300");
+  const k=prefParse(prefClean(el.value).replace(/\s+/g," ").trim()), L={cotes:"côtes",fartlek:"fartlek",seuil:"seuil",vma:"VMA"}, h=$("#prefFx");
+  // seuls les effets possibles sans IA sont annoncés : tout refus (séance plus douce ou footing), parmi les envies le fartlek seulement (PREF_LIVE)
+  const no=k.no, like=k.like.filter(x=>PREF_LIVE.like.includes(x));
+  const t=[no.length? "pas de "+no.map(x=>L[x]).join(", ")+" (remplacé par une séance plus douce ou un footing facile, sauf en affûtage et en course)" : "", like.length? "privilégié quand c'est permis : "+like.map(x=>L[x]).join(", ") : ""].filter(Boolean).join(" ; ");
+  if(h){ h.hidden=!t; setT(h,t? "Peut s'appliquer sans IA : "+t+"." : ""); } }
 function readForm(){
   const p={...state.profile};
   FIELDS.forEach(k=>{const el=$("#"+k); if(el) p[k]=String(el.value).slice(0,40);});   // longueur bornée (valeur forcée par script comprise)
   RADIOS.forEach(k=>{ if(k==="longDay"&&$("#segLongDay").dataset.locked) return; const r=document.querySelector(`input[name="${k}"]:checked`); if(r)p[k]=r.value;});
   p.types=[...document.querySelectorAll('input[name="types"]:checked')].map(c=>c.value);
+  const pf=$("#pref"); if(pf) p.pref=prefClean(pf.value);
   if(p.niveau==="deb"&&+p.seances>4) p.seances="4";
   readSport14(p);
   return p;
 }
 function valid(p){return !profileNums(p).incomplete;}
 $("#profileForm").addEventListener("input",e=>{
+  if(e.target&&e.target.id==="pref") prefUi();
   const fx=e.target&&e.target.id&&document.getElementById(e.target.id+"Fix"); if(fx) fx.hidden=true;
   if(e.target&&e.target.id==="start"&&!okIso(e.target.value)) return;   // début vidé ou date impossible : rétabli à la validation (change)
   const p=readForm(); oobGuard15(p); if(!valid(p))return;
@@ -2672,7 +2747,7 @@ function tmDraw(stepChanged){
 function closeTimer(){ if(!tm) return; clearInterval(tm.iv); lockOff(); const o=tm.opener; tm=null; if(timerEl) timerEl.remove(); timerEl=null; if(!sheetEl) document.documentElement.style.overflow=""; if(o&&document.contains(o)) o.focus({preventScroll:true}); else $("#weekTitle").focus({preventScroll:true}); }
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&tm&&tm.run) lockOn(); });
 
-/* nouveautés : journal des versions, bannière façon notification iOS, feuille « Quoi de neuf » */
+/* nouveautés : journal des versions, feuille « Quoi de neuf » ; les nouvelles versions sont aussi dans le panneau Notifications */
 const APP_V=15;
 const CHANGELOG=[
   {v:15,t:"Un profil mieux rangé et des imports plus robustes",items:["Ton profil est mieux rangé : l'objectif, tes données, tes entraînements et ta nutrition sont dans l'onglet Profil, en sections qui se replient et gardent un résumé visible. Le bilan chiffré (calories, déficit, poids visé) y est aussi.", "L'écran Semaine ne garde que le quotidien : le plan de la semaine, le jour, la nutrition du jour et la prochaine séance.", "Import des stats plus robuste : les fichiers piégés ou énormes ne figent plus l'écran, et « Annuler » répond tout de suite.", "Une même séance (date, type, durée, heure de début, distance) n'est jamais importée deux fois, et deux séances le même jour restent deux séances.", "Les sports sans course démarrent plus prudemment : la première semaine suit les heures de sport par semaine que tu déclares.", "Plans mieux dosés : en trail, le dénivelé monte de 10 % au plus par semaine (de 30 m au plus sous 100 m) et baisse en semaine allégée ; en VTT et remise en forme, les heures par semaine sont respectées (la semaine 2 part de la charge réellement placée en semaine 1, +10 % au plus ; une semaine allégée est plus légère que la précédente, ou égale au plancher) ; en force, le RPE ne saute plus de plus de 10 % au changement de phase, et la durée affichée correspond à celle du minuteur. Pour le VTT, la force et la remise en forme, le jour de l'objectif et sa veille sont à l'équilibre calorique (la course à pied reste comme avant). Un rappel discret apparaît si la première semaine de force dépasse 3 h.", "Nouveau, si ton site l'active : l'onglet Coach, un assistant à qui poser des questions. Rien n'est envoyé sans ton accord séparé, tu choisis si ton profil, ton ressenti ou tes stats sont joints (décoché par défaut), et il ne remplace pas un avis médical."]},
@@ -2695,35 +2770,32 @@ function openNews(opener){
   markSeen(true);
 }
 document.querySelectorAll("[data-news]").forEach(b=>b.addEventListener("click",()=>openNews(b)));
-let bannerEl=null;
-// la bannière ne cache jamais une alerte : en haut si la place est libre, sinon en bas, sinon elle attend
-function placeBanner(){
-  if(!bannerEl) return; const b=bannerEl;
-  const hit=()=>{ const r=b.getBoundingClientRect(); return [...document.querySelectorAll(".alert.bad,.alert.warn")].some(a=>{ const q=a.getBoundingClientRect(); return q.height&&q.bottom>r.top&&q.top<r.bottom; }); };
-  b.style.visibility=""; b.classList.remove("bottom"); if(!hit()) return;
-  b.classList.add("bottom"); if(!hit()) return;
-  b.style.visibility="hidden";
+/* notifications passives : un bouton à côté du Compte ouvre un panneau ; aucun point, compteur, badge ni animation pour signaler du nouveau */
+const notif={week:null,plan:[],news:false};   // news : nouveautés montrées pendant cette visite (gardées après markSeen)
+function notifHtml(){
+  const nw=notif.news||seenV()<APP_V? CHANGELOG.filter(c=>c.v>newsFrom) : [], wk=notif.week, sec=(t,body)=>`<section class="nt-s"><h4>${t}</h4>${body}</section>`, out=[];
+  if(wk&&wk.items.length) out.push(sec("Semaine "+wk.w,`<div class="alerts">${wk.items.join("")}</div>`));
+  if(notif.plan.length) out.push(sec("Ton plan",`<div class="alerts">${notif.plan.join("")}</div>`));
+  if(nw.length){ const n=nw.reduce((a,c)=>a+c.items.length,0);
+    out.push(sec("Nouveautés",`<div class="cl">${nw.map(c=>`<section><h5>Version ${c.v} · ${esc(c.t)}</h5><ul>${c.items.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></section>`).join("")}</div><p class="note">${n} nouveauté${n>1?"s":""} depuis ta dernière visite.</p>`)); }
+  return (out.length? out.join("") : `<p class="nt-empty">Rien de nouveau pour l'instant.</p>`)+`<button class="linkbtn" type="button" data-nt-news>Toutes les versions de Pacebook</button>`;
 }
-function dismissBanner(){ if(!bannerEl) return; const hadF=bannerEl.contains(document.activeElement); bannerEl.remove(); bannerEl=null; window.removeEventListener("scroll",placeBanner); if(hadF) $("#weekTitle").focus({preventScroll:true}); }
-function showNewsBanner(){
-  const nw=CHANGELOG.filter(c=>c.v>newsFrom); if(!nw.length||bannerEl||seenV()>=APP_V) return;   // déjà vue sur un autre appareil (compte)
-  const n=nw.reduce((a,c)=>a+c.items.length,0), b=document.createElement("div");
-  b.className="banner"; b.setAttribute("role","region"); b.setAttribute("aria-label","Notification");
-  b.innerHTML=`<div class="ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="14" cy="4" r="2"/><path d="M8 21l3-6 3 2v5M6 12l3-4 4 1 3 4h3M11 15l-1-5"/></svg></div><button class="bmain" type="button"><span class="bk"><span>Nouveautés</span><span>maintenant</span></span><span class="bt">Pacebook, version ${APP_V}</span><span class="bs">${esc(nw[0].t)} : ${n} nouveauté${n>1?"s":""}. Touche pour tout voir.</span></button><button class="bx" type="button" aria-label="Fermer la notification">×</button>`;
-  document.body.prepend(b); bannerEl=b; placeBanner(); window.addEventListener("scroll",placeBanner,{passive:true});
-  setT($("#srLive"),"Nouveautés de la version "+APP_V+" : "+nw[0].t+". Notification en haut de la page ; la liste reste dans « Quoi de neuf », en bas de page.");
-  b.querySelector(".bmain").addEventListener("click",()=>{ const op=$("#weekTitle"); dismissBanner(); openNews(op); });
-  b.querySelector(".bx").addEventListener("click",dismissBanner);
-  // glisser vers le haut pour fermer
-  let y0=null; b.addEventListener("pointerdown",e=>{ y0=e.clientY; });
-  b.addEventListener("pointermove",e=>{ if(y0==null) return; const dy=Math.min(0,e.clientY-y0); b.style.transform=dy?`translateY(${dy}px)`:""; });
-  const up=e=>{ if(y0==null) return; const dy=e.clientY-y0; y0=null; b.style.transform=""; if(dy<-40) dismissBanner(); };
-  b.addEventListener("pointerup",up); b.addEventListener("pointercancel",()=>{ y0=null; b.style.transform=""; });
-  // repli automatique après 10 s (pas tant que le focus ou le pointeur y est)
-  let tmo=setTimeout(function fold(){ if(!bannerEl) return; if(b.matches(":hover")||b.contains(document.activeElement)){ tmo=setTimeout(fold,3000); return; } dismissBanner(); },10000);
-  markSeen(true);
+const notifSheet=()=>sheetEl&&sheetEl.querySelector('.sheet[data-kind="notif"]');
+// panneau ouvert : son contenu suit la semaine, le plan et le profil (synchro, action faite depuis le panneau)
+function refreshNotif(){ const sh=notifSheet(); if(!sh) return; const b=sh.querySelector(".sh-b"), hadF=b.contains(document.activeElement);
+  b.innerHTML=notifHtml(); if(hadF) sh.querySelector(".sh-x").focus({preventScroll:true}); }
+function openNotif(opener){
+  if(seenV()<APP_V&&CHANGELOG.some(c=>c.v>newsFrom)) notif.news=true;
+  openSheet({title:"Notifications",kind:"notif",opener,html:notifHtml(),onReady:sh=>{
+    sh.querySelector(".sh-b").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return;
+      if(b.matches("[data-nt-news]")){ openNews(opener); return; }
+      // actions des alertes : elles changent le plan ; le panneau se ferme et la semaine reprend le focus
+      if(b.id==="restartPlan"){ closeSheet(true); regenPlan(false); $("#weekTitle").focus({preventScroll:true}); }
+      else if(b.id==="followedPlan"){ closeSheet(true); followed=realStart(); try{localStorage.setItem("carnet.suivi",followed);}catch(e){} recompute(); $("#weekTitle").focus({preventScroll:true}); }
+      else if(b.matches("[data-safedate]")){ closeSheet(true); setTimeout(()=>$("#weekTitle").focus({preventScroll:true}),0); } }); }});
+  if(hasData()) markSeen(true);   // données d'exemple sans action : rien n'est écrit (voir showApp)
 }
-
+document.querySelectorAll("[data-notif]").forEach(b=>b.addEventListener("click",()=>openNotif(b)));
 /* ---------- v14 : ressenti après séance, activités importées, FC de repos ---------- */
 const PAIN_ZONES={dos:"Dos",epaule:"Épaule",coude:"Coude",poignet:"Poignet",hanche:"Hanche",cuisse:"Cuisse",genou:"Genou",mollet:"Mollet",achille:"Tendon d'Achille",cheville:"Cheville",pied:"Pied",autre:"Autre zone"};
 const RPE_LAB=["","1 · très facile","2 · facile","3 · modéré","4 · un peu dur","5 · dur","6 · assez dur","7 · très dur","8 · intense","9 · presque maximal","10 · maximal"];
@@ -3015,16 +3087,17 @@ function sportLead14(){
   if(P.sport==="force") return "Chaque semaine suit le même schéma de séances ; ce qui progresse, c'est la charge, à l'effort perçu (RPE). Une semaine sur quatre est allégée (moins de séries, RPE plus bas). Avec une date d'objectif, la dernière semaine est un test et l'avant-dernière allège la charge.";
   return base+(P.sport==="vtt"?"Les durées sont en minutes puis en heures pour la sortie longue. ":"")+"Avec une date d'objectif, les deux dernières semaines allègent le volume en gardant un peu d'intensité."; }
 // semaine de la dernière séance dure : avant la fin d'une semaine allégée, avertir sans bloquer
-function sportAlerts14(wk,f,tp){
+// keep : alertes de santé ou de risque de blessure, gardées en haut de la semaine (le reste va dans le panneau Notifications)
+function sportAlerts14(wk,f,tp,keep){
   const al=[];
   if(runSport()){ if(P.sport==="trail"&&wk.w<=2) al.push(`<div class="alert ok"><b>Trail.</b> Chaque sortie indique un dénivelé positif visé (D+). Il monte de 10 % au plus d'une semaine à l'autre (de 30 m au plus par semaine tant que tu es sous 100 m). Marche dans les montées raides : c'est plus économique et ça garde des forces pour la descente.</div>`); return al; }
   const sp=P.sport;
   if(sp!=="force"&&wk.w===1&&!(P.hSem>0)) al.push(`<div class="alert warn">Tu n'as pas indiqué tes heures de sport par semaine : le plan démarre prudemment. Renseigne-les dans ton profil pour un plan mieux adapté.</div>`);
   // force : les heures par semaine ne sont pas demandées ; si la semaine 1 dépasse 1,5 fois une durée habituelle de 2 h (soit 3 h), un rappel discret propose de retirer une séance
   if(sp==="force"&&wk.w===1){ const tot=wk.days.filter(d=>d.run&&d.kind!=="before").reduce((t,d)=>t+sessionMin(d.run),0); if(tot>180) al.push(`<div class="alert ok">Cette première semaine fait environ <b>${Math.floor(tot/60)} h ${String(Math.round(tot%60)).padStart(2,"0")}</b>. Si tu t'entraînes d'habitude moins de 2 h par semaine, retire une séance dans ton profil (« Mes entraînements ») : mieux vaut commencer léger.</div>`); }
-  if(sp==="force"&&P.minor) al.push(`<div class="alert warn"><b>Avant 18 ans</b>, garde des charges modérées, une technique propre et la présence d'un adulte compétent. Le plan plafonne l'effort à RPE 8 et ne propose aucun test de maximum.</div>`);
+  if(sp==="force"&&P.minor) keep.push(`<div class="alert warn"><b>Avant 18 ans</b>, garde des charges modérées, une technique propre et la présence d'un adulte compétent. Le plan plafonne l'effort à RPE 8 et ne propose aucun test de maximum.</div>`);
   if(sp==="force"&&P.sObj==="oly"&&wk.w<=4) al.push(`<div class="alert ok"><b>Haltérophilie olympique.</b> L'arraché et l'épaulé-jeté s'apprennent avec un coach : charges légères, barre proche du corps, jamais jusqu'à l'échec. Les séries sont notées à un effort modéré (RPE 7 au plus) pour garder la technique.</div>`);
-  if(sp==="force"&&P.niveau==="deb"&&wk.w<=4) al.push(`<div class="alert warn">Débutant en musculation : charges modérées et technique d'abord pendant 4 à 6 semaines. Ajoute 2,5 kg à la fois, et seulement quand toutes les séries se passent à RPE 6 ou moins.</div>`);
+  if(sp==="force"&&P.niveau==="deb"&&wk.w<=4) keep.push(`<div class="alert warn">Débutant en musculation : charges modérées et technique d'abord pendant 4 à 6 semaines. Ajoute 2,5 kg à la fois, et seulement quand toutes les séries se passent à RPE 6 ou moins.</div>`);
   if(wk.phase==="taper"||wk.phase==="race") al.push(`<div class="alert ok">${wk.phase==="race"?"Semaine de ton objectif":"Allègement"} : le volume baisse mais l'intensité reste. Le déficit fixe est gardé, sans supplément les jours faciles${wk.phase==="race"?", et le jour de l'objectif et sa veille sont à l'équilibre":""}.</div>`);
   else if(wk.deload) al.push(`<div class="alert ok"><b>Semaine allégée.</b> Mêmes séances, moins de volume${sp==="force"?" et RPE plus bas":""} : c'est elle qui permet de progresser ensuite.</div>`);
   return al; }
@@ -3171,6 +3244,7 @@ function aipBody(feel,wish){
   const b={v:1,complexite:n.cplx,profil:{age:n.age,sport:n.sport,niveau:n.niveau,objectif:n.runObjectif||n.objectif,seances:n.seances,renfo:n.renfo,semaines_plan:base.length},semaines};
   if(feel){ const f=(window.CarnetBridge.summary({feel:true}).ressenti||[]).map(x=>({effort:x.effort,forme:x.forme,douleur:x.douleur})); if(f.length) b.ressenti=f; }
   if(wish) b.souhait=wish;
+  if(n.pref) b.preferences=n.pref;   // préférences de séances du profil (filet de sécurité appliqué avant l'envoi et côté serveur)
   return b; }
 async function aipCall(body){
   let tk=null;
@@ -3191,7 +3265,7 @@ function aipSheet(opener){
   const host=(()=>{ try{ return new URL(PLAN_AI_URL).host; }catch(e){ return ""; } })(), prov=esc(String((window.APP_CONFIG||{}).CHAT_PROVIDER_NAME||"un fournisseur d'IA").replace(/[\u0000-\u001f<>]/g,"").slice(0,60));
   const chk=(id,t,d)=>`<label class="chk"><input type="checkbox" id="${id}"><span>${t}<small>${d}</small></span></label>`;
   openSheet({title:"Ajuster mon plan avec l'IA",opener,kind:"aip",
-    html:`<p class="note">Pour ajuster ton plan, Pacebook envoie à la fonction du site (<b>${esc(host)}</b>) puis à <b>${prov}</b> : ton âge, ton sport, ton niveau, ton objectif, tes séances de sport et de renforcement par semaine, la durée de ton plan, la complexité choisie (<b>${esc(CPLX_LAB[P.cplx]||"Standard")}</b>) et la structure des semaines à venir (phase, semaine allégée ou non, kilomètres, minutes, séances d'intensité). Ni ton nom, ni ton poids, ni tes notes ne sont envoyés. Ces données sortent de ton appareil et peuvent sortir de l'Union européenne. Rien n'est envoyé sans ton accord.</p>
+    html:`<p class="note">Pour ajuster ton plan, Pacebook envoie à la fonction du site (<b>${esc(host)}</b>) puis à <b>${prov}</b> : ton âge, ton sport, ton niveau, ton objectif, tes séances de sport et de renforcement par semaine, la durée de ton plan, la complexité choisie (<b>${esc(CPLX_LAB[P.cplx]||"Standard")}</b>)${P.pref?", tes préférences de séances écrites dans le Profil":""} et la structure des semaines à venir (phase, semaine allégée ou non, kilomètres, minutes, séances d'intensité). Ni ton nom, ni ton poids, ni tes notes ne sont envoyés. Ces données sortent de ton appareil et peuvent sortir de l'Union européenne. Rien n'est envoyé sans ton accord.</p>
 <div class="field"><label for="aipWish">Ta demande (facultatif)</label><textarea id="aipWish" maxlength="300" rows="3" placeholder="ex. je préfère les côtes au fractionné ; mes semaines sont chargées en ce moment" aria-describedby="aipWishH"></textarea><span class="hint" id="aipWishH">N'écris ni ton nom ni de détail médical. 300 caractères au plus.</span></div>
 <div class="grp" role="group" aria-label="Ce qui est envoyé">${chk("aipFeel","Inclure mon ressenti après séance","Les 8 derniers : effort perçu, forme, douleur (sans tes notes). Décoché par défaut.")}
 ${chk("aipOk","J'accepte cet envoi","Obligatoire, pour cet ajustement seulement.")}</div>
@@ -3205,7 +3279,8 @@ ${chk("aipOk","J'accepte cet envoi","Obligatoire, pour cet ajustement seulement.
         if(!ok.checked){ show("Coche « J'accepte cet envoi » pour lancer l'ajustement."); ok.focus(); return; }
         const wish=sh.querySelector("#aipWish").value.replace(/\s+/g," ").trim().slice(0,300);
         // filet de sécurité du Coach, avant tout envoi : un sujet grave n'est jamais envoyé
-        let k=""; try{ k=wish&&window.CarnetCoach? window.CarnetCoach.guard(wish) : ""; }catch(e){}
+        const pref=P.pref||"", prefRaw=String(($("#pref")||{}).value||state.profile.pref||""), G=t=>!!t&&window.CarnetCoach.guard(t);
+        let k=""; try{ k=window.CarnetCoach? G(wish)||G(prefRaw)||G(pref)||"" : ""; }catch(e){}
         if(k){ show("Ce que tu écris peut être sérieux et je ne l'ai envoyé à aucun serveur. En cas de détresse, appelle le 3114 (24 h sur 24) ; en cas d'urgence, le 15 ou le 112. Pour une douleur ou un malaise, arrête l'effort et consulte un médecin."); return; }
         // bouton « occupé » sans disabled : il garde le focus (Échap et Tab restent dans la feuille pendant l'attente)
         const cplx=P.cplx, sig=planSig(profileNums(state.profile)); aipBusy=true; go.setAttribute("aria-disabled","true"); go.textContent="L'IA prépare ton plan…"; err.hidden=true;
@@ -3391,6 +3466,7 @@ function cleanProfile(p){ const out={start:"",raceDate:""}; if(!p||typeof p!=="o
     else if(v!==undefined&&["cible","mg","volume","longest","fcmax","adj","hSem"].includes(k)) out[k]=""; }   // illisible : vide, pas la valeur de l'exemple
   const rv=own("refVal"); if(typeof rv==="string"&&rv.length<=24&&/^[0-9 .,:'’′″"hmins-]*$/i.test(rv)) out.refVal=rv; else if(typeof rv==="number"&&isFinite(rv)) out.refVal=rv;
   for(const k of ["start","raceDate"]){ const v=own(k); if(okIso(v)) out[k]=v; }
+  const pr=own("pref"); if(typeof pr==="string") out.pref=prefClean(pr);
   const ty=own("types"); if(Array.isArray(ty)) out.types=[...new Set(ty.slice(0,20).filter(t=>typeof t==="string"&&EXAMPLE.types.includes(t)))].slice(0,EXAMPLE.types.length);
   return out; }
 // date de modification de chaque champ du profil : {champ: horodatage}, champs connus seulement
@@ -3869,8 +3945,8 @@ renderAcct();
 // première visite (aucune donnée à toi) : page d'accueil ; rien n'est enregistré tant que tu n'agis pas
 if(!local&&!hvSeen()) showHome();
 
-// nouveautés : première visite, rien (la version est notée) ; sinon bannière si une version plus récente est sortie
-{ const sv=seenV(); if(!local&&!sv){ /* rien n'est écrit avant la première action (voir showApp) */ } else { newsFrom= sv||10; if(newsFrom<APP_V) setTimeout(showNewsBanner,900); } }
+// nouveautés : première visite, rien (la version est notée) ; sinon elles attendent dans le panneau Notifications, sans aucun signal (passif)
+{ const sv=seenV(); if(!local&&!sv){ /* rien n'est écrit avant la première action (voir showApp) */ } else { newsFrom= sv||10; } }
 // export Calendrier : seulement si la page peut proposer un fichier (capacité « downloads »)
 // téléchargement : fichier local (Blob), aucune capacité externe
 dlCap={ save:async({filename,data})=>{ const mime=/\.json$/.test(filename)?"application/json":/\.zip$/.test(filename)?"application/zip":"application/octet-stream";
