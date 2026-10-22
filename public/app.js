@@ -562,11 +562,8 @@ const LONG_NEED={5:3.5,10:7,21:16,42:28};
 const reachable=(o,wk,deb)=> !LONG_NEED[o] || (!(deb&&((o==="21"&&wk.length<30)||(o==="42"&&wk.length<52))) && wk.topLong>=LONG_NEED[o]-.05);
 function buildPlan(p){
   if(evSport(p.sport)){ const w=buildSportPlan(p); applyAi(w,p); return w; }
-  const weeks=buildPlanRun(p); applyAi(weeks,p); if(p.sport==="trail"){ trailize(weeks,p); if(weeks.ai) aiTrailFrom(weeks,p); } return weeks;
+  const weeks=buildPlanRun(p); applyAi(weeks,p); if(p.sport==="trail") trailize(weeks,p); return weeks;
 }
-// trail : l'« avant » doit être la séance que l'utilisateur voyait, donc celle du plan sans IA après trailize (titres et notes de sentier)
-function aiTrailFrom(weeks,p){ const b=buildPlanRun(p), v=vmaOf(p).vma; trailize(b,p);
-  weeks.forEach((wk,k)=>wk.days.forEach((d,i)=>{ const o=b[k]&&b[k].days[i]; if(d.run&&d.run.aiFrom&&o&&o.run) d.run.aiFrom=aiSnap(o.run,v); })); }
 /* ---- ajustement par l'IA (api/plan.js) : appliqué sur le plan déjà construit, jamais au-delà de ses limites ----
    L'IA choisit le type des séances d'intensité parmi les remplaçants permis, peut alléger une semaine (sa dernière séance d'intensité devient un footing
    de même distance) et donne un conseil par semaine. Une séance n'est remplacée que si elle reste au plus aussi longue et aussi intense,
@@ -578,25 +575,30 @@ function aiOf(p){ if(p.noAi) return null; const a=state&&state.aip&&state.aip.p;
 function qOpts(k,p){ if(p.niveau==="deb"||k==="allure"||!SUBST[k]) return [k]; return [k,...SUBST[k].filter(c=>c!==k&&c!=="allure"&&p.types.includes(c)&&!(p.cplx==="simple"&&c==="vma"))]; }
 // avant / après : résumé de la séance du plan remplacée par l'IA, gardé sur la séance (run.aiFrom) ; recalculé à chaque construction du plan, jamais enregistré
 const runSum=r=>r.blocks.map(b=>b.l+(b.min&&!b.mix&&b.z!=="walk"&&b.work==null?" "+fmt0(b.min)+" min":"")).join(" · ");
-const aiSnap=(r,vma)=>({t:r.title,s:runSum(r),km:sessionKm(r,vma),min:sessionDur(r)});
+const aiSnap=(r,vma,trail)=>({t:trail? trailTitle(r.title) : r.title,s:runSum(r),km:sessionKm(r,vma),min:sessionDur(r)});   // trail : titre tel que trailize l'affichera
 function applyAi(weeks,p){
   const a=aiOf(p); if(!a) return; const run=!evSport(p.sport), vma=run? vmaOf(p).vma : 0, mod=new Set();   // séances modifiées (une séance changée puis allégée compte une fois)
-  // séance d'un jour passé, ou déjà cochée (faite / pas faite) : jamais modifiée, sa marque (liée à daySig) resterait sinon orpheline
-  const tdy=todayIso(), dn=(state&&state.done)||{}, locked=(w,i)=>{ const k=isoOf(w,i); return !!k&&(k<tdy||!!(dn[k]&&dn[k].v!=="none")); };
+  // séance d'origine déjà cochée (faite / pas faite) AVANT l'ajustement : jamais modifiée, sa marque (liée à daySig) resterait sinon orpheline.
+  // Une marque posée sur la séance de l'IA ne verrouille pas (l'IA reste appliquée, la coche aussi) ; la date du jour n'intervient jamais.
+  // Dates calculées sur le profil p seulement (pas sur state.profile).
+  const trail=p.sport==="trail", st=run? effStart(p) : null, dn=(state&&state.done)||{};
+  const sigOf=d=> daySig(trail&&d.run? {...d,run:{...d.run,title:trailTitle(d.run.title)}} : d);
+  const lockedDay=(w,d)=>{ if(!st) return false; const e=dn[addDays(st,(w-1)*7+d.i)]; return !!(e&&e.v!=="none"&&e.sig&&e.sig===sigOf(d)); };
   for(const wk of weeks){ const x=a.wk[wk.w]; if(!x) continue;
     if(x.f||x.c) wk.aiTip={f:x.f,c:x.c};
     if(!run||wk.phase==="taper"||wk.phase==="race") continue;
     const qa=()=>wk.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind&&d.kind!=="before");   // toutes : l'IA a reçu les options dans cet ordre
-    const qd=()=>qa().filter(d=>!locked(wk.w,wk.days.indexOf(d)));
-    qa().forEach((d,j)=>{ const k=x.q[j], old=d.run; if(locked(wk.w,wk.days.indexOf(d))||!k||k===old.kind||!qOpts(old.kind,p).includes(k)||qa().some(o=>o!==d&&o.run.kind===k)) return;   // pas deux fois le même type dans la semaine
+    const lk=new Set(wk.days.filter(d=>lockedDay(wk.w,d)).map(d=>d.i));   // verrous évalués sur les séances d'origine, avant toute modification
+    const qd=()=>qa().filter(d=>!lk.has(d.i));
+    qa().forEach((d,j)=>{ const k=x.q[j], old=d.run; if(lk.has(d.i)||!k||k===old.kind||!qOpts(old.kind,p).includes(k)||qa().some(o=>o!==d&&o.run.kind===k)) return;   // pas deux fois le même type dans la semaine
       const km0=sessionKm(old,vma), h0=old.hardMin||0, z0=zoneMins(wk.days).easy, i=wk.days.indexOf(d); let o={...old.qo};
       for(let t=0;t<4;t++){ const s=quality(k,wk.w,p,vma,wk.phase,o);
-        if(s&&sessionKm(s,vma)<=km0*1.05+.3&&(s.hardMin||0)<=h0*1.1+.5){ wk.days[i]={...d,run:{...s,ai:1,aiFrom:old.aiFrom||aiSnap(old,vma),note:(s.note?s.note+" ":"")+"Séance choisie par l'IA pour cette semaine."}};
+        if(s&&sessionKm(s,vma)<=km0*1.05+.3&&(s.hardMin||0)<=h0*1.1+.5){ wk.days[i]={...d,run:{...s,ai:1,aiFrom:old.aiFrom||aiSnap(old,vma,trail),note:(s.note?s.note+" ":"")+"Séance choisie par l'IA pour cette semaine."}};
           if(zoneMins(wk.days).easy>=Math.min(z0,.8)-1e-9){ mod.add(wk.w+":"+i); return; } wk.days[i]=d; }
         o= o.short? {...o,fewer:(o.fewer||0)+1} : {...o,short:true}; } });
     // allègement : jamais pour un débutant (ses séances sont déjà en facile continu) ; le footing ne dépasse jamais la distance de la séance remplacée
     if(x.a&&p.niveau!=="deb"){ const qs=qd(), d=qs[qs.length-1]; if(d){ const i=wk.days.indexOf(d), km=d.run.aiFrom? d.run.aiFrom.km : sessionKm(d.run,vma); let k2=Math.max(1.5,Math.floor(km*10)/10); while(k2>1.5&&sessionKm(easyRun(k2,vma),vma)>km+1e-9) k2=Math.round((k2-.1)*10)/10;
-      wk.days[i]={...d,run:{...easyRun(k2,vma,"Footing facile (semaine allégée)",0),ai:1,aiLight:1,aiFrom:d.run.aiFrom||aiSnap(d.run,vma),note:"Allégée par l'IA d'après ton ressenti ou ta demande : même distance, sans intensité."},kind:"easy"}; wk.aiLight=true; mod.add(wk.w+":"+i); } }
+      wk.days[i]={...d,run:{...easyRun(k2,vma,"Footing facile (semaine allégée)",0),ai:1,aiLight:1,aiFrom:d.run.aiFrom||aiSnap(d.run,vma,trail),note:"Allégée par l'IA d'après ton ressenti ou ta demande : même distance, sans intensité."},kind:"easy"}; wk.aiLight=true; mod.add(wk.w+":"+i); } }
   }
   weeks.ai={n:mod.size,at:a.at};
 }
@@ -1318,6 +1320,7 @@ function buildSportPlan(p){
 
 /* --- trail : le plan de course à pied, avec dénivelé --- */
 const dpMin14=r=> r&&r.dplus? r.dplus/100*6 : 0;   // trail : environ 6 min de plus par 100 m de D+ (même règle que dans les notes de séance)
+const TRAIL_T={"Footing facile":"Footing nature","Sortie longue":"Sortie longue trail","Sprints en côte":"Côtes sur sentier"}, trailTitle=t=>TRAIL_T[t]||t;
 function trailize(weeks,p){
   const o=p.objectif, {vma}=vmaOf(p), r0={forme:12,5:12,10:15,21:20,42:25}[o]??12, r1={forme:22,5:20,10:30,21:40,42:50}[o]??22, N=weeks.length;
   const w0=weeks[0]; if(w0&&w0.phase!=="race"&&!w0.days.some(d=>d.run&&d.kind!=="before")){ const si=Math.max(0,p.startIdx||0); w0.days[si]={...w0.days[si],run:{...easyRun(4,vma,"Footing facile"),note:"Première séance du plan : on démarre doucement."},kind:"easy"}; w0.firstEasy=true; }   // semaine 1 jamais vide
@@ -1336,7 +1339,7 @@ function trailize(weeks,p){
     if(!wk.deload&&wk.phase!=="taper"&&wk.phase!=="race") prev=tot;
     wk.dplus=tot;
     for(const {d,dp} of items){ const r=d.run; r.dplus=dp; r.trail=true;
-      if(r.title==="Footing facile") r.title="Footing nature"; else if(r.title==="Sortie longue") r.title="Sortie longue trail"; else if(r.title==="Sprints en côte") r.title="Côtes sur sentier";
+      r.title=trailTitle(r.title);
       const extra= dp>0? "Dénivelé positif visé : environ "+fmt0(dp)+" m (le temps réel peut être de "+Math.round(dp/100*6)+" min plus long). " : "";
       r.note=((r.note?r.note+" ":"")+extra+"Guide-toi à l'effort plus qu'à l'allure : marche dans les montées raides, descends relâché, appuis courts.").trim(); }
     for(const d of wk.days) if(d.run&&(d.run.type==="race"||d.kind==="race")){ const r=d.run, dp=Math.round((RACE_KM[o]||5)*r1*.8/50)*50; r.title=r.title.replace(/^Course/,"Trail"); r.dplus=dp; r.trail=true; r.note=((r.note?r.note+" ":"")+"Dénivelé positif de ton épreuve : prévois environ "+fmt0(dp)+" m (vérifie le profil officiel). Marche dans les montées raides, garde des forces pour la descente.").trim(); }

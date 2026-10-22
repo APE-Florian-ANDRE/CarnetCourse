@@ -13,7 +13,7 @@ const INJ=(fa)=>`(()=>{ const T=window.__T, n=T.profileNums(T.state.profile), p0
 (async()=>{
  const b=await chromium.launch(); const E=[];
  const S=await L.serve({"/config.js":L.cfgJs({PLAN_AI_URL:"https://plan.example.test/api/plan"}),"/app.js":appT});
- const mk=async({session=L.SESSION(),sd=seed(),width=1280,db=L.makeDb(),ctx=null}={})=>{ const c=ctx||await b.newContext({viewport:{width,height:900},locale:"fr-FR"}); const p=await c.newPage();
+ const mk=async({session=L.SESSION(),sd=seed(),width=1280,db=L.makeDb(),ctx=null,clock=null}={})=>{ const c=ctx||await b.newContext({viewport:{width,height:900},locale:"fr-FR"}); const p=await c.newPage(); if(clock) await p.clock.install({time:new Date(clock)});   // avant les scripts d'amorçage (dates de consentement cohérentes)
   p.on("pageerror",e=>E.push("PE "+e.message)); p.on("console",m=>{ if(["error","warning"].includes(m.type())&&!/Failed to load resource|net::ERR|CORS|status of (4|5)\d\d/.test(m.text())) E.push(m.type()+" "+m.text().slice(0,160)); });
   await L.fake(p,db,{session}); await p.addInitScript(({sd,pend})=>{ if(!sessionStorage.__seed&&!localStorage.getItem("__seeded")){ sessionStorage.__seed=1; localStorage.setItem("__seeded","1"); localStorage.setItem("carnet-course.v1",sd); localStorage.setItem("carnet.hv","1"); localStorage.setItem("carnet.vu","15"); if(pend) localStorage.setItem("carnet.consent",pend); } },{sd,pend:session?JSON.stringify({cgu:"2026-10-10",privacy:"2026-10-10",terms:true,health:true,age15:true,at:new Date().toISOString()}):null});
   await p.goto(S.url+"/"); await p.waitForTimeout(900); p.ctx=c; return p; };
@@ -128,19 +128,43 @@ const INJ=(fa)=>`(()=>{ const T=window.__T, n=T.profileNums(T.state.profile), p0
    ok(true,"B11 semaine en cours, jours passés : "+JSON.stringify(past.filter(x=>x.q||x.mod)));
    await p.ctx.close(); }
 
- /* ---- séance faite AVANT l'ajustement : l'IA la remplace-t-elle (et perd-on la marque « Faite ») ? ---- */
- { const p=await mk();
+ /* ---- séance faite AVANT l'ajustement : l'IA ne la remplace pas, la marque « Faite » reste ---- */
+ { const p=await mk({clock:"2026-10-22T10:00:00",session:null});
    await p.click("#tab-semaine"); await p.waitForTimeout(200); await p.selectOption("#weekSel","4"); await p.waitForTimeout(200);
    const qd=await p.evaluate(()=>{ const w=window.__T.plan[3], today=(new Date().getDay()+6)%7; const d=w.days.find(d=>d.i<today&&d.run&&d.run.type==="q"&&d.run.kind&&window.__T.qOpts(d.run.kind,window.__T.profileNums(window.__T.state.profile)).length>1); return d? d.i : -1; });
    if(qd>=0&&await p.$(`#days [data-done="${qd}"]`)){ await p.click(`#days [data-done="${qd}"]`); await p.waitForTimeout(200);
      const t0=await p.evaluate(i=>document.querySelector(`#days article[data-day="${i}"] .title`).textContent,qd);
      await p.evaluate(INJ("w=>false")); await p.waitForTimeout(200);
      const r=await p.evaluate(i=>{ const a=document.querySelector(`#days article[data-day="${i}"]`); return {title:a.querySelector(".title").textContent,ai:!!a.querySelector(".chip.ai"),done:!!a.querySelector(".chip.ok"),pressed:a.querySelector("[data-done]").getAttribute("aria-pressed")}; },qd);
-     ok(!(r.ai&&!r.done),"C1 séance déjà faite (jour passé de la semaine en cours) : l'IA ne la remplace pas, ou la marque « Faite » est gardée",{avant:t0,...r});
+     ok(!r.ai&&r.done&&r.title===t0,"C1 séance d'origine cochée avant l'ajustement : l'IA ne la remplace pas, la marque « Faite » reste",{avant:t0,...r});
      await p.evaluate(INJ("w=>w===4")); await p.waitForTimeout(200);
      const r2=await p.evaluate(i=>{ const a=document.querySelector(`#days article[data-day="${i}"]`); return {title:a.querySelector(".title").textContent,ai:a.querySelector(".chip.ai")&&a.querySelector(".chip.ai").textContent,done:!!a.querySelector(".chip.ok")}; },qd);
-     ok(!(r2.ai&&!r2.done),"C2 séance déjà faite puis semaine allégée par l'IA : la séance faite n'est pas réécrite, ou reste marquée « Faite »",{avant:t0,...r2}); }
-   else ok(true,"C1 (aucune séance d'intensité passée cette semaine, cas non testable aujourd'hui)");
+     ok(!r2.ai&&r2.done&&r2.title===t0,"C2 séance d'origine cochée puis semaine allégée par l'IA : la séance n'est pas réécrite et reste « Faite »",{avant:t0,...r2}); }
+   else ok(false,"C1 aucune séance d'intensité modifiable avant le jeudi de la semaine 4 (date simulée)",qd);
+   await p.ctx.close(); }
+
+ /* ---- séance de l'IA cochée « Faite » : l'IA reste appliquée et la coche aussi, même après recalcul, rechargement et passage du jour ---- */
+ { const p=await mk({clock:"2026-10-22T10:00:00",session:null});
+   await p.evaluate(INJ("w=>false")); await p.click("#tab-semaine"); await p.waitForTimeout(200);
+   // première séance modifiée (non allégée) à partir d'aujourd'hui (jeudi de la semaine 4)
+   const tg=await p.evaluate(()=>{ for(const w of window.__T.plan) for(const d of w.days) if(d.run&&d.run.aiFrom&&!d.run.aiLight&&(w.w>4||(w.w===4&&d.i>=3))) return {w:w.w,i:d.i,t:d.run.title}; return null; });
+   if(tg){ const day=new Date("2026-09-28T10:00:00"); day.setDate(day.getDate()+(tg.w-1)*7+tg.i);
+     await p.clock.setSystemTime(day); await p.selectOption("#weekSel",String(tg.w)); await p.waitForTimeout(200);
+     await p.click(`#days [data-done="${tg.i}"]`); await p.waitForTimeout(200);
+     const st=()=>p.evaluate(i=>{ const a=document.querySelector(`#days article[data-day="${i}"]`); return {title:a.querySelector(".title").textContent,ai:!!a.querySelector(".chip.ai"),done:!!a.querySelector(".chip.ok"),btn:!!a.querySelector("[data-aiba]")}; },tg.i);
+     const good=r=>r.title===tg.t&&r.ai&&r.done&&r.btn;
+     const r0=await st(); ok(good(r0),"G1 séance de l'IA cochée « Faite » : puce IA, titre IA et coche",{tg,...r0});
+     await p.evaluate(()=>window.__T.recompute()); await p.waitForTimeout(150); const r1=await st();
+     ok(good(r1),"G2 après recalcul : l'IA reste appliquée et la coche aussi",{tg,...r1});
+     await p.reload(); await p.waitForTimeout(900); await p.click("#tab-semaine"); await p.selectOption("#weekSel",String(tg.w)); await p.waitForTimeout(200); const r2=await st();
+     ok(good(r2),"G3 après rechargement : l'IA reste appliquée et la coche aussi",{tg,...r2});
+     // (b) le jour passe : la séance affichée ne change pas
+     const next=new Date(day); next.setDate(next.getDate()+1); await p.clock.setSystemTime(next);
+     await p.evaluate(()=>window.__T.recompute()); await p.waitForTimeout(150); const r3=await st();
+     ok(good(r3),"G4 lendemain (date simulée), après recalcul : séance de l'IA et coche gardées",{tg,...r3});
+     await p.reload(); await p.waitForTimeout(900); await p.click("#tab-semaine"); await p.selectOption("#weekSel",String(tg.w)); await p.waitForTimeout(200); const r4=await st();
+     ok(good(r4),"G5 lendemain, après rechargement : séance de l'IA et coche gardées",{tg,...r4}); }
+   else ok(false,"G1 aucune séance modifiée par l'IA à venir");
    await p.ctx.close(); }
 
  /* ---- profil : liste repliée, profil modifié, retrait, rechargement, deux onglets ---- */

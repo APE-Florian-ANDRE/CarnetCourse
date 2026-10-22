@@ -60,14 +60,23 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
        count:(()=>{ const n=P({}), p0=T.buildPlan({...n,noAi:true}), wk={}; for(const w of p0){ const qs=w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind); wk[w.w]={f:"",c:"x",q:qs.map(d=>T.qOpts(d.run.kind,n)[1]||""),a:1}; }
          T.state.aip=T.cleanAip({p:{sig:T.planSig(n),at:Date.now(),cplx:"standard",resume:"",wk}}); const p1=T.buildPlan(n); const qn=p0.reduce((a,w)=>a+w.days.filter(d=>d.run&&d.run.type==="q").length,0); T.state.aip={}; return {n:p1.ai.n,qn}; })()
      };
-     // jours passés et séance cochée : jamais modifiés par l'IA (la marque « Faite » est liée au contenu de la séance)
-     out.past=(()=>{ const n=P({}), p0=T.buildPlan({...n,noAi:true}), wk={}; for(const w of p0){ const qs=w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind); wk[w.w]={f:"",c:"x",q:qs.map(d=>T.qOpts(d.run.kind,n)[1]||""),a:1}; }
-       const st=new Date(T.state.profile.start+"T12:00:00"), f=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"), isoD=(w,i)=>{ const d=new Date(st); d.setDate(d.getDate()+(w-1)*7+i); return f(d); }, today=f(new Date());
-       let mark=null; for(const w of p0) for(const d of w.days) if(!mark&&d.run&&d.run.type==="q"&&isoD(w.w,d.i)>=today&&T.qOpts(d.run.kind,n).length>1) mark={w:w.w,i:d.i};
-       const sd=T.state.done; T.state.done={...(sd||{}),[isoD(mark.w,mark.i)]:{v:"done",sig:"",at:1}};
-       T.state.aip=T.cleanAip({p:{sig:T.planSig(n),at:Date.now(),cplx:"standard",resume:"",wk}}); const p1=T.buildPlan(n); T.state.aip={}; T.state.done=sd;
-       const bad=[]; let mods=0; p1.forEach((w,k)=>w.days.forEach((d,i)=>{ const same=JSON.stringify(d.run)===JSON.stringify(p0[k].days[i].run); if(!same) mods++; if((isoD(w.w,i)<today||(w.w===mark.w&&i===mark.i))&&!same) bad.push([w.w,i]); }));
-       return {ok:!bad.length&&mods>0,bad,mods,mark}; })();
+     // verrou : seule une marque posée sur la séance d'ORIGINE (avant l'ajustement) la protège ; une marque sur la séance de l'IA ne la défait pas ; la date du jour n'intervient pas
+     out.past=(()=>{ const n=P({}), p0=T.buildPlan({...n,noAi:true}), wk={}; for(const w of p0){ const qs=w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind); wk[w.w]={f:"",c:"x",q:qs.map(d=>T.qOpts(d.run.kind,n)[1]||""),a:0}; }
+       const st=new Date(T.state.profile.start+"T12:00:00"), f=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"), isoD=(w,i)=>{ const d=new Date(st); d.setDate(d.getDate()+(w-1)*7+i); return f(d); };
+       const sig=d=>(d.kind||"")+"|"+(d.run?d.run.title:"")+"|"+(d.renfo?d.renfo.t:""), same=(a,b)=>JSON.stringify(a.run)===JSON.stringify(b.run);
+       const sd=T.state.done, aip=T.cleanAip({p:{sig:T.planSig(n),at:Date.now(),cplx:"standard",resume:"",wk}});
+       T.state.done={}; T.state.aip=aip; const p1=T.buildPlan(n);
+       const mods=[]; p1.forEach((w,k)=>w.days.forEach((d,i)=>{ if(d.run&&d.run.aiFrom) mods.push({w:w.w,i,k}); }));
+       const A=mods[0], B=mods[mods.length-1];   // A : séance d'origine cochée ; B : séance de l'IA cochée
+       T.state.done={[isoD(A.w,A.i)]:{v:"done",sig:sig(p0[A.k].days[A.i]),at:1},[isoD(B.w,B.i)]:{v:"done",sig:sig(p1[B.k].days[B.i]),at:1}};
+       const p2=T.buildPlan(n);
+       // date du jour décalée d'un an : même plan
+       const RD=Date, off=365*864e5; window.Date=class extends RD{ constructor(...a){ if(a.length) super(...a); else super(RD.now()+off); } static now(){ return RD.now()+off; } };
+       let p3; try{ p3=T.buildPlan(n); } finally{ window.Date=RD; }
+       T.state.aip={}; T.state.done=sd;
+       const r={A:same(p2[A.k].days[A.i],p0[A.k].days[A.i]),B:same(p2[B.k].days[B.i],p1[B.k].days[B.i])&&!!p2[B.k].days[B.i].run.aiFrom,mods:mods.length,
+         date:JSON.stringify(p2.map(w=>w.days))===JSON.stringify(p3.map(w=>w.days)), noMark:JSON.stringify(p1.filter(w=>w.w!==A.w).map(w=>w.days))===JSON.stringify(p2.filter(w=>w.w!==A.w).map(w=>w.days))};
+       r.ok=r.A&&r.B&&r.date&&r.noMark&&mods.length>1&&A!==B; return r; })();
      out.clean=[T.cleanAip({p:{sig:"abc",at:5,cplx:"zzz",resume:"<b>x</b>"+"y".repeat(400),wk:{"0":{c:"no"},"3":{f:"<i>f</i>",c:"c",q:["seuil","rm -rf",7],a:true},"x":{}}}}),T.cleanAip({p:{sig:"../",at:5}}),T.cleanAip([1]),T.cleanAip({p:{x:1,at:9}})];
      T.state.aip={};
      return out; });
@@ -91,8 +100,8 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
    ok(aft.every((w,i)=>w.q.reduce((a,x)=>a+x.h,0)<=bef[i].q.reduce((a,x)=>a+x.h,0)*1.1+1),"M10 IA : minutes d'intensité de chaque semaine au plus +10 %");
    ok(aft.every((w,i)=>w.q.every(x=>!x.k||A.opts[i].flat().includes(x.k))),"M11 IA : types choisis parmi les remplaçants permis");
    ok(aft.every(w=>new Set(w.q.map(x=>x.k)).size===w.q.length),"M12 IA : jamais deux fois le même type dans une semaine");
-   ok(aft.filter((w,i)=>A.fut[i]&&w.w%3===0&&bef[i].q.length&&w.phase!=="taper"&&w.phase!=="race").every(w=>w.q.length===bef[w.w-1].q.length-1),"M13 IA : semaine allégée (à venir) = une séance d'intensité en moins");
-   ok(R.past.ok,"M26 IA : séances des jours passés et séance cochée jamais modifiées",R.past);
+   ok(aft.filter((w,i)=>w.w%3===0&&bef[i].q.length&&w.phase!=="taper"&&w.phase!=="race").every(w=>w.q.length===bef[w.w-1].q.length-1),"M13 IA : semaine allégée = une séance d'intensité en moins");
+   ok(R.past.ok,"M26 IA : séance d'origine cochée avant l'ajustement jamais modifiée ; séance de l'IA cochée gardée ; jours passés modifiables (plan indépendant de la date)",R.past);
    const SN=R.snap;
    ok(SN.mods.length===SN.n&&SN.mods.every(m=>m.ok),"M23 avant / après : chaque séance modifiée garde la séance du plan qu'elle remplace (titre, distance, durée, contenu)",SN);
    ok(SN.mods.some(m=>m.light)&&SN.mods.every(m=>!m.same),"M24 avant / après : allègements marqués, aucune séance identique signalée comme modifiée");
