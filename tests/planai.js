@@ -15,7 +15,7 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
      if(mode==="429") return send(429,{reply:"Trop de demandes pour le moment : réessaie dans quelques minutes."});
      if(mode==="bad") return send(200,{plan:"pas un objet"});
      const delay=mode==="slow"?1800:0;
-     const sem=(j.semaines||[]).map((w,i)=>({s:w.s,focus:i===0?"<img src=x onerror=window.__pwn=1>Régularité":"Régularité",conseil:"Couche-toi tôt la veille de la séance d'intensité.",q:(w.qualite||[]).map(x=>x.options[1]||"garder"),allege:i===0&&(w.qualite||[]).length>0}));
+     const sem=(j.semaines||[]).map((w,i)=>({s:w.s,focus:i===0?"<img src=x onerror=window.__pwn=1>Régularité":"Régularité",conseil:"Couche-toi tôt la veille de la séance d'intensité.",q:(w.qualite||[]).map(x=>x.options[1]||"garder"),allege:i<=1&&(w.qualite||[]).length>0}));
      setTimeout(()=>send(200,{plan:{resume:"Plus de fartlek pour ménager ta fatigue.",semaines:sem}}),delay); }); });
  await new Promise(r=>api.listen(0,"127.0.0.1",r)); const API="http://127.0.0.1:"+api.address().port+"/api/plan"; L.EXTRA.v=" http://127.0.0.1:"+api.address().port;
  const b=await chromium.launch(); const E=[];
@@ -38,7 +38,7 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
      const n=P({}), plan0=T.buildPlan({...n,noAi:true}), wk={};
      for(const w of plan0){ const qs=w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind); wk[w.w]={f:"But "+w.w,c:"Conseil "+w.w,q:qs.map(d=>T.qOpts(d.run.kind,n)[1]||""),a:w.w%3===0?1:0}; }
      T.state.aip=T.cleanAip({p:{sig:T.planSig(n),at:Date.now(),cplx:"standard",resume:"r",wk}});
-     const plan1=T.buildPlan(n); out.ai={before:wkInfo(plan0,n),after:wkInfo(plan1,n),n:plan1.ai&&plan1.ai.n,tips:plan1.filter(w=>w.aiTip).length,N:plan1.length,opts:plan0.map(w=>w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind).map(d=>T.qOpts(d.run.kind,n)))};
+     const plan1=T.buildPlan(n), st0=new Date(T.state.profile.start+"T00:00:00").getTime(); out.ai={fut:plan1.map(w=>st0+(w.w-1)*7*864e5>Date.now()),before:wkInfo(plan0,n),after:wkInfo(plan1,n),n:plan1.ai&&plan1.ai.n,tips:plan1.filter(w=>w.aiTip).length,N:plan1.length,opts:plan0.map(w=>w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind).map(d=>T.qOpts(d.run.kind,n)))};
      // avant / après : chaque séance modifiée garde le résumé de la séance du plan qu'elle remplace (aiFrom), jamais ailleurs
      out.snap=(()=>{ const v=T.vmaOf(n).vma, mods=[]; plan1.forEach((w,k)=>w.days.forEach((d,i)=>{ if(!d.run||!d.run.aiFrom) return; const f=d.run.aiFrom, o=plan0[k].days[i];
          mods.push({ok:!!(o.run&&o.run.title===f.t&&Math.abs(T.sessionKm(o.run,v)-f.km)<1e-9&&f.s&&f.min>0&&d.run.ai), light:!!d.run.aiLight, same:o.run&&o.run.title===d.run.title&&!d.run.aiLight}); }));
@@ -60,6 +60,14 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
        count:(()=>{ const n=P({}), p0=T.buildPlan({...n,noAi:true}), wk={}; for(const w of p0){ const qs=w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind); wk[w.w]={f:"",c:"x",q:qs.map(d=>T.qOpts(d.run.kind,n)[1]||""),a:1}; }
          T.state.aip=T.cleanAip({p:{sig:T.planSig(n),at:Date.now(),cplx:"standard",resume:"",wk}}); const p1=T.buildPlan(n); const qn=p0.reduce((a,w)=>a+w.days.filter(d=>d.run&&d.run.type==="q").length,0); T.state.aip={}; return {n:p1.ai.n,qn}; })()
      };
+     // jours passés et séance cochée : jamais modifiés par l'IA (la marque « Faite » est liée au contenu de la séance)
+     out.past=(()=>{ const n=P({}), p0=T.buildPlan({...n,noAi:true}), wk={}; for(const w of p0){ const qs=w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind); wk[w.w]={f:"",c:"x",q:qs.map(d=>T.qOpts(d.run.kind,n)[1]||""),a:1}; }
+       const st=new Date(T.state.profile.start+"T12:00:00"), f=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"), isoD=(w,i)=>{ const d=new Date(st); d.setDate(d.getDate()+(w-1)*7+i); return f(d); }, today=f(new Date());
+       let mark=null; for(const w of p0) for(const d of w.days) if(!mark&&d.run&&d.run.type==="q"&&isoD(w.w,d.i)>=today&&T.qOpts(d.run.kind,n).length>1) mark={w:w.w,i:d.i};
+       const sd=T.state.done; T.state.done={...(sd||{}),[isoD(mark.w,mark.i)]:{v:"done",sig:"",at:1}};
+       T.state.aip=T.cleanAip({p:{sig:T.planSig(n),at:Date.now(),cplx:"standard",resume:"",wk}}); const p1=T.buildPlan(n); T.state.aip={}; T.state.done=sd;
+       const bad=[]; let mods=0; p1.forEach((w,k)=>w.days.forEach((d,i)=>{ const same=JSON.stringify(d.run)===JSON.stringify(p0[k].days[i].run); if(!same) mods++; if((isoD(w.w,i)<today||(w.w===mark.w&&i===mark.i))&&!same) bad.push([w.w,i]); }));
+       return {ok:!bad.length&&mods>0,bad,mods,mark}; })();
      out.clean=[T.cleanAip({p:{sig:"abc",at:5,cplx:"zzz",resume:"<b>x</b>"+"y".repeat(400),wk:{"0":{c:"no"},"3":{f:"<i>f</i>",c:"c",q:["seuil","rm -rf",7],a:true},"x":{}}}}),T.cleanAip({p:{sig:"../",at:5}}),T.cleanAip([1]),T.cleanAip({p:{x:1,at:9}})];
      T.state.aip={};
      return out; });
@@ -83,7 +91,8 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
    ok(aft.every((w,i)=>w.q.reduce((a,x)=>a+x.h,0)<=bef[i].q.reduce((a,x)=>a+x.h,0)*1.1+1),"M10 IA : minutes d'intensité de chaque semaine au plus +10 %");
    ok(aft.every((w,i)=>w.q.every(x=>!x.k||A.opts[i].flat().includes(x.k))),"M11 IA : types choisis parmi les remplaçants permis");
    ok(aft.every(w=>new Set(w.q.map(x=>x.k)).size===w.q.length),"M12 IA : jamais deux fois le même type dans une semaine");
-   ok(aft.filter((w,i)=>w.w%3===0&&bef[i].q.length&&w.phase!=="taper"&&w.phase!=="race").every(w=>w.q.length===bef[w.w-1].q.length-1),"M13 IA : semaine allégée = une séance d'intensité en moins");
+   ok(aft.filter((w,i)=>A.fut[i]&&w.w%3===0&&bef[i].q.length&&w.phase!=="taper"&&w.phase!=="race").every(w=>w.q.length===bef[w.w-1].q.length-1),"M13 IA : semaine allégée (à venir) = une séance d'intensité en moins");
+   ok(R.past.ok,"M26 IA : séances des jours passés et séance cochée jamais modifiées",R.past);
    const SN=R.snap;
    ok(SN.mods.length===SN.n&&SN.mods.every(m=>m.ok),"M23 avant / après : chaque séance modifiée garde la séance du plan qu'elle remplace (titre, distance, durée, contenu)",SN);
    ok(SN.mods.some(m=>m.light)&&SN.mods.every(m=>!m.same),"M24 avant / après : allègements marqués, aucune séance identique signalée comme modifiée");
@@ -126,12 +135,14 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
    await p.click("#tab-semaine"); await p.waitForTimeout(200);
    const wk=await p.evaluate(()=>({tip:(document.querySelector("#weekAlerts .aitip")||{}).textContent||"",img:!!document.querySelector("#weekAlerts img"),pwn:!!window.__pwn,light:/semaine allégée/.test(document.querySelector("#days").textContent)}));
    ok(/Conseil de l'IA/.test(wk.tip)&&/Couche-toi tôt/.test(wk.tip)&&!wk.img&&!wk.pwn,"U11 conseil de la semaine affiché comme du texte (HTML neutralisé)",wk);
+   await p.selectOption("#weekSel",String(h.body.semaines[1].s)); await p.waitForTimeout(200);
+   wk.light=await p.evaluate(()=>/semaine allégée/.test(document.querySelector("#days").textContent));
    ok(wk.light,"U12 semaine allégée par l'IA : footing à la place de la dernière séance d'intensité");
    const ab0=await p.evaluate(()=>{ const b=document.querySelector("#days [data-aiba]"), c=b&&document.getElementById(b.getAttribute("aria-controls")); return {chip:[...document.querySelectorAll("#days .chip.ai")].map(x=>x.textContent),n:document.querySelectorAll("#days [data-aiba]").length,exp:b&&b.getAttribute("aria-expanded"),hid:!!(c&&c.hidden&&!c.offsetHeight)}; });
    ok(ab0.n>0&&ab0.chip.length===ab0.n&&ab0.chip.includes("Allégée par l'IA")&&ab0.exp==="false"&&ab0.hid,"U29 cartes : repère « Modifiée / Allégée par l'IA », avant / après replié (aria-expanded=false)",ab0);
    await p.setViewportSize({width:375,height:800}); await p.click("#days [data-aiba]"); await p.waitForTimeout(150);
-   const ab1=await p.evaluate(()=>{ const b=document.querySelector("#days [data-aiba]"), c=document.getElementById(b.getAttribute("aria-controls")); return {exp:b.getAttribute("aria-expanded"),vis:!c.hidden&&c.offsetHeight>0,t:c.textContent,html:c.innerHTML,sw:document.documentElement.scrollWidth}; });
-   ok(ab1.exp==="true"&&ab1.vis&&/Avant/.test(ab1.t)&&/Après/.test(ab1.t)&&/km/.test(ab1.t)&&/Footing facile \(semaine allégée\)/.test(ab1.t)&&!/<img|<script/i.test(ab1.html),"U30 avant / après déplié : les deux séances, distance et contenu",ab1.t);
+   const ab1=await p.evaluate(()=>{ const b=document.querySelector("#days [data-aiba]"), c=document.getElementById(b.getAttribute("aria-controls")); const la=[...document.querySelectorAll("#days article")].find(a=>/Allégée par/.test(a.textContent)); return {exp:b.getAttribute("aria-expanded"),vis:!c.hidden&&c.offsetHeight>0,t:c.textContent,lt:la?la.querySelector(".aiba-c").textContent:"",html:c.innerHTML,sw:document.documentElement.scrollWidth}; });
+   ok(ab1.exp==="true"&&ab1.vis&&/Avant/.test(ab1.t)&&/Après/.test(ab1.t)&&/km/.test(ab1.t)&&/Avant/.test(ab1.lt)&&/Footing facile \(semaine allégée\)/.test(ab1.lt)&&!/<img|<script/i.test(ab1.html),"U30 avant / après déplié : les deux séances, distance et contenu",ab1.t);
    ok(ab1.sw<=375,"U31 avant / après sur téléphone (375 px) : pas de défilement horizontal",ab1.sw);
    await p.click("#days [data-aiba]"); await p.waitForTimeout(100);
    ok(await p.evaluate(()=>{ const b=document.querySelector("#days [data-aiba]"); return b.getAttribute("aria-expanded")==="false"&&document.getElementById(b.getAttribute("aria-controls")).hidden; }),"U32 avant / après : se replie au second appui");

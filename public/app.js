@@ -562,8 +562,11 @@ const LONG_NEED={5:3.5,10:7,21:16,42:28};
 const reachable=(o,wk,deb)=> !LONG_NEED[o] || (!(deb&&((o==="21"&&wk.length<30)||(o==="42"&&wk.length<52))) && wk.topLong>=LONG_NEED[o]-.05);
 function buildPlan(p){
   if(evSport(p.sport)){ const w=buildSportPlan(p); applyAi(w,p); return w; }
-  const weeks=buildPlanRun(p); applyAi(weeks,p); if(p.sport==="trail") trailize(weeks,p); return weeks;
+  const weeks=buildPlanRun(p); applyAi(weeks,p); if(p.sport==="trail"){ trailize(weeks,p); if(weeks.ai) aiTrailFrom(weeks,p); } return weeks;
 }
+// trail : l'« avant » doit être la séance que l'utilisateur voyait, donc celle du plan sans IA après trailize (titres et notes de sentier)
+function aiTrailFrom(weeks,p){ const b=buildPlanRun(p), v=vmaOf(p).vma; trailize(b,p);
+  weeks.forEach((wk,k)=>wk.days.forEach((d,i)=>{ const o=b[k]&&b[k].days[i]; if(d.run&&d.run.aiFrom&&o&&o.run) d.run.aiFrom=aiSnap(o.run,v); })); }
 /* ---- ajustement par l'IA (api/plan.js) : appliqué sur le plan déjà construit, jamais au-delà de ses limites ----
    L'IA choisit le type des séances d'intensité parmi les remplaçants permis, peut alléger une semaine (sa dernière séance d'intensité devient un footing
    de même distance) et donne un conseil par semaine. Une séance n'est remplacée que si elle reste au plus aussi longue et aussi intense,
@@ -578,18 +581,21 @@ const runSum=r=>r.blocks.map(b=>b.l+(b.min&&!b.mix&&b.z!=="walk"&&b.work==null?"
 const aiSnap=(r,vma)=>({t:r.title,s:runSum(r),km:sessionKm(r,vma),min:sessionDur(r)});
 function applyAi(weeks,p){
   const a=aiOf(p); if(!a) return; const run=!evSport(p.sport), vma=run? vmaOf(p).vma : 0, mod=new Set();   // séances modifiées (une séance changée puis allégée compte une fois)
+  // séance d'un jour passé, ou déjà cochée (faite / pas faite) : jamais modifiée, sa marque (liée à daySig) resterait sinon orpheline
+  const tdy=todayIso(), dn=(state&&state.done)||{}, locked=(w,i)=>{ const k=isoOf(w,i); return !!k&&(k<tdy||!!(dn[k]&&dn[k].v!=="none")); };
   for(const wk of weeks){ const x=a.wk[wk.w]; if(!x) continue;
     if(x.f||x.c) wk.aiTip={f:x.f,c:x.c};
     if(!run||wk.phase==="taper"||wk.phase==="race") continue;
-    const qd=()=>wk.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind&&d.kind!=="before");
-    qd().forEach((d,j)=>{ const k=x.q[j], old=d.run; if(!k||k===old.kind||!qOpts(old.kind,p).includes(k)||qd().some(o=>o!==d&&o.run.kind===k)) return;   // pas deux fois le même type dans la semaine
+    const qa=()=>wk.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind&&d.kind!=="before");   // toutes : l'IA a reçu les options dans cet ordre
+    const qd=()=>qa().filter(d=>!locked(wk.w,wk.days.indexOf(d)));
+    qa().forEach((d,j)=>{ const k=x.q[j], old=d.run; if(locked(wk.w,wk.days.indexOf(d))||!k||k===old.kind||!qOpts(old.kind,p).includes(k)||qa().some(o=>o!==d&&o.run.kind===k)) return;   // pas deux fois le même type dans la semaine
       const km0=sessionKm(old,vma), h0=old.hardMin||0, z0=zoneMins(wk.days).easy, i=wk.days.indexOf(d); let o={...old.qo};
       for(let t=0;t<4;t++){ const s=quality(k,wk.w,p,vma,wk.phase,o);
         if(s&&sessionKm(s,vma)<=km0*1.05+.3&&(s.hardMin||0)<=h0*1.1+.5){ wk.days[i]={...d,run:{...s,ai:1,aiFrom:old.aiFrom||aiSnap(old,vma),note:(s.note?s.note+" ":"")+"Séance choisie par l'IA pour cette semaine."}};
           if(zoneMins(wk.days).easy>=Math.min(z0,.8)-1e-9){ mod.add(wk.w+":"+i); return; } wk.days[i]=d; }
         o= o.short? {...o,fewer:(o.fewer||0)+1} : {...o,short:true}; } });
     // allègement : jamais pour un débutant (ses séances sont déjà en facile continu) ; le footing ne dépasse jamais la distance de la séance remplacée
-    if(x.a&&p.niveau!=="deb"){ const qs=qd(), d=qs[qs.length-1]; if(d){ const i=wk.days.indexOf(d), km=sessionKm(d.run,vma); let k2=Math.max(1.5,Math.floor(km*2)/2); while(k2>1.5&&sessionKm(easyRun(k2,vma),vma)>km+1e-9) k2-=.5;
+    if(x.a&&p.niveau!=="deb"){ const qs=qd(), d=qs[qs.length-1]; if(d){ const i=wk.days.indexOf(d), km=d.run.aiFrom? d.run.aiFrom.km : sessionKm(d.run,vma); let k2=Math.max(1.5,Math.floor(km*10)/10); while(k2>1.5&&sessionKm(easyRun(k2,vma),vma)>km+1e-9) k2=Math.round((k2-.1)*10)/10;
       wk.days[i]={...d,run:{...easyRun(k2,vma,"Footing facile (semaine allégée)",0),ai:1,aiLight:1,aiFrom:d.run.aiFrom||aiSnap(d.run,vma),note:"Allégée par l'IA d'après ton ressenti ou ta demande : même distance, sans intensité."},kind:"easy"}; wk.aiLight=true; mod.add(wk.w+":"+i); } }
   }
   weeks.ai={n:mod.size,at:a.at};
@@ -1462,8 +1468,8 @@ function followedOf(){ if(followed==null){ try{ followed=localStorage.getItem("c
 const aibaOpen=new Set();
 const kmTxt=k=>fmt1(k).replace(/,0$/,"");
 const aiLine=x=>`<b>${esc(x.t)}</b> · ${x.min?"≈ "+fmt0(x.min)+" min · ":""}${kmTxt(x.km)} km`;
-function aibaHtml(w,d){ const r=d.run, f=r&&r.aiFrom; if(!f) return ""; const op=aibaOpen.has(w+":"+d.i), id="aiba-"+d.i, now=aiSnap(r,E.vma);
-  return `<div class="aiba"><button class="aibt" type="button" data-aiba="${d.i}" aria-expanded="${op}" aria-controls="${id}">Voir avant / après</button><div class="aiba-c" id="${id}"${op?"":" hidden"}><p class="aiba-r"><span class="aiba-k">Avant</span><span class="aiba-v">${aiLine(f)}<small>${esc(f.s)}</small></span></p><p class="aiba-r now"><span class="aiba-k">Après</span><span class="aiba-v">${aiLine(now)}<small>${esc(now.s)}</small></span></p></div></div>`; }
+function aibaHtml(w,d){ const r=d.run, f=r&&r.aiFrom; if(!f) return ""; const key=w+":"+(d.movedFrom!=null? d.movedFrom : d.i), op=aibaOpen.has(key), id="aiba-"+d.i, now=aiSnap(r,E.vma);
+  return `<div class="aiba"><button class="aibt" type="button" data-aiba="${d.i}" data-aibk="${key}" aria-expanded="${op}" aria-controls="${id}" aria-label="Voir avant / après (${DAYS[d.i].toLowerCase()})">Voir avant / après</button><div class="aiba-c" id="${id}"${op?"":" hidden"}><p class="aiba-r"><span class="aiba-k">Avant</span><span class="aiba-v">${aiLine(f)}<small>${esc(f.s)}</small></span></p><p class="aiba-r now"><span class="aiba-k">Après</span><span class="aiba-v">${aiLine(now)}<small>${esc(now.s)}</small></span></p></div></div>`; }
 function renderWeek(){
   const wk=plan[state.week-1], f=dayFuel(P,E,wk), tp=todayPos(), lt14=lighterSet14();
   $("#weekTitle").textContent="Semaine "+wk.w;
@@ -2306,7 +2312,7 @@ $("#days").addEventListener("click",e=>{
   if(b.dataset.done!=null||b.dataset.skip!=null){ const i=+(b.dataset.done??b.dataset.skip), k=b.dataset.done!=null?"done":"skip"; setDone(w,i,k,`#days [data-${k}="${i}"]`); }
   else if(b.dataset.move!=null) openMoveSheet(+b.dataset.move,b);
   else if(b.dataset.vm!=null){ const a=b.closest("article"), open=a.classList.contains("cmp"); setTile(a,open); if(a.dataset.iso){ tiles.o[a.dataset.iso]=open; saveTiles(); } updFoldAll(); }
-  else if(b.dataset.aiba!=null){ const k=w+":"+b.dataset.aiba, op=b.getAttribute("aria-expanded")!=="true", c=document.getElementById(b.getAttribute("aria-controls"));
+  else if(b.dataset.aiba!=null){ const k=b.dataset.aibk, op=b.getAttribute("aria-expanded")!=="true", c=document.getElementById(b.getAttribute("aria-controls"));
     b.setAttribute("aria-expanded",String(op)); if(c) c.hidden=!op; if(op) aibaOpen.add(k); else aibaOpen.delete(k); }
   else if(b.dataset.ics!=null) openExport(b,{w,i:+b.dataset.ics});
   else if(b.dataset.timer!=null) openTimer(w,+b.dataset.timer,b);

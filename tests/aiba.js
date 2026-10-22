@@ -49,7 +49,7 @@ const INJ=(fa)=>`(()=>{ const T=window.__T, n=T.profileNums(T.state.profile), p0
      out.noQ=(()=>{ const n=P({}), p0=T.buildPlan({...n,noAi:true}); return p0.filter(w=>!w.days.some(d=>d.run&&d.run.type==="q"&&d.run.kind)).map(w=>w.w); })();
      // changée puis allégée : l'avant de la séance allégée est la séance d'origine, pas la séance choisie par l'IA
      out.chain=(()=>{ const n=P({}), p0=T.buildPlan({...n,noAi:true}), wk={}; let tw=0;
-       for(const w of p0){ const qs=w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind); if(!tw&&qs.length>=1&&w.phase!=="taper"&&w.phase!=="race"&&T.qOpts(qs[qs.length-1].run.kind,n).length>1) tw=w.w;
+       for(const w of p0){ const qs=w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind); if(!tw&&new Date(T.state.profile.start+"T00:00:00").getTime()+(w.w-1)*7*864e5>Date.now()&&qs.length>=1&&w.phase!=="taper"&&w.phase!=="race"&&T.qOpts(qs[qs.length-1].run.kind,n).length>1) tw=w.w;
          wk[w.w]={f:"",c:"",q:qs.map(d=>T.qOpts(d.run.kind,n)[1]||""),a:w.w===tw?1:0}; }
        T.state.aip=T.cleanAip({p:{sig:T.planSig(n),at:Date.now(),cplx:"standard",resume:"",wk}}); const p1=T.buildPlan(n); T.state.aip={};
        const w0=p0[tw-1], w1=p1[tw-1], qs=w0.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind), last=qs[qs.length-1], i=w0.days.indexOf(last), d1=w1.days[i];
