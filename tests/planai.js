@@ -36,9 +36,9 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
        out.prof[k]=r; }
      // ajustement IA : chaque séance reçoit son 2e remplaçant permis, une semaine sur trois est allégée
      const n=P({}), plan0=T.buildPlan({...n,noAi:true}), wk={};
-     for(const w of plan0){ const qs=w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind); wk[w.w]={f:"But "+w.w,c:"Conseil "+w.w,q:qs.map(d=>T.qOpts(d.run.kind,n)[1]||""),a:w.w%3===0?1:0}; }
+     for(const w of plan0){ const qs=w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind); wk[w.w]={f:"But "+w.w,c:"Conseil "+w.w,q:qs.map(d=>T.qOpts(d.run.kind,n,w.qPool)[1]||""),a:w.w%3===0?1:0}; }
      T.state.aip=T.cleanAip({p:{sig:T.planSig(n),at:Date.now(),cplx:"standard",resume:"r",wk}});
-     const plan1=T.buildPlan(n); out.ai={before:wkInfo(plan0,n),after:wkInfo(plan1,n),n:plan1.ai&&plan1.ai.n,tips:plan1.filter(w=>w.aiTip).length,N:plan1.length,opts:plan0.map(w=>w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind).map(d=>T.qOpts(d.run.kind,n)))};
+     const plan1=T.buildPlan(n); out.ai={before:wkInfo(plan0,n),after:wkInfo(plan1,n),n:plan1.ai&&plan1.ai.n,tips:plan1.filter(w=>w.aiTip).length,N:plan1.length,opts:plan0.map(w=>w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind).map(d=>T.qOpts(d.run.kind,n,w.qPool)))};
      out.aiRace=(()=>{ const n2=P({objectif:"10",raceDate:"2026-12-20"}), p0=T.buildPlan({...n2,noAi:true}), wk2={}; for(const w of p0) wk2[w.w]={f:"",c:"x",q:["fartlek","fartlek"],a:1};
        T.state.aip=T.cleanAip({p:{sig:T.planSig(n2),at:Date.now(),cplx:"standard",resume:"",wk:wk2}}); const p1=T.buildPlan(n2);
        return p0.filter(w=>w.phase==="taper"||w.phase==="race").every(w=>JSON.stringify(w.days)===JSON.stringify(p1[w.w-1].days)); })();
@@ -51,7 +51,7 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
        debLong:(()=>{ const o={niveau:"deb",objectif:"10",seances:"3",volume:15,longest:6,raceDate:"2027-06-27",start:"2026-10-26"}; return JSON.stringify(T.buildPlan(P({...o,cplx:"avance"})).map(w=>w.days))===JSON.stringify(T.buildPlan(P({...o,cplx:"standard"})).map(w=>w.days)); })(),
        fallback:(()=>{ const o={objectif:"10",volume:0,longest:10,seances:"4",types:["seuil","cotes","fartlek","ld"],raceDate:"2027-05-30",start:"2026-10-26",ref:"5",refVal:"35:12"}, rank={forme:0,5:1,10:2,21:3,42:4}, used=c=>{ const pl=T.buildPlan(P({...o,cplx:c})); return pl.unreal? pl.unreal.used : o.objectif; };
          return ["simple","avance"].every(c=>rank[used(c)]<=rank[used("standard")]); })(),
-       count:(()=>{ const n=P({}), p0=T.buildPlan({...n,noAi:true}), wk={}; for(const w of p0){ const qs=w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind); wk[w.w]={f:"",c:"x",q:qs.map(d=>T.qOpts(d.run.kind,n)[1]||""),a:1}; }
+       count:(()=>{ const n=P({}), p0=T.buildPlan({...n,noAi:true}), wk={}; for(const w of p0){ const qs=w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind); wk[w.w]={f:"",c:"x",q:qs.map(d=>T.qOpts(d.run.kind,n,w.qPool)[1]||""),a:1}; }
          T.state.aip=T.cleanAip({p:{sig:T.planSig(n),at:Date.now(),cplx:"standard",resume:"",wk}}); const p1=T.buildPlan(n); const qn=p0.reduce((a,w)=>a+w.days.filter(d=>d.run&&d.run.type==="q").length,0); T.state.aip={}; return {n:p1.ai.n,qn}; })()
      };
      out.clean=[T.cleanAip({p:{sig:"abc",at:5,cplx:"zzz",resume:"<b>x</b>"+"y".repeat(400),wk:{"0":{c:"no"},"3":{f:"<i>f</i>",c:"c",q:["seuil","rm -rf",7],a:true},"x":{}}}}),T.cleanAip({p:{sig:"../",at:5}}),T.cleanAip([1]),T.cleanAip({p:{x:1,at:9}})];
@@ -69,6 +69,10 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
      if(r.standard.deb||k==="conf42") ok(JSON.stringify(r.avance.info)===JSON.stringify(r.standard.info),"M5 "+k+" avancé : sans effet (débutant ou déjà confirmé)");
      else ok(hA>=hS&&r.avance.info.length===r.standard.info.length,"M5 "+k+" avancé : intensité totale au moins égale à standard",[hS,hA]);
      ok(r.avance.info.every((w,i)=>Math.abs(w.km-r.standard.info[i].km)<=Math.max(2,r.standard.info[i].km*.12)),"M6 "+k+" avancé : volume de chaque semaine proche de standard");
+     // affûtage et course : pas de footing simple à raccourcir (footing + lignes droites, course), 1 km de marge
+     ok(r.simple.info.every((w,i)=>w.km<=r.standard.info[i].km+(w.phase==="taper"||w.phase==="race"?1.1:.1)),"M23 "+k+" simple : volume de chaque semaine au plus celui du standard",r.simple.info.map((w,i)=>[w.w,+w.km.toFixed(1),+r.standard.info[i].km.toFixed(1)]).filter(x=>x[1]>x[2]+.1));
+     if(!r.standard.deb){ const ks=r.standard.info.map(w=>w.q.map(x=>x.k).filter(Boolean)), early=new Set(ks.slice(0,4).flat()), all=new Set(ks.flat());
+       ok([...early].every(x=>x==="fartlek"||x==="cotes")&&all.size>=3,"M24 "+k+" variété croissante : fartlek et côtes les 4 premières semaines, 3 types ou plus sur le plan",{early:[...early],all:[...all]}); }
    }
    const A=R.ai, bef=A.before, aft=A.after;
    ok(A.n>5&&A.tips===A.N,"M7 IA appliquée : "+A.n+" séances modifiées, un conseil sur chaque semaine",[A.n,A.tips,A.N]);
