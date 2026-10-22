@@ -105,7 +105,8 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
      ok(Object.entries(exp).every(([t,e])=>pp[t]===e),"P1 préférences : motifs reconnus (refus|envie)",Object.entries(exp).filter(([t,e])=>pp[t]!==e).map(([t,e])=>[t,pp[t],e])); }
    for(const [nm,r] of Object.entries(R.pe)){
      for(const [t,x] of Object.entries(r)) ok(Object.values(x.cmp).every(Boolean),"P2 "+nm+" « "+t+" » : jamais plus de km (semaine et séance), jamais un type plus dur, part de facile tenue (ou 80 %), même nombre de séances",x.cmp);
-     const nc=r["pas de côtes"]; if(nc.k0.includes("cotes")) ok(nc.k1.filter(k=>k==="cotes").length<nc.k0.filter(k=>k==="cotes").length,"P3 "+nm+" « pas de côtes » : moins de séances de côtes",[nc.k0.filter(k=>k==="cotes").length,nc.k1.filter(k=>k==="cotes").length]);
+     const nc=r["pas de côtes"]; // sans marge sur les minutes dures, aucune séance ne remplace les sprints en côte (≈ 1,3 min dures) : « pas de côtes » reste pour l'IA
+     ok(nc.k1.filter(k=>k==="cotes").length<=nc.k0.filter(k=>k==="cotes").length,"P3 "+nm+" « pas de côtes » : jamais plus de séances de côtes",[nc.k0.filter(k=>k==="cotes").length,nc.k1.filter(k=>k==="cotes").length]);
      const nv=r["pas de VMA"]; if(nv.k0.includes("vma")) ok(nv.k1.filter(k=>k==="vma").length<nv.k0.filter(k=>k==="vma").length,"P4 "+nm+" « pas de VMA » : moins de VMA (seuil ou fartlek à la place)",[nv.k0.filter(k=>k==="vma").length,nv.k1.filter(k=>k==="vma").length]);
      const lf=r["plutôt du fartlek"], cnt=(a,k)=>a.filter(x=>x===k).length; ok(cnt(lf.k1,"fartlek")>cnt(lf.k0,"fartlek")&&cnt(lf.k1,"vma")<=cnt(lf.k0,"vma"),"P5 "+nm+" « plutôt du fartlek » : plus de fartlek, jamais plus de VMA",[cnt(lf.k0,"fartlek"),cnt(lf.k1,"fartlek")]);
      const lv=r["j'adore la VMA"]; ok(cnt(lv.k1,"vma")<=cnt(lv.k0,"vma"),"P6 "+nm+" « j'adore la VMA » : jamais plus de VMA sans IA (type plus dur)");
@@ -161,7 +162,7 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
    await p.evaluate(()=>{ document.querySelector("#ps-trn").open=true; }); await p.waitForTimeout(150);
    await p.fill("#pref","je n'aime pas les côtes, plutôt du fartlek ; pas de fractionné le lundi"); await p.waitForTimeout(500);
    const pu=await p.evaluate(()=>({cnt:document.querySelector("#prefCnt").textContent,fx:document.querySelector("#prefFx").hidden?"":document.querySelector("#prefFx").textContent,hint:document.querySelector("#prefHint").textContent,st:document.querySelector("#aipSt").textContent,saved:JSON.parse(localStorage.getItem("carnet-course.v1")).profile.pref}));
-   ok(pu.cnt==="71 / 300"&&/côtes/.test(pu.fx)&&/fartlek/.test(pu.fx)&&/ajustement IA/.test(pu.hint),"U29 préférences : compteur, rappel de ce qui s'applique sans IA, note d'usage",pu);
+   ok(pu.cnt==="71 / 300"&&!/côtes/.test(pu.fx)&&/fartlek/.test(pu.fx)&&/ajustement IA/.test(pu.hint),"U29 préférences : compteur, rappel de ce qui s'applique sans IA, note d'usage",pu);
    ok(pu.saved==="je n'aime pas les côtes, plutôt du fartlek ; pas de fractionné le lundi","U30 préférences enregistrées dans le profil",pu.saved);
    ok(/Pas encore|a changé/.test(pu.st),"U31 préférences changées : statut de l'ajustement mis à jour",pu.st);
    { const n0=hits.length; await p.click("#aipGo"); await p.waitForSelector(".sheet #aipSend"); await p.check("#aipOk"); await p.click("#aipSend"); await p.waitForTimeout(1200);

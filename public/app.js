@@ -536,33 +536,44 @@ const SUBST={seuil:["seuil","fartlek","vma"],vma:["vma","seuil","fartlek"],cotes
 function pickKind(k,p,avoid){ if(!k)return null; const ok=(SUBST[k]||[k]).filter(c=>c==="allure"||p.types.includes(c)&&!(p.cplx==="simple"&&c==="vma")); return ok.find(c=>c!==avoid) || (avoid?null:ok[0]) || null; }
 /* ---- préférences de séances (profil, texte libre de 300 caractères au plus) ----
    L'ajustement par l'IA reçoit le texte tel quel (donnée, jamais instruction). Sans IA, seuls ces motifs sont reconnus (accents et majuscules ignorés),
-   proposition par proposition (coupure sur . , ; : ! ? retour à la ligne et « mais ») :
+   phrase par phrase (coupure sur . ; ! ? et retour à la ligne), puis proposition par proposition (coupure sur , : « mais » et « et ») :
    - types : côtes (« côtes », « montées », « la côte », « en côte », « une côte », « des côtes »), fartlek, seuil (« seuil », « tempo »),
      VMA (« VMA », « fractionné », « intervalles »). L'allure course n'est jamais concernée.
-   - refus, mot placé AVANT le type : « pas », « pas trop », « sans », « jamais », « aucun(e) », « évite(r) », « déteste », « horreur », « ne … plus »
+   - refus, mot placé AVANT le type : « pas » (sauf « pas que », « pas seulement », « pas uniquement »), « pas trop », « sans », « jamais », « aucun(e) »,
+     « évite(r) », « déteste », « horreur », « ne … plus », « n'en … plus »
      (« pas de côtes », « sans VMA », « je n'aime pas le fractionné », « je ne veux plus de côtes ») : le type n'est plus proposé à l'IA comme
      remplaçant et, sans IA, une séance de ce type est remplacée par un autre remplaçant permis (un type aimé d'abord).
    - envie, mot placé AVANT le type : « aime », « adore », « préfère », « plutôt », « privilégie », « favorise », « envie » (« j'aime le fartlek »,
      « plutôt du seuil ») : sans IA, une séance plus dure dont ce type fait partie des remplaçants permis passe à ce type (une fois par semaine
      au plus, jamais deux fois le même type dans la semaine). « Je préfère A à B », « A plutôt que B » : seul A compte.
-   - refus et envie sur le même type : refus. Une proposition qui cite un jour ou un moment (lundi…, semaine, week-end, matin, soir), une condition
-     (si, quand, sauf) ou une gêne (peur, douleur, mal, souci, problème, blessure) est ignorée : elle reste pour l'IA.
+   - une proposition sans mot de refus ni d'envie reprend celui de la proposition précédente reliée par « , » ou « et » (« j'aime les côtes et le
+     fartlek »), jamais à travers « mais ». Refus et envie sur le même type : refus.
+   - ignoré (laissé à l'IA) : une proposition qui cite un jour ou un moment (lundi…, semaine, week-end, matin, soir) ou une gêne (peur, douleur,
+     mal, souci, problème, blessure) ; une condition (si, quand, lorsque, sauf) neutralise sa proposition et toute la suite de la phrase
+     (« si je suis fatigué, pas de VMA »).
    Garde-fous du changement sans IA (prefApply) : jamais pour un débutant, ni en affûtage, ni la semaine de course ; seulement vers un type plus
-   doux (fartlek < côtes < seuil < VMA : « pas de fartlek » ou « j'aime la VMA » ne changent donc rien sans IA) ; la séance changée n'est pas plus
-   longue (km) et la part de facile de la semaine reste au moins celle du plan (ou 80 %), sinon la séance prévue reste. Les volumes, les jours et
-   le nombre de séances ne changent jamais. */
-const PREF0={no:[],like:[]}, PREF_HARD={fartlek:1,cotes:1.5,seuil:2,vma:3};
-const prefClean=v=> typeof v==="string"? Array.from(v.replace(/[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g," ")).slice(0,300).join("") : "";
+   doux (fartlek < côtes < seuil < VMA) ; la séance changée n'est ni plus longue (km) ni plus intense (minutes dures, aucune marge), et la part de
+   facile de la semaine ne baisse pas, sinon la séance prévue reste. En pratique, sans IA, seuls « pas de seuil », « pas de VMA » (remplacés par
+   du fartlek) et « j'aime le fartlek » peuvent agir (PREF_LIVE) : les sprints en côte comptent moins de minutes dures que toute autre séance,
+   « pas de côtes » reste donc pour l'IA. Les volumes, les jours et le nombre de séances ne changent jamais. */
+const PREF0={no:[],like:[]}, PREF_HARD={fartlek:1,cotes:1.5,seuil:2,vma:3}, PREF_LIVE={no:["seuil","vma"],like:["fartlek"]};
+// caractères de contrôle et invisibles SUPPRIMÉS (comme CLEAN côté serveur : « fi\u200bnir » redevient « finir » pour le filet de sécurité) ; tabulation et retours à la ligne → espace
+const prefClean=v=> typeof v==="string"? Array.from(v.replace(/[\t\n\r]/g," ").replace(/[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g,"")).slice(0,300).join("") : "";
 const PREF_KIND=[["cotes",/\b(cotes|montees?|(la|en|une|des) cotes?)\b/],["fartlek",/\bfartleks?\b/],["seuil",/\b(seuils?|tempo)\b/],["vma",/\b(vma|fractionnes?|intervalles?)\b/]];
 function prefParse(t){ const out={no:[],like:[]}; if(!t) return out;
   const s=t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[’`]/g,"'");
-  for(const c of s.split(/[.,;:!?\n]+|\bmais\b/)){
-    if(/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|semaines?|week ?-?ends?|matins?|soirs?|midi|si|s'il|quand|lorsque|sauf|peur|douleurs?|mal|souci|problemes?|blessures?|blesse\w*|gene\w*|derange\w*)\b/.test(c)) continue;
-    const at=re=>{ const m=re.exec(c); return m? m.index : -1; };
-    const neg=at(/\b(pas|sans|jamais|aucune?|evit\w*|detest\w*|horreur)\b|\bne \w+ plus\b|\bn'\w+ plus\b/), yes=at(/\b(aime|adore|prefere\w*|plutot|privilegi\w*|favoris\w*|envie)\b/), cmp=at(/\b(au|aux|a la|a l'|que)\b/);
-    for(const [k,re] of PREF_KIND){ const i=at(re); if(i<0) continue;
-      if(neg>=0&&neg<i){ if(!out.no.includes(k)) out.no.push(k); }
-      else if(yes>=0&&yes<i&&!(cmp>yes&&cmp<i)&&!out.like.includes(k)) out.like.push(k); } }
+  for(const sent of s.split(/[.;!?\n]+/)){ const parts=sent.split(/(,|:|\bmais\b|\bet\b)/); let carry=null;
+    for(let j=0;j<parts.length;j+=2){ const c=parts[j]; if(j&&parts[j-1]==="mais") carry=null;
+      if(/\b(si|s'il|s'ils|quand|lorsque|lorsqu|sauf)\b/.test(c)) break;   // condition : la suite de la phrase en dépend
+      if(/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|semaines?|week ?-?ends?|matins?|soirs?|midi|peur|douleurs?|mal|souci|problemes?|blessures?|blesse\w*|gene\w*|derange\w*)\b/.test(c)){ carry=null; continue; }
+      const at=re=>{ const m=re.exec(c); return m? m.index : -1; };
+      let neg=at(/\bpas\b(?! (que|qu'|seulement|uniquement)\b)|\b(sans|jamais|aucune?|evit\w*|detest\w*|horreur)\b|\bne \w+ plus\b|\bn'(en )?\w+ plus\b/), yes=at(/\b(aime|adore|prefere\w*|plutot|privilegi\w*|favoris\w*|envie)\b/);
+      const cmp=at(/\b(au|aux|a la|a l'|que)\b/);
+      if(neg<0&&yes<0){ if(carry==="no") neg=-.5; else if(carry==="yes") yes=-.5; }   // « … et le fartlek » : même sens que la proposition précédente
+      else carry= neg>=0&&(yes<0||neg<yes)? "no" : "yes";
+      for(const [k,re] of PREF_KIND){ const i=at(re); if(i<0) continue;
+        if(neg!==-1&&neg<i){ if(!out.no.includes(k)) out.no.push(k); }
+        else if(yes!==-1&&yes<i&&!(cmp>yes&&cmp<i)&&!out.like.includes(k)) out.like.push(k); } } }
   out.like=out.like.filter(k=>!out.no.includes(k)); return out; }
 const onTapis=(p,kind)=> p.lieu==="tapis" || (p.lieu==="mixte" && kind==="q");
 // MET d'un effort léger (Compendium 2011) : la séance remplace un footing facile
@@ -609,15 +620,15 @@ function aiOf(p){ if(p.noAi) return null; const a=state&&state.aip&&state.aip.p;
 // un type refusé dans les préférences n'est pas proposé à l'IA
 function qOpts(k,p){ if(p.niveau==="deb"||k==="allure"||!SUBST[k]) return [k]; const no=(p.prefK||PREF0).no; return [k,...SUBST[k].filter(c=>c!==k&&c!=="allure"&&p.types.includes(c)&&!(p.cplx==="simple"&&c==="vma")&&!no.includes(c))]; }
 // remplace la séance d'intensité d de la semaine par le type k, raccourcie au besoin, dans les marges t (km, minutes dures, part de facile) ; renvoie son jour ou -1
-// préférences : le type choisi est toujours plus doux (PREF_HARD), d'où l'absence de borne sur les minutes d'intensité ; jamais plus long
-const AI_TOL={km:1.05,kmA:.3,h:1.1,hA:.5,z:.8}, PREF_TOL={km:1,kmA:.01,h:1,hA:1e9,z:.8};
+// préférences : aucune marge (jamais plus long, jamais plus de minutes dures, part de facile jamais en baisse)
+const AI_TOL={km:1.05,kmA:.3,h:1.1,hA:.5,z:.8}, PREF_TOL={km:1,kmA:.01,h:1,hA:1e-9,z:1};
 function swapQ(wk,d,k,p,vma,t,mark,note){ const old=d.run, km0=sessionKm(old,vma), h0=old.hardMin||0, z0=zoneMins(wk.days).easy, i=wk.days.indexOf(d); let o={...old.qo};
   for(let n=0;n<4;n++){ const s=quality(k,wk.w,p,vma,wk.phase,o);
     if(s&&sessionKm(s,vma)<=km0*t.km+t.kmA&&(s.hardMin||0)<=h0*t.h+t.hA){ wk.days[i]={...d,run:{...s,...mark,note:(s.note?s.note+" ":"")+note}};
       if(zoneMins(wk.days).easy>=Math.min(z0,t.z)-1e-9) return i; wk.days[i]=d; }
     o= o.short? {...o,fewer:(o.fewer||0)+1} : {...o,short:true}; }
   return -1; }
-// préférences de séances, sans IA (motifs de prefParse) : type refusé remplacé, type aimé choisi, toujours par un type plus doux et jamais plus long
+// préférences de séances, sans IA (motifs de prefParse) : type refusé remplacé, type aimé choisi, toujours par un type plus doux, jamais plus long ni plus intense
 function prefApply(weeks,p){ const pf=p.prefK; if(!pf||(!pf.no.length&&!pf.like.length)||p.niveau==="deb"||evSport(p.sport)) return; const vma=vmaOf(p).vma;
   for(const wk of weeks){ if(wk.phase==="taper"||wk.phase==="race") continue;
     const qd=()=>wk.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind&&d.kind!=="before");
@@ -1947,8 +1958,10 @@ function fillForm(){
 // préférences de séances : compteur et rappel de ce qui s'applique sans IA
 function prefUi(){ const el=$("#pref"); if(!el) return; setT($("#prefCnt"),Array.from(el.value).length+" / 300");
   const k=prefParse(prefClean(el.value).replace(/\s+/g," ").trim()), L={cotes:"côtes",fartlek:"fartlek",seuil:"seuil",vma:"VMA"}, h=$("#prefFx");
-  const t=[k.no.length? "évité si possible : "+k.no.map(x=>L[x]).join(", ") : "", k.like.length? "privilégié quand c'est permis : "+k.like.map(x=>L[x]).join(", ") : ""].filter(Boolean).join(" ; ");
-  if(h){ h.hidden=!t; setT(h,t? "Appliqué sans IA : "+t+"." : ""); } }
+  // seuls les effets possibles sans IA sont annoncés (PREF_LIVE) ; le reste ne joue que via l'ajustement IA
+  const no=k.no.filter(x=>PREF_LIVE.no.includes(x)), like=k.like.filter(x=>PREF_LIVE.like.includes(x));
+  const t=[no.length? "évité si possible : "+no.map(x=>L[x]).join(", ") : "", like.length? "privilégié quand c'est permis : "+like.map(x=>L[x]).join(", ") : ""].filter(Boolean).join(" ; ");
+  if(h){ h.hidden=!t; setT(h,t? "Peut s'appliquer sans IA : "+t+"." : ""); } }
 function readForm(){
   const p={...state.profile};
   FIELDS.forEach(k=>{const el=$("#"+k); if(el) p[k]=String(el.value).slice(0,40);});   // longueur bornée (valeur forcée par script comprise)
@@ -3242,7 +3255,8 @@ ${chk("aipOk","J'accepte cet envoi","Obligatoire, pour cet ajustement seulement.
         if(!ok.checked){ show("Coche « J'accepte cet envoi » pour lancer l'ajustement."); ok.focus(); return; }
         const wish=sh.querySelector("#aipWish").value.replace(/\s+/g," ").trim().slice(0,300);
         // filet de sécurité du Coach, avant tout envoi : un sujet grave n'est jamais envoyé
-        const pref=P.pref||""; let k=""; try{ k=window.CarnetCoach? (wish&&window.CarnetCoach.guard(wish))||(pref&&window.CarnetCoach.guard(pref))||"" : ""; }catch(e){}
+        const pref=P.pref||"", prefRaw=String(($("#pref")||{}).value||state.profile.pref||""), G=t=>!!t&&window.CarnetCoach.guard(t);
+        let k=""; try{ k=window.CarnetCoach? G(wish)||G(prefRaw)||G(pref)||"" : ""; }catch(e){}
         if(k){ show("Ce que tu écris peut être sérieux et je ne l'ai envoyé à aucun serveur. En cas de détresse, appelle le 3114 (24 h sur 24) ; en cas d'urgence, le 15 ou le 112. Pour une douleur ou un malaise, arrête l'effort et consulte un médecin."); return; }
         // bouton « occupé » sans disabled : il garde le focus (Échap et Tab restent dans la feuille pendant l'attente)
         const cplx=P.cplx, sig=planSig(profileNums(state.profile)); aipBusy=true; go.setAttribute("aria-disabled","true"); go.textContent="L'IA prépare ton plan…"; err.hidden=true;

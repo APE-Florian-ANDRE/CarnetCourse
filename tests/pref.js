@@ -158,7 +158,8 @@ const seed=o=>JSON.stringify({profile:{...prof,...o},isExample:false,log:[],week
      return {v:el.value,cnt:c.textContent,cp:Array.from(el.value).length,fx:fx.hidden?"":fx.textContent,w:r.width,right:r.right,cRight:cr.right,vw:innerWidth,sw:document.documentElement.scrollWidth,saved:(JSON.parse(localStorage.getItem("carnet-course.v1"))||{}).profile.pref,url:location.hash}; });
    ok(u.cnt===u.cp+" / 300","U1 compteur en caractères visibles (emoji = 1)",u);
    ok(u.right<=u.vw&&u.cRight<=u.vw&&u.sw<=u.vw,"U2 mobile 375 : champ et compteur dans l'écran, pas de défilement horizontal",u);
-   ok(/Appliqué sans IA : évité si possible : côtes ; privilégié quand c'est permis : fartlek\./.test(u.fx),"U3 rappel « Appliqué sans IA » juste",u.fx);
+   // correctif F2 (aucune marge sur les minutes dures) : les sprints en côte (≈ 1,3 min dures) ne peuvent être remplacés par aucune séance sans IA ; « pas de côtes » ne doit donc plus être annoncé comme appliqué sans IA
+   ok(/^Peut s'appliquer sans IA : privilégié quand c'est permis : fartlek\.$/.test(u.fx)&&!/côtes/.test(u.fx),"U3 rappel « sans IA » juste (fartlek annoncé, côtes non promises)",u.fx);
    ok(u.saved===u.v.replace(/\n/g," "),"U4 invité : préférences enregistrées sur l'appareil (retour à la ligne → espace), Entrée reste dans le champ",u);
    // maxlength : collage de 400 caractères
    await p.evaluate(()=>{ const el=document.querySelector("#pref"); el.value="pas de VMA "+"é".repeat(400); el.dispatchEvent(new Event("input",{bubbles:true})); }); await p.waitForTimeout(400);
@@ -166,16 +167,16 @@ const seed=o=>JSON.stringify({profile:{...prof,...o},isExample:false,log:[],week
    ok(u2.saved<=300&&/^\d+ \/ 300$/.test(u2.cnt),"U5 valeur forcée par script : enregistrée à 300 caractères au plus",u2);
    if(+u2.cnt.split(" ")[0]>300) console.log("     info : valeur forcée par script au-delà de maxlength : compteur "+u2.cnt+" (enregistré : 300) ; impossible au clavier ou au collage");
    // phrases ambiguës : le rappel ne promet rien pour une phrase ignorée
-   for(const [t,re] of [["pas de fractionné le lundi",null],["sans problème pour les côtes",null],["pas de côtes",/évité si possible : côtes/],["plutôt du fartlek",/privilégié quand c'est permis : fartlek/]]){
+   for(const [t,re] of [["pas de fractionné le lundi",null],["sans problème pour les côtes",null],["pas de côtes",null],["pas de VMA",/évité si possible : VMA/],["plutôt du fartlek",/privilégié quand c'est permis : fartlek/]]){
      await p.fill("#pref",t); await p.waitForTimeout(250); const fx=await p.evaluate(()=>{ const f=document.querySelector("#prefFx"); return f.hidden?"":f.textContent; });
      ok(re? re.test(fx) : fx==="","U7 rappel pour « "+t+" »",fx); }
    // « Appliqué sans IA » ne doit pas promettre ce que le moteur ne fait jamais sans IA : VMA aimée (type le plus dur) ou fartlek refusé (type le plus doux)
    for(const t of ["j'aime la VMA","pas de fartlek"]){ await p.fill("#pref",t); await p.waitForTimeout(250); const fx=await p.evaluate(()=>{ const f=document.querySelector("#prefFx"); return f.hidden?"":f.textContent; });
      ok(!/VMA|fartlek/.test(fx),"U9 rappel « Appliqué sans IA » pour « "+t+" » : ne promet pas un changement que le moteur ne fait jamais sans IA",fx); }
-   await p.fill("#pref","pas de côtes"); await p.waitForTimeout(300);
+   await p.fill("#pref","pas de VMA"); await p.waitForTimeout(300);
    await p.reload(); await p.waitForTimeout(800); await p.evaluate(()=>{ const d=document.querySelector("#ps-trn"); if(d) d.open=true; });
    const rl=await p.evaluate(()=>({v:document.querySelector("#pref").value,cnt:document.querySelector("#prefCnt").textContent,fx:document.querySelector("#prefFx").textContent}));
-   ok(rl.v==="pas de côtes"&&rl.cnt==="12 / 300"&&/côtes/.test(rl.fx),"U8 rechargement : valeur, compteur et rappel restaurés",rl);
+   ok(rl.v==="pas de VMA"&&rl.cnt==="10 / 300"&&/VMA/.test(rl.fx),"U8 rechargement : valeur, compteur et rappel restaurés",rl);
    await ctx.close(); S.close(); }
 
  /* ---- 6. page de confidentialité ---- */
