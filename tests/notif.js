@@ -54,12 +54,15 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
    ok(r.sw<=r.vw&&!r.overlap&&r.inV,"N3 320 px : bouton et Compte visibles, sans chevauchement ni débordement",r); await p.ctx.close(); }
 
  // N4 contenu : chaque alerte déplacée est dans le panneau et nulle part ailleurs
- for(const [k,re,sec] of [["future",/Ton plan commence le/,"Semaine 1"],["busy",/Objectif trop loin/,"Ton plan"],["busy",/Ton plan a commencé le/,"Semaine 7"],["busy",/Énergie disponible/,"Semaine 7"],["ended",/Ce plan est terminé/,"Semaine 1"]]){
+ for(const [k,re,sec] of [["future",/Ton plan commence le/,"Semaine 1"],["busy",/Objectif trop loin/,"Ton plan"],["busy",/Énergie disponible/,"Semaine 7"],["ended",/Ce plan est terminé/,"Semaine 1"]]){
    const p=await mk(S,{seed:seedOf(k)});
    const out=await p.evaluate(re=>{ const r=new RegExp(re); return {week:r.test(document.querySelector("#weekAlerts").textContent),wrap:[...document.querySelectorAll(".wrap .alert")].filter(a=>a.getClientRects().length&&r.test(a.textContent)).length}; },re.source);
    const pt=await openP(p); const inSec=await p.evaluate(([re,sec])=>{ const s=[...document.querySelectorAll('.sheet .nt-s')].find(x=>x.querySelector("h4").textContent===sec); return !!s&&new RegExp(re).test(s.textContent); },[re.source,sec]);
    ok(!out.week&&out.wrap===0&&inSec,"N4 "+re.source+" : dans la section « "+sec+" » du panneau, plus dans la page",{out,secs:pt&&pt.secs}); await p.ctx.close(); }
- // alertes de sécurité gardées dans la semaine (moins de 18 ans, avis médical)
+ // alertes de sécurité gardées dans la semaine (moins de 18 ans, avis médical, début passé avec volume au-delà du profil)
+ { const p=await mk(S,{seed:seedOf("busy")});
+   ok(await p.evaluate(()=>/Ton plan a commencé le/.test(document.querySelector("#weekAlerts").textContent)),"N4 « Ton plan a commencé le » (risque de blessure) gardé en haut de la semaine");
+   const pt=await openP(p); ok(pt&&!/Ton plan a commencé le/.test(pt.txt),"N4 « Ton plan a commencé le » absent du panneau (pas en double)"); await p.ctx.close(); }
  { const p=await mk(S,{seed:JSON.stringify({profile:{...base,age:16,cible:"80"},isExample:false,log:[],week:1,seen:15})});
    ok(await p.evaluate(()=>/moins de 18 ans/.test(document.querySelector("#weekAlerts").textContent)),"N4 alerte moins de 18 ans gardée en haut de la semaine");
    const pt=await openP(p); ok(pt&&!/moins de 18 ans/.test(pt.txt),"N4 alerte moins de 18 ans absente du panneau (pas en double)"); await p.ctx.close(); }
@@ -71,14 +74,14 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
    const r=await p.evaluate(()=>({sheet:!!document.querySelector(".sheet"),toast:document.querySelector("#toasts").textContent,rd:JSON.parse(localStorage.getItem("carnet-course.v1")).profile.raceDate,f:document.activeElement.id}));
    ok(!r.sheet&&/Course fixée/.test(r.toast)&&!!r.rd&&r.f==="weekTitle","N5 « Viser cette date » : date fixée, panneau fermé, focus sur la semaine",r);
    const pt=await openP(p); ok(pt&&!/Objectif trop loin/.test(pt.txt),"N5 après « Viser cette date » : alerte retirée du panneau",pt&&pt.secs); await p.ctx.close(); }
- { const p=await mk(S,{seed:seedOf("busy")}); await openP(p); await p.click('.sheet #followedPlan'); await p.waitForTimeout(400);
+ { const p=await mk(S,{seed:seedOf("busy")}); await p.click('#weekAlerts #followedPlan'); await p.waitForTimeout(400);
    const r=await p.evaluate(()=>({sheet:!!document.querySelector(".sheet"),suivi:localStorage.getItem("carnet.suivi"),st:JSON.parse(localStorage.getItem("carnet-course.v1")).profile.start,f:document.activeElement.id}));
-   ok(!r.sheet&&r.suivi===r.st&&r.f==="weekTitle","N5 « J'ai suivi le plan » : noté, panneau fermé, focus sur la semaine",r);
-   const pt=await openP(p); ok(pt&&!/Ton plan a commencé le/.test(pt.txt),"N5 après « J'ai suivi le plan » : alerte retirée"); await p.ctx.close(); }
- for(const k of ["busy","ended"]){ const p=await mk(S,{seed:seedOf(k)}); await openP(p); await p.click('.sheet #restartPlan'); await p.waitForTimeout(500);
+   ok(!r.sheet&&r.suivi===r.st&&r.f==="weekTitle","N5 « J'ai suivi le plan » (en haut de la semaine) : noté, focus sur la semaine",r);
+   ok(await p.evaluate(()=>!/Ton plan a commencé le/.test(document.querySelector(".wrap").textContent)),"N5 après « J'ai suivi le plan » : alerte retirée"); await p.ctx.close(); }
+ for(const k of ["busy","ended"]){ const p=await mk(S,{seed:seedOf(k)}); if(k==="ended"){ await openP(p); await p.click('.sheet #restartPlan'); } else await p.click('#weekAlerts #restartPlan'); await p.waitForTimeout(500);
    const r=await p.evaluate(()=>({sheet:!!document.querySelector(".sheet"),st:JSON.parse(localStorage.getItem("carnet-course.v1")).profile.start,f:document.activeElement.id}));
    ok(!r.sheet&&r.st===D0&&r.f==="weekTitle","N5 « Recommencer aujourd'hui » ("+k+") : plan relancé aujourd'hui, focus sur la semaine",r);
-   const pt=await openP(p); ok(pt&&!/Ce plan est terminé|Ton plan a commencé le/.test(pt.txt),"N5 après « Recommencer » ("+k+") : alerte retirée"); await p.ctx.close(); }
+   const wa=await p.evaluate(()=>document.querySelector("#weekAlerts").textContent); const pt=await openP(p); ok(pt&&!/Ce plan est terminé|Ton plan a commencé le/.test(pt.txt+wa),"N5 après « Recommencer » ("+k+") : alerte retirée"); await p.ctx.close(); }
 
  // N6 interactions : double clic, lien vers les versions, rechargement, clavier
  { const p=await mk(S,{seed:seedOf("busy")}); await p.dblclick("#notifBtn"); await p.waitForTimeout(250);
@@ -109,9 +112,9 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
  // N7 un autre onglet change le plan pendant que le panneau est ouvert : le panneau suit
  { const ctx=await b.newContext({viewport:{width:390,height:844},locale:"fr-FR"});
    const a=await mk(S,{seed:seedOf("busy"),ctx}); const pa=await openP(a); const bb=await mk(S,{ctx});
-   await bb.click("#notifBtn"); await bb.waitForTimeout(200); await bb.click('.sheet #restartPlan'); await bb.waitForTimeout(1200);
+   await bb.click('#weekAlerts #restartPlan'); await bb.waitForTimeout(1200);
    const pa2=await panel(a);
-   ok(pa&&/Ton plan a commencé/.test(pa.txt)&&pa2&&!/Ton plan a commencé/.test(pa2.txt),"N7 changement venu d'un autre onglet : le panneau ouvert se met à jour",{avant:pa&&pa.secs,apres:pa2&&pa2.secs});
+   ok(pa&&pa.secs.includes("Semaine 7")&&pa2&&!pa2.secs.includes("Semaine 7"),"N7 changement venu d'un autre onglet : le panneau ouvert se met à jour",{avant:pa&&pa.secs,apres:pa2&&pa2.secs});
    await ctx.close(); }
 
  // N8 coach (bulle) ouvert + panneau
@@ -132,10 +135,12 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
    await p.addInitScript(()=>{ if(!sessionStorage.__s){ sessionStorage.__s=1; localStorage.setItem("carnet.hv","1"); } });
    await p.goto(S.url+"/"); await p.waitForTimeout(900);
    const vis=await p.evaluate(()=>{ const b=document.querySelector("#notifBtn"); return !!(b&&b.getClientRects().length); });
+   const ls0=await p.evaluate(()=>JSON.stringify(Object.entries(localStorage).sort()));
    if(vis){ const pt=await openP(p); ok(pt&&!pt.secs.includes("Nouveautés"),"N9 première visite : pas de liste de nouveautés",pt&&pt.secs);
      await p.keyboard.press("Escape"); await p.waitForTimeout(200);
      // comme « Quoi de neuf » (comportement antérieur) : la version vue est notée ; les données restent marquées « exemple »
-     ok(await p.evaluate(()=>{ const s=localStorage.getItem("carnet-course.v1"); return s===null||JSON.parse(s).isExample===true; }),"N9 première visite : ouvrir le panneau ne transforme pas l'exemple en données à toi"); }
+     ok(await p.evaluate(()=>{ const s=localStorage.getItem("carnet-course.v1"); return s===null||JSON.parse(s).isExample===true; }),"N9 première visite : ouvrir le panneau ne transforme pas l'exemple en données à toi");
+     ok(await p.evaluate(()=>JSON.stringify(Object.entries(localStorage).sort()))===ls0,"N9 première visite : ouvrir le panneau n'écrit rien dans le stockage local (carnet.vu compris)"); }
    else console.log("     (N9 : bouton non visible à la première visite)");
    await ctx.close(); }
 

@@ -18,7 +18,7 @@ const PEND=JSON.stringify({cgu:"2026-10-10",privacy:"2026-10-10",terms:true,heal
   await p.click("#tab-suivi"); await p.waitForTimeout(150); await p.click("#impOpen"); await sz("import-stats");
   { const pk=async f=>{ const [fc]=await Promise.all([p.waitForEvent("filechooser"),p.click("#stPick")]); await fc.setFiles(f); }; const FX=require("./fx14"), tf=path.join(require("os").tmpdir(),"sheets-v14-"+process.pid); fs.mkdirSync(tf,{recursive:true}); fs.writeFileSync(tf+"/junk.xml","<html></html>"); fs.writeFileSync(tf+"/export.zip",FX.appleZip());
     await pk(tf+"/junk.xml"); await p.waitForSelector("#stMsg .alert"); await sz("import-stats-erreur"); await pk(tf+"/export.zip"); await p.waitForSelector("#stA"); await sz("import-stats-apercu"); await p.click("#stPick"); await p.waitForTimeout(400); await p.click("#impClear"); await sz("retirer-importees"); await close(); fs.rmSync(tf,{recursive:true,force:true}); }
-  await p.click("#tab-semaine"); await p.evaluate(()=>document.querySelectorAll(".banner .bx").forEach(b=>b.click())); await p.waitForTimeout(250);
+  await p.click("#tab-semaine"); await p.waitForTimeout(250);
   await p.click(".apptop .av"); await sz("compte");
   for(const [k,go] of [["erase",["#erNext"]],["signout",[]],["withdraw",[]],["delacct",["#daNext"]]]){ await p.click("[data-acc="+k+"]"); await sz(k+"-1"); if(go.length){ await p.click(go[0]); await sz(k+"-2"); } await close(); await p.click(".apptop .av"); await p.waitForTimeout(250); }
   await p.setInputFiles(".sheet input[type=file]",{name:"x.json",mimeType:"application/json",buffer:fs.readFileSync(path.join(__dirname,"export-sample.json"))}); await p.waitForTimeout(500); await sz("import"); await close();

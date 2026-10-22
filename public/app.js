@@ -1475,7 +1475,7 @@ function renderWeek(){
   if(tp&&tp.w===wk.w&&wk.w>2&&realStart()<tdy&&followedOf()!==realStart()){   // dès la 3e semaine : la 2e dépasse normalement un peu le volume déclaré
     const decl= P.volume>0? P.volume : P.niveau==="deb"? 8 : 0, lrD=f.days.find(d=>d.run&&d.run.type==="long"), lk=lrD?lrD.km:0;
     const overV= decl>0&&totKm>decl*1.1, overL= P.longest>0&&lk>P.longest*1.1;
-    if(overV||overL) al.push(`<div class="alert warn act"><span><b>Ton plan a commencé le ${longDate(realStart())}.</b> La semaine en cours suppose que tu as suivi les semaines d'avant : ${[overV?fmt0(totKm)+" km cette semaine, pour "+fmt0(decl)+" km par semaine dans ton profil":"",overL?"une sortie longue de "+fmt1(lk)+" km, pour "+fmt1(P.longest)+" km au plus dans ton profil":""].filter(Boolean).join(", et ")}. Si ce n'est pas le cas, recommence le plan aujourd'hui pour repartir de ton niveau actuel.</span><button class="btn" type="button" id="restartPlan">Recommencer aujourd'hui</button><button class="btn ghost sm" type="button" id="followedPlan">J'ai suivi le plan</button></div>`);
+    if(overV||overL) keep.push(`<div class="alert warn act"><span><b>Ton plan a commencé le ${longDate(realStart())}.</b> La semaine en cours suppose que tu as suivi les semaines d'avant : ${[overV?fmt0(totKm)+" km cette semaine, pour "+fmt0(decl)+" km par semaine dans ton profil":"",overL?"une sortie longue de "+fmt1(lk)+" km, pour "+fmt1(P.longest)+" km au plus dans ton profil":""].filter(Boolean).join(", et ")}. Si ce n'est pas le cas, recommence le plan aujourd'hui pour repartir de ton niveau actuel.</span><button class="btn" type="button" id="restartPlan">Recommencer aujourd'hui</button><button class="btn ghost sm" type="button" id="followedPlan">J'ai suivi le plan</button></div>`);
   }
   // séances déplacées : garde-fous (avertir sans bloquer) et retour au plan prévu
   if(wk.moved||wk.moveBad){
@@ -1490,20 +1490,22 @@ function renderWeek(){
   const longRace= P.objectif==="21"||P.objectif==="42";
   if(f.taper&&runSport()) al.push(`<div class="alert ok">${wk.phase==="race"?"Semaine de course":"Affûtage"} : le déficit fixe est gardé, mais sans supplément les jours faciles${wk.phase==="race"?", et le jour de la course est à l'équilibre":""}. ${wk.phase==="race"&&longRace?"Les 2 jours avant la course sont aussi à l'équilibre, avec des féculents à chaque repas.":"Si tu te sens à plat, repasse à l'équilibre les 2 jours avant la course."}</div>`);
   const absMinK=P.sexe==="F"?1200:1500;
-  if(f.floorHit&&Math.max(0,f.realDef)<15) al.push(`<div class="alert bad">Aucun déficit possible cette semaine : ${f.maintAvg<=absMinK+100?"ton maintien est déjà sous "+(P.sexe==="F"?"1 200":"1 500")+" kcal environ":"une fois le sport payé, il te resterait moins de 25 kcal par kg de masse maigre"}. L'objectif reste au maintien.${E.mgEst?" Ta masse grasse est estimée à "+E.mg+" % ; renseigne-la dans ton profil si tu la connais.":""}</div>`);
-  else if(f.floorHit) al.push(`<div class="alert bad">Déficit limité à ${fmt0(Math.max(0,f.realDef))} kcal/jour au lieu de ${fmt0(f.wanted)} : au-delà, il te resterait moins de 25 kcal par kg de masse maigre une fois le sport payé, ce qui est trop peu pour s'entraîner sans risque.${f.adj<0?" L'ajustement manuel est compris dans ce calcul.":""} ${E.mgEst?"Ta masse grasse est estimée à "+E.mg+" % ; renseigne-la dans ton profil si tu la connais.":""}</div>`);
+  if(f.floorHit&&Math.max(0,f.realDef)<15) keep.push(`<div class="alert bad">Aucun déficit possible cette semaine : ${f.maintAvg<=absMinK+100?"ton maintien est déjà sous "+(P.sexe==="F"?"1 200":"1 500")+" kcal environ":"une fois le sport payé, il te resterait moins de 25 kcal par kg de masse maigre"}. L'objectif reste au maintien.${E.mgEst?" Ta masse grasse est estimée à "+E.mg+" % ; renseigne-la dans ton profil si tu la connais.":""}</div>`);
+  else if(f.floorHit) keep.push(`<div class="alert bad">Déficit limité à ${fmt0(Math.max(0,f.realDef))} kcal/jour au lieu de ${fmt0(f.wanted)} : au-delà, il te resterait moins de 25 kcal par kg de masse maigre une fois le sport payé, ce qui est trop peu pour s'entraîner sans risque.${f.adj<0?" L'ajustement manuel est compris dans ce calcul.":""} ${E.mgEst?"Ta masse grasse est estimée à "+E.mg+" % ; renseigne-la dans ton profil si tu la connais.":""}</div>`);
   else if(!f.noDef && f.ea<30) al.push(`<div class="alert ${f.ea<28?"warn":"ok"}">Énergie disponible : <b>${fmt1(f.ea)} kcal/kg</b> de masse maigre, ${f.ea<28?"sous":"juste sous"} le repère de 30. <details><summary>Pourquoi ?</summary><p>C'est ce qui reste à ton corps une fois le sport payé, rapporté à ta masse maigre. Sous 30, la récupération peut souffrir ; l'outil bloque sous 25. Surveille fatigue et sommeil dans l'onglet Suivi, et remonte un peu si les séances deviennent difficiles.</p></details></div>`);
-  if(f.absHit) al.push(`<div class="alert bad">Certains jours, l'objectif est remonté à ${P.sexe==="F"?"1 200":"1 500"} kcal : en dessous, seulement avec un suivi médical. Le déficit réel de ces jours est plus petit que celui demandé.</div>`);
+  if(f.absHit) keep.push(`<div class="alert bad">Certains jours, l'objectif est remonté à ${P.sexe==="F"?"1 200":"1 500"} kcal : en dessous, seulement avec un suivi médical. Le déficit réel de ces jours est plus petit que celui demandé.</div>`);
   else if(f.bmrHit && !f.floorHit) al.push(`<div class="alert warn">Certains jours, l'objectif est remonté à ton métabolisme de base (${fmt0(E.bmr)} kcal) : le déficit réel de ces jours est plus petit que celui demandé.</div>`);
   if(E.bmi>=35||P.age>=65) keep.push(`<div class="alert warn">${E.bmi>=35&&P.age>=65?"À "+P.age+" ans et avec un IMC de "+fmt1(E.bmi):E.bmi>=35?"Avec un IMC de "+fmt1(E.bmi):"À "+P.age+" ans"}, demande l'avis d'un médecin avant de commencer ce plan, surtout pour les séances intenses.</div>`);
   if(runSport()&&P.niveau!=="deb"&&!(P.volume>0)&&wk.w===1) al.push(isNaN(P.volume)? `<div class="alert warn">Tu n'as pas indiqué ton volume actuel : le plan démarre prudemment. Renseigne « km par semaine » dans ton profil pour un plan adapté.</div>` : `<div class="alert warn">Tu pars de zéro : le plan démarre prudemment. Si tu cours déjà un peu, indique tes km par semaine dans ton profil.</div>`);
   if(runSport()&&P.niveau==="deb"&&tplWeek(wk.w,P.objectif!=="forme",plan.length)<=8&&wk.phase!=="race") al.push(`<div class="alert warn">Débutant : ${plan.length===12?"pendant les 8 premières semaines":"au début du plan"}, tout est en facile. Tes tendons et tes os ont besoin de ce temps, même si ton souffle suit déjà.</div>`);
   if(wk.L && P.longest>0 && wk.w===1 && wk.L>P.longest*1.1+1e-9) al.push(`<div class="alert warn">La sortie longue dépasse de plus de 10 % ta plus longue sortie du mois. Vérifie le champ « plus longue sortie » de ton profil.</div>`);
-  keep.unshift(...feelAlerts14(wk,tp)); al.push(...sportAlerts14(wk,f,tp));
+  keep.unshift(...feelAlerts14(wk,tp)); al.push(...sportAlerts14(wk,f,tp,keep));
   if(wk.aiTip&&wk.aiTip.c) al.unshift(`<div class="alert ok aitip"><span><b>Conseil de l'IA${wk.aiTip.f?" · "+esc(wk.aiTip.f):""}</b> ${esc(wk.aiTip.c)}</span></div>`);
   $("#weekAlerts").innerHTML=keep.join("");
   notif.week={w:wk.w,items:al}; refreshNotif();
   const rm=$("#resetMoves"); if(rm) rm.addEventListener("click",()=>resetWeekMoves(wk.w));
+  const fp=$("#weekAlerts #followedPlan"); if(fp) fp.addEventListener("click",()=>{ followed=realStart(); try{localStorage.setItem("carnet.suivi",followed);}catch(e){} recompute(); $("#weekTitle").focus({preventScroll:true}); });
+  const rs=$("#weekAlerts #restartPlan"); if(rs) rs.addEventListener("click",()=>{ regenPlan(false); $("#weekTitle").focus({preventScroll:true}); });
   // jours
   // jours d'avant le début : une seule carte compacte (la carte du jour reste près du haut sur téléphone)
   const bef=f.days.filter(d=>d.kind==="before"), bLast=bef.length?bef[bef.length-1].i:-1;
@@ -2673,9 +2675,9 @@ function openNews(opener){
 }
 document.querySelectorAll("[data-news]").forEach(b=>b.addEventListener("click",()=>openNews(b)));
 /* notifications passives : un bouton à côté du Compte ouvre un panneau ; aucun point, compteur, badge ni animation pour signaler du nouveau */
-const notif={week:null,plan:[]};
+const notif={week:null,plan:[],news:false};   // news : nouveautés montrées pendant cette visite (gardées après markSeen)
 function notifHtml(){
-  const nw=CHANGELOG.filter(c=>c.v>newsFrom), wk=notif.week, sec=(t,body)=>`<section class="nt-s"><h4>${t}</h4>${body}</section>`, out=[];
+  const nw=notif.news||seenV()<APP_V? CHANGELOG.filter(c=>c.v>newsFrom) : [], wk=notif.week, sec=(t,body)=>`<section class="nt-s"><h4>${t}</h4>${body}</section>`, out=[];
   if(wk&&wk.items.length) out.push(sec("Semaine "+wk.w,`<div class="alerts">${wk.items.join("")}</div>`));
   if(notif.plan.length) out.push(sec("Ton plan",`<div class="alerts">${notif.plan.join("")}</div>`));
   if(nw.length){ const n=nw.reduce((a,c)=>a+c.items.length,0);
@@ -2687,6 +2689,7 @@ const notifSheet=()=>sheetEl&&sheetEl.querySelector('.sheet[data-kind="notif"]')
 function refreshNotif(){ const sh=notifSheet(); if(!sh) return; const b=sh.querySelector(".sh-b"), hadF=b.contains(document.activeElement);
   b.innerHTML=notifHtml(); if(hadF) sh.querySelector(".sh-x").focus({preventScroll:true}); }
 function openNotif(opener){
+  if(seenV()<APP_V&&CHANGELOG.some(c=>c.v>newsFrom)) notif.news=true;
   openSheet({title:"Notifications",kind:"notif",opener,html:notifHtml(),onReady:sh=>{
     sh.querySelector(".sh-b").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return;
       if(b.matches("[data-nt-news]")){ openNews(opener); return; }
@@ -2694,7 +2697,7 @@ function openNotif(opener){
       if(b.id==="restartPlan"){ closeSheet(true); regenPlan(false); $("#weekTitle").focus({preventScroll:true}); }
       else if(b.id==="followedPlan"){ closeSheet(true); followed=realStart(); try{localStorage.setItem("carnet.suivi",followed);}catch(e){} recompute(); $("#weekTitle").focus({preventScroll:true}); }
       else if(b.matches("[data-safedate]")){ closeSheet(true); setTimeout(()=>$("#weekTitle").focus({preventScroll:true}),0); } }); }});
-  markSeen(true);
+  if(hasData()) markSeen(true);   // données d'exemple sans action : rien n'est écrit (voir showApp)
 }
 document.querySelectorAll("[data-notif]").forEach(b=>b.addEventListener("click",()=>openNotif(b)));
 /* ---------- v14 : ressenti après séance, activités importées, FC de repos ---------- */
@@ -2988,16 +2991,17 @@ function sportLead14(){
   if(P.sport==="force") return "Chaque semaine suit le même schéma de séances ; ce qui progresse, c'est la charge, à l'effort perçu (RPE). Une semaine sur quatre est allégée (moins de séries, RPE plus bas). Avec une date d'objectif, la dernière semaine est un test et l'avant-dernière allège la charge.";
   return base+(P.sport==="vtt"?"Les durées sont en minutes puis en heures pour la sortie longue. ":"")+"Avec une date d'objectif, les deux dernières semaines allègent le volume en gardant un peu d'intensité."; }
 // semaine de la dernière séance dure : avant la fin d'une semaine allégée, avertir sans bloquer
-function sportAlerts14(wk,f,tp){
+// keep : alertes de santé ou de risque de blessure, gardées en haut de la semaine (le reste va dans le panneau Notifications)
+function sportAlerts14(wk,f,tp,keep){
   const al=[];
   if(runSport()){ if(P.sport==="trail"&&wk.w<=2) al.push(`<div class="alert ok"><b>Trail.</b> Chaque sortie indique un dénivelé positif visé (D+). Il monte de 10 % au plus d'une semaine à l'autre (de 30 m au plus par semaine tant que tu es sous 100 m). Marche dans les montées raides : c'est plus économique et ça garde des forces pour la descente.</div>`); return al; }
   const sp=P.sport;
   if(sp!=="force"&&wk.w===1&&!(P.hSem>0)) al.push(`<div class="alert warn">Tu n'as pas indiqué tes heures de sport par semaine : le plan démarre prudemment. Renseigne-les dans ton profil pour un plan mieux adapté.</div>`);
   // force : les heures par semaine ne sont pas demandées ; si la semaine 1 dépasse 1,5 fois une durée habituelle de 2 h (soit 3 h), un rappel discret propose de retirer une séance
   if(sp==="force"&&wk.w===1){ const tot=wk.days.filter(d=>d.run&&d.kind!=="before").reduce((t,d)=>t+sessionMin(d.run),0); if(tot>180) al.push(`<div class="alert ok">Cette première semaine fait environ <b>${Math.floor(tot/60)} h ${String(Math.round(tot%60)).padStart(2,"0")}</b>. Si tu t'entraînes d'habitude moins de 2 h par semaine, retire une séance dans ton profil (« Mes entraînements ») : mieux vaut commencer léger.</div>`); }
-  if(sp==="force"&&P.minor) al.push(`<div class="alert warn"><b>Avant 18 ans</b>, garde des charges modérées, une technique propre et la présence d'un adulte compétent. Le plan plafonne l'effort à RPE 8 et ne propose aucun test de maximum.</div>`);
+  if(sp==="force"&&P.minor) keep.push(`<div class="alert warn"><b>Avant 18 ans</b>, garde des charges modérées, une technique propre et la présence d'un adulte compétent. Le plan plafonne l'effort à RPE 8 et ne propose aucun test de maximum.</div>`);
   if(sp==="force"&&P.sObj==="oly"&&wk.w<=4) al.push(`<div class="alert ok"><b>Haltérophilie olympique.</b> L'arraché et l'épaulé-jeté s'apprennent avec un coach : charges légères, barre proche du corps, jamais jusqu'à l'échec. Les séries sont notées à un effort modéré (RPE 7 au plus) pour garder la technique.</div>`);
-  if(sp==="force"&&P.niveau==="deb"&&wk.w<=4) al.push(`<div class="alert warn">Débutant en musculation : charges modérées et technique d'abord pendant 4 à 6 semaines. Ajoute 2,5 kg à la fois, et seulement quand toutes les séries se passent à RPE 6 ou moins.</div>`);
+  if(sp==="force"&&P.niveau==="deb"&&wk.w<=4) keep.push(`<div class="alert warn">Débutant en musculation : charges modérées et technique d'abord pendant 4 à 6 semaines. Ajoute 2,5 kg à la fois, et seulement quand toutes les séries se passent à RPE 6 ou moins.</div>`);
   if(wk.phase==="taper"||wk.phase==="race") al.push(`<div class="alert ok">${wk.phase==="race"?"Semaine de ton objectif":"Allègement"} : le volume baisse mais l'intensité reste. Le déficit fixe est gardé, sans supplément les jours faciles${wk.phase==="race"?", et le jour de l'objectif et sa veille sont à l'équilibre":""}.</div>`);
   else if(wk.deload) al.push(`<div class="alert ok"><b>Semaine allégée.</b> Mêmes séances, moins de volume${sp==="force"?" et RPE plus bas":""} : c'est elle qui permet de progresser ensuite.</div>`);
   return al; }
@@ -3831,7 +3835,7 @@ function safeStart(d){ try{ if(d) loadState(d); fillForm(); recompute(); return 
 if(!safeStart(local)) local=null;
 try{const t=localStorage.getItem("carnet.tab");if(t&&document.getElementById("p-"+t)&&!document.getElementById("tab-"+t).hidden)selectTab(t);}catch(e){}
 // téléphone : on va à la carte du jour, sauf à la première visite (ou sur l'exemple), où l'on montre d'abord l'en-tête
-if(window.innerWidth<=520 && $(".wrap").dataset.tab==="semaine" && local && !state.isExample) requestAnimationFrame(scrollToToday);
+if(window.innerWidth<=520 && $(".wrap").dataset.tab==="semaine" && local && !state.isExample && !$("#followedPlan")) requestAnimationFrame(scrollToToday);   // alerte « début dans le passé » : elle reste visible en haut
 localSaved=!!(local&&!local.isExample);
 setStore(!lsOK? LS_BLOCKED : local&&!local.isExample? "sur cet appareil." : "données d'exemple, rien d'enregistré encore.");
 renderAcct();
