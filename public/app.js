@@ -629,11 +629,18 @@ function swapQ(wk,d,k,p,vma,t,mark,note){ const old=d.run, km0=sessionKm(old,vma
       if(zoneMins(wk.days).easy>=Math.min(z0,t.z)-1e-9) return i; wk.days[i]=d; }
     o= o.short? {...o,fewer:(o.fewer||0)+1} : {...o,short:true}; }
   return -1; }
+// séance cochée (faite / pas faite) dont la marque correspond à la séance telle qu'elle est (daySig) : verrouillée, jamais modifiée ensuite
+// (préférences puis IA) ; sinon la marque deviendrait orpheline. Une marque posée sur une autre version de la séance ne verrouille pas.
+// Dates calculées sur le profil p seulement (pas sur state.profile) ; la date du jour n'intervient jamais.
+function dayLock(p){ const run=!evSport(p.sport), trail=p.sport==="trail", st=run? effStart(p) : null, dn=(state&&state.done)||{};
+  const sigOf=d=> daySig(trail&&d.run? {...d,run:{...d.run,title:trailTitle(d.run.title)}} : d);   // trail : titre tel que trailize l'affichera
+  return (w,d)=>{ if(!st) return false; const e=dn[addDays(st,(w-1)*7+d.i)]; return !!(e&&e.v!=="none"&&e.sig&&e.sig===sigOf(d)); }; }
 // préférences de séances, sans IA (motifs de prefParse) : type refusé remplacé (type plus doux, sinon footing facile), type aimé choisi ; jamais plus long ni plus intense
-function prefApply(weeks,p){ const pf=p.prefK; if(!pf||(!pf.no.length&&!pf.like.length)||p.niveau==="deb"||evSport(p.sport)) return; const vma=vmaOf(p).vma;
+function prefApply(weeks,p){ const pf=p.prefK; if(!pf||(!pf.no.length&&!pf.like.length)||p.niveau==="deb"||evSport(p.sport)) return; const vma=vmaOf(p).vma, lockedDay=dayLock(p);
   for(const wk of weeks){ if(wk.phase==="taper"||wk.phase==="race") continue;
     const qd=()=>wk.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind&&d.kind!=="before");
-    for(const d of qd()){ const k0=d.run.kind; if(!PREF_HARD[k0]) continue;
+    const lk=new Set(wk.days.filter(d=>lockedDay(wk.w,d)).map(d=>d.i));   // verrous évalués sur les séances du moteur, avant toute modification
+    for(const d of qd()){ const k0=d.run.kind; if(!PREF_HARD[k0]||lk.has(d.i)) continue;
       const used=qd().filter(o=>o!==d).map(o=>o.run.kind); if(!pf.no.includes(k0)&&used.some(c=>pf.like.includes(c))) continue;   // un type aimé une fois par semaine suffit
       const opts=qOpts(k0,p).filter(c=>c!==k0&&!used.includes(c)&&PREF_HARD[c]<PREF_HARD[k0]), rank=c=>{ const i=pf.like.indexOf(c); return i<0? 9 : i; };
       const want= pf.no.includes(k0)? opts.sort((a,b)=>rank(a)-rank(b)) : pf.like.includes(k0)? [] : opts.filter(c=>pf.like.includes(c)).sort((a,b)=>rank(a)-rank(b));
@@ -647,12 +654,8 @@ const runSum=r=>r.blocks.map(b=>b.l+(b.min&&!b.mix&&b.z!=="walk"&&b.work==null?"
 const aiSnap=(r,vma,trail)=>({t:trail? trailTitle(r.title) : r.title,s:runSum(r),km:sessionKm(r,vma),min:sessionDur(r)});   // trail : titre tel que trailize l'affichera
 function applyAi(weeks,p){
   const a=aiOf(p); if(!a) return; const run=!evSport(p.sport), vma=run? vmaOf(p).vma : 0, mod=new Set();   // séances modifiées (une séance changée puis allégée compte une fois)
-  // séance d'origine déjà cochée (faite / pas faite) AVANT l'ajustement : jamais modifiée, sa marque (liée à daySig) resterait sinon orpheline.
-  // Une marque posée sur la séance de l'IA ne verrouille pas (l'IA reste appliquée, la coche aussi) ; la date du jour n'intervient jamais.
-  // Dates calculées sur le profil p seulement (pas sur state.profile).
-  const trail=p.sport==="trail", st=run? effStart(p) : null, dn=(state&&state.done)||{};
-  const sigOf=d=> daySig(trail&&d.run? {...d,run:{...d.run,title:trailTitle(d.run.title)}} : d);
-  const lockedDay=(w,d)=>{ if(!st) return false; const e=dn[addDays(st,(w-1)*7+d.i)]; return !!(e&&e.v!=="none"&&e.sig&&e.sig===sigOf(d)); };
+  // séance d'origine déjà cochée AVANT l'ajustement : jamais modifiée (dayLock) ; une marque posée sur la séance de l'IA ne verrouille pas
+  const trail=p.sport==="trail", lockedDay=dayLock(p);
   for(const wk of weeks){ const x=a.wk[wk.w]; if(!x) continue;
     if(x.f||x.c) wk.aiTip={f:x.f,c:x.c};
     if(!run||wk.phase==="taper"||wk.phase==="race") continue;

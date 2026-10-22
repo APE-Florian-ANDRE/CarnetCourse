@@ -147,6 +147,22 @@ const INJ=(fa)=>`(()=>{ const T=window.__T, n=T.profileNums(T.state.profile), p0
    else ok(false,"C1 aucune séance d'intensité modifiable avant le jeudi de la semaine 4 (date simulée)",qd);
    await p.ctx.close(); }
 
+ /* ---- préférences : séance de côtes cochée AVANT « pas de côtes » : jamais remplacée, la coche reste ; une séance de côtes à venir non cochée devient un footing ---- */
+ { const p=await mk({clock:"2026-10-22T10:00:00",session:null,sd:seed({profile:{objectif:"forme"}})});
+   const tg=await p.evaluate(()=>{ const out=[]; for(const w of window.__T.plan){ if(w.phase==="taper"||w.phase==="race") continue; for(const d of w.days) if(d.run&&d.run.type==="q"&&d.run.kind==="cotes"&&(w.w>4||(w.w===4&&d.i>=3))) out.push({w:w.w,i:d.i,t:d.run.title}); } return out; });
+   ok(tg.length>=2,"PL0 plan de test : au moins deux séances de côtes à venir",tg);
+   if(tg.length>=2){ const [c1,c2]=[tg[0],tg.find(x=>x.w>tg[0].w)||tg[1]], day=new Date("2026-09-28T10:00:00"); day.setDate(day.getDate()+(c1.w-1)*7+c1.i);
+     await p.clock.setSystemTime(day); await p.click("#tab-semaine"); await p.waitForTimeout(200); await p.selectOption("#weekSel",String(c1.w)); await p.waitForTimeout(200);
+     await p.click(`#days [data-done="${c1.i}"]`); await p.waitForTimeout(200);
+     await p.evaluate(()=>{ const T=window.__T; T.state.profile.pref="pas de côtes"; T.persist(); T.recompute(); }); await p.selectOption("#weekSel",String(c1.w)); await p.waitForTimeout(250);
+     const r=await p.evaluate(({c1,c2})=>{ const T=window.__T, a=document.querySelector(`#days article[data-day="${c1.i}"]`), d1=T.plan[c1.w-1].days[c1.i], d2=T.plan[c2.w-1].days[c2.i];
+       return {kind1:d1.run&&d1.run.kind,title:a.querySelector(".title").textContent,done:!!a.querySelector(".chip.ok"),pressed:a.querySelector("[data-done]").getAttribute("aria-pressed"),type2:d2.run&&d2.run.type,pref2:!!(d2.run&&d2.run.pref),note2:d2.run&&d2.run.note||""}; },{c1,c2});
+     ok(r.kind1==="cotes"&&r.title===c1.t&&r.done,"PL1 séance de côtes cochée puis « pas de côtes » : la séance reste des côtes et reste cochée",{avant:c1,...r});
+     ok(r.type2==="easy"&&r.pref2&&/Préférence : pas de côtes/.test(r.note2),"PL2 séance de côtes à venir non cochée : devient un footing facile (note « Préférence : pas de côtes »)",{c2,...r});
+     await p.reload(); await p.waitForTimeout(900); await p.click("#tab-semaine"); await p.waitForTimeout(200); await p.selectOption("#weekSel",String(c1.w)); await p.waitForTimeout(200);
+     const r3=await p.evaluate(i=>{ const a=document.querySelector(`#days article[data-day="${i}"]`); return {title:a.querySelector(".title").textContent,done:!!a.querySelector(".chip.ok")}; },c1.i);
+     ok(r3.title===c1.t&&r3.done,"PL3 après rechargement : séance de côtes et coche gardées",r3); }
+   await p.ctx.close(); }
  /* ---- séance de l'IA cochée « Faite » : l'IA reste appliquée et la coche aussi, même après recalcul, rechargement et passage du jour ---- */
  { const p=await mk({clock:"2026-10-22T10:00:00",session:null});
    await p.evaluate(INJ("w=>false")); await p.click("#tab-semaine"); await p.waitForTimeout(200);
