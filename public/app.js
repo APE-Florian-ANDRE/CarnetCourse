@@ -553,10 +553,11 @@ function pickKind(k,p,avoid){ if(!k)return null; const ok=(SUBST[k]||[k]).filter
      (« si je suis fatigué, pas de VMA »).
    Garde-fous du changement sans IA (prefApply) : jamais pour un débutant, ni en affûtage, ni la semaine de course ; seulement vers un type plus
    doux (fartlek < côtes < seuil < VMA) ; la séance changée n'est ni plus longue (km) ni plus intense (minutes dures, aucune marge), et la part de
-   facile de la semaine ne baisse pas, sinon la séance prévue reste. En pratique, sans IA, seuls « pas de seuil », « pas de VMA » (remplacés par
-   du fartlek) et « j'aime le fartlek » peuvent agir (PREF_LIVE) : les sprints en côte comptent moins de minutes dures que toute autre séance,
-   « pas de côtes » reste donc pour l'IA. Les volumes, les jours et le nombre de séances ne changent jamais. */
-const PREF0={no:[],like:[]}, PREF_HARD={fartlek:1,cotes:1.5,seuil:2,vma:3}, PREF_LIVE={no:["seuil","vma"],like:["fartlek"]};
+   facile de la semaine ne baisse pas. Un type REFUSÉ sans remplaçant valide (les sprints en côte comptent moins de minutes dures que toute autre
+   séance ; rien n'est plus doux que le fartlek) devient un footing facile de distance au plus égale, avec lignes droites si elles sont cochées :
+   moins de minutes dures, plus de facile. Une envie seule ne change rien si aucun remplaçant n'est valide. Seule « j'aime le fartlek » peut agir
+   parmi les envies (PREF_LIVE). Les volumes, les jours et le nombre de séances ne changent jamais. */
+const PREF0={no:[],like:[]}, PREF_HARD={fartlek:1,cotes:1.5,seuil:2,vma:3}, PREF_LIVE={like:["fartlek"]};
 // caractères de contrôle et invisibles SUPPRIMÉS (comme CLEAN côté serveur : « fi\u200bnir » redevient « finir » pour le filet de sécurité) ; tabulation et retours à la ligne → espace
 const prefClean=v=> typeof v==="string"? Array.from(v.replace(/[\t\n\r]/g," ").replace(/[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g,"")).slice(0,300).join("") : "";
 const PREF_KIND=[["cotes",/\b(cotes|montees?|(la|en|une|des) cotes?)\b/],["fartlek",/\bfartleks?\b/],["seuil",/\b(seuils?|tempo)\b/],["vma",/\b(vma|fractionnes?|intervalles?)\b/]];
@@ -628,7 +629,7 @@ function swapQ(wk,d,k,p,vma,t,mark,note){ const old=d.run, km0=sessionKm(old,vma
       if(zoneMins(wk.days).easy>=Math.min(z0,t.z)-1e-9) return i; wk.days[i]=d; }
     o= o.short? {...o,fewer:(o.fewer||0)+1} : {...o,short:true}; }
   return -1; }
-// préférences de séances, sans IA (motifs de prefParse) : type refusé remplacé, type aimé choisi, toujours par un type plus doux, jamais plus long ni plus intense
+// préférences de séances, sans IA (motifs de prefParse) : type refusé remplacé (type plus doux, sinon footing facile), type aimé choisi ; jamais plus long ni plus intense
 function prefApply(weeks,p){ const pf=p.prefK; if(!pf||(!pf.no.length&&!pf.like.length)||p.niveau==="deb"||evSport(p.sport)) return; const vma=vmaOf(p).vma;
   for(const wk of weeks){ if(wk.phase==="taper"||wk.phase==="race") continue;
     const qd=()=>wk.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind&&d.kind!=="before");
@@ -636,7 +637,11 @@ function prefApply(weeks,p){ const pf=p.prefK; if(!pf||(!pf.no.length&&!pf.like.
       const used=qd().filter(o=>o!==d).map(o=>o.run.kind); if(!pf.no.includes(k0)&&used.some(c=>pf.like.includes(c))) continue;   // un type aimé une fois par semaine suffit
       const opts=qOpts(k0,p).filter(c=>c!==k0&&!used.includes(c)&&PREF_HARD[c]<PREF_HARD[k0]), rank=c=>{ const i=pf.like.indexOf(c); return i<0? 9 : i; };
       const want= pf.no.includes(k0)? opts.sort((a,b)=>rank(a)-rank(b)) : pf.like.includes(k0)? [] : opts.filter(c=>pf.like.includes(c)).sort((a,b)=>rank(a)-rank(b));
-      for(const k of want) if(swapQ(wk,d,k,p,vma,PREF_TOL,{pref:1},"Type choisi d'après tes préférences de séances.")>=0) break; } } }
+      let done=false; for(const k of want) if(swapQ(wk,d,k,p,vma,PREF_TOL,{pref:1},"Type choisi d'après tes préférences de séances.")>=0){ done=true; break; }
+      // refus explicite sans remplaçant valide : footing facile de même distance au plus (comme l'allègement de l'IA)
+      if(!done&&pf.no.includes(k0)){ const i=wk.days.indexOf(d), km=sessionKm(d.run,vma); let k2=Math.max(1.5,Math.floor(km*2)/2); while(k2>1.5&&sessionKm(easyRun(k2,vma),vma)>km+1e-9) k2-=.5;
+        if(sessionKm(easyRun(k2,vma),vma)<=km+1e-9){ const L={cotes:"côtes",fartlek:"fartlek",seuil:"seuil",vma:"VMA"}[k0];
+          wk.days[i]={...d,run:{...easyRun(k2,vma,"Footing facile",p.types.includes("ld")?4:0),pref:1,note:"Préférence : pas de "+L+". Footing facile à la place, même distance au plus."},kind:"easy"}; } } } } }
 function applyAi(weeks,p){
   const a=aiOf(p); if(!a) return; const run=!evSport(p.sport), vma=run? vmaOf(p).vma : 0, mod=new Set();   // séances modifiées (une séance changée puis allégée compte une fois)
   for(const wk of weeks){ const x=a.wk[wk.w]; if(!x) continue;
@@ -1958,9 +1963,9 @@ function fillForm(){
 // préférences de séances : compteur et rappel de ce qui s'applique sans IA
 function prefUi(){ const el=$("#pref"); if(!el) return; setT($("#prefCnt"),Array.from(el.value).length+" / 300");
   const k=prefParse(prefClean(el.value).replace(/\s+/g," ").trim()), L={cotes:"côtes",fartlek:"fartlek",seuil:"seuil",vma:"VMA"}, h=$("#prefFx");
-  // seuls les effets possibles sans IA sont annoncés (PREF_LIVE) ; le reste ne joue que via l'ajustement IA
-  const no=k.no.filter(x=>PREF_LIVE.no.includes(x)), like=k.like.filter(x=>PREF_LIVE.like.includes(x));
-  const t=[no.length? "évité si possible : "+no.map(x=>L[x]).join(", ") : "", like.length? "privilégié quand c'est permis : "+like.map(x=>L[x]).join(", ") : ""].filter(Boolean).join(" ; ");
+  // seuls les effets possibles sans IA sont annoncés : tout refus (séance plus douce ou footing), parmi les envies le fartlek seulement (PREF_LIVE)
+  const no=k.no, like=k.like.filter(x=>PREF_LIVE.like.includes(x));
+  const t=[no.length? "pas de "+no.map(x=>L[x]).join(", ")+" (remplacé par une séance plus douce ou un footing facile, sauf en affûtage et en course)" : "", like.length? "privilégié quand c'est permis : "+like.map(x=>L[x]).join(", ") : ""].filter(Boolean).join(" ; ");
   if(h){ h.hidden=!t; setT(h,t? "Peut s'appliquer sans IA : "+t+"." : ""); } }
 function readForm(){
   const p={...state.profile};

@@ -73,7 +73,9 @@ const seed=o=>JSON.stringify({profile:{...prof,...o},isExample:false,log:[],week
          if(wa.days.length!==wb.days.length) return V("jours",{...tag,w});
          let kmA=0,kmB=0,hA=0,hB=0;
          wa.days.forEach((da,j)=>{ const db=wb.days[j]; kmA+=da[5]; kmB+=db[5]; hA+=da[6]; hB+=db[6];
-           if(da[0]!==db[0]||da[1]!==db[1]||da[2]!==db[2]||da[3]!==db[3]) V("jour, type de jour ou renforcement changé",{...tag,w,j,da,db});
+           const toEasy=da[1]==="q"&&db[1]==="easy"&&db[2]==="easy"&&!db[6];   // refus sans remplaçant : footing facile (seul changement de jour permis)
+           if(da[0]!==db[0]||(!toEasy&&(da[1]!==db[1]||da[2]!==db[2]))||da[3]!==db[3]) V("jour, type de jour ou renforcement changé",{...tag,w,j,da,db});
+           if(toEasy&&!(T.prefParse(T.prefClean(ph)).no.includes(da[4]))) V("footing à la place d'une séance non refusée",{...tag,w,j,da,db});
            if(db[5]>da[5]+.011) V("séance plus longue (km)",{...tag,w,j,a:da[5],b:db[5]});
            if(da[4]&&db[4]&&(RK[db[4]]||0)>(RK[da[4]]||0)) V("type plus dur",{...tag,w,j,a:da[4],b:db[4]});
            if(db[6]>da[6]+1e-9) V("séance avec plus de minutes dures",{...tag,w,j,a:[da[4],da[6]],b:[db[4],db[6]]}); });
@@ -83,10 +85,13 @@ const seed=o=>JSON.stringify({profile:{...prof,...o},isExample:false,log:[],week
          if(wb.easy<Math.min(wa.easy,.8)-1e-9) V("part de facile sous le plan (ou 80 %)",{...tag,w,a:wa.easy,b:wb.easy});
          if(wb.easy<wa.easy-1e-9) res.easyDown.length<4&&res.easyDown.push({...tag,w,a:wa.easy,b:wb.easy}); });
        if(T.planSig(n0)===T.planSig(n1)) V("empreinte inchangée malgré des préférences",tag);
+       // refus de côtes (coureur non débutant) : plus aucune séance de côtes hors affûtage et course
+       if(niv!=="deb"&&["course","trail"].includes(sport)&&n1.prefK.no.includes("cotes")){ res.noCotes=(res.noCotes||0)+1; B.forEach((wb,w)=>{ if(wb.phase!=="taper"&&wb.phase!=="race"&&wb.days.some(d=>d[1]==="q"&&d[4]==="cotes")) V("côtes restantes malgré « pas de côtes »",{...tag,w}); }); }
      }catch(e){ res.errs.length<3&&res.errs.push(String(e&&e.stack||e).slice(0,300)); } }
    return res; },{PHR,N:700});
+ ok((FZ.noCotes||0)>=30,"F4 tirage : "+(FZ.noCotes||0)+" plans avec « pas de côtes » vérifiés");
  ok(FZ.n>=500&&!FZ.errs.length,"F0 tirage : "+FZ.n+" profils valides × phrases, sans erreur",FZ.errs);
- const VK=["semaines","jours","jour, type de jour ou renforcement changé","débutant ou autre sport modifié","affûtage ou course modifié","séance plus longue (km)","semaine plus longue (km)","type plus dur","part de facile sous le plan (ou 80 %)","empreinte inchangée malgré des préférences"];
+ const VK=["côtes restantes malgré « pas de côtes »","semaines","jours","jour, type de jour ou renforcement changé","footing à la place d'une séance non refusée","débutant ou autre sport modifié","affûtage ou course modifié","séance plus longue (km)","semaine plus longue (km)","type plus dur","part de facile sous le plan (ou 80 %)","empreinte inchangée malgré des préférences"];
  for(const k of VK) ok(!FZ.viol[k],"F1 invariant : jamais « "+k+" »",FZ.viol[k]&&{n:FZ.viol[k].n,ex:FZ.viol[k]});
  ok(!FZ.viol["séance avec plus de minutes dures"],"F2 jamais plus de minutes dures sur une séance changée par les préférences",FZ.viol["séance avec plus de minutes dures"]&&{n:FZ.viol["séance avec plus de minutes dures"].n,ex:FZ.viol["séance avec plus de minutes dures"]});
  ok(!FZ.viol["semaine avec plus de minutes dures"],"F3 jamais plus de minutes dures dans la semaine",FZ.viol["semaine avec plus de minutes dures"]&&{n:FZ.viol["semaine avec plus de minutes dures"].n,ex:FZ.hardUp});
@@ -159,7 +164,8 @@ const seed=o=>JSON.stringify({profile:{...prof,...o},isExample:false,log:[],week
    ok(u.cnt===u.cp+" / 300","U1 compteur en caractères visibles (emoji = 1)",u);
    ok(u.right<=u.vw&&u.cRight<=u.vw&&u.sw<=u.vw,"U2 mobile 375 : champ et compteur dans l'écran, pas de défilement horizontal",u);
    // correctif F2 (aucune marge sur les minutes dures) : les sprints en côte (≈ 1,3 min dures) ne peuvent être remplacés par aucune séance sans IA ; « pas de côtes » ne doit donc plus être annoncé comme appliqué sans IA
-   ok(/^Peut s'appliquer sans IA : privilégié quand c'est permis : fartlek\.$/.test(u.fx)&&!/côtes/.test(u.fx),"U3 rappel « sans IA » juste (fartlek annoncé, côtes non promises)",u.fx);
+   // ajustement produit : un type refusé sans remplaçant valide devient un footing facile ; « pas de côtes » agit donc sans IA et est annoncé
+   ok(/^Peut s'appliquer sans IA : pas de côtes \(remplacé par une séance plus douce ou un footing facile, sauf en affûtage et en course\) ; privilégié quand c'est permis : fartlek\.$/.test(u.fx),"U3 rappel « sans IA » juste (côtes refusées, fartlek privilégié)",u.fx);
    ok(u.saved===u.v.replace(/\n/g," "),"U4 invité : préférences enregistrées sur l'appareil (retour à la ligne → espace), Entrée reste dans le champ",u);
    // maxlength : collage de 400 caractères
    await p.evaluate(()=>{ const el=document.querySelector("#pref"); el.value="pas de VMA "+"é".repeat(400); el.dispatchEvent(new Event("input",{bubbles:true})); }); await p.waitForTimeout(400);
@@ -167,16 +173,19 @@ const seed=o=>JSON.stringify({profile:{...prof,...o},isExample:false,log:[],week
    ok(u2.saved<=300&&/^\d+ \/ 300$/.test(u2.cnt),"U5 valeur forcée par script : enregistrée à 300 caractères au plus",u2);
    if(+u2.cnt.split(" ")[0]>300) console.log("     info : valeur forcée par script au-delà de maxlength : compteur "+u2.cnt+" (enregistré : 300) ; impossible au clavier ou au collage");
    // phrases ambiguës : le rappel ne promet rien pour une phrase ignorée
-   for(const [t,re] of [["pas de fractionné le lundi",null],["sans problème pour les côtes",null],["pas de côtes",null],["pas de VMA",/évité si possible : VMA/],["plutôt du fartlek",/privilégié quand c'est permis : fartlek/]]){
+   for(const [t,re] of [["pas de fractionné le lundi",null],["sans problème pour les côtes",null],["pas de côtes",/pas de côtes \(remplacé/],["pas de VMA",/pas de VMA \(remplacé/],["plutôt du fartlek",/privilégié quand c'est permis : fartlek/]]){
      await p.fill("#pref",t); await p.waitForTimeout(250); const fx=await p.evaluate(()=>{ const f=document.querySelector("#prefFx"); return f.hidden?"":f.textContent; });
      ok(re? re.test(fx) : fx==="","U7 rappel pour « "+t+" »",fx); }
    // « Appliqué sans IA » ne doit pas promettre ce que le moteur ne fait jamais sans IA : VMA aimée (type le plus dur) ou fartlek refusé (type le plus doux)
-   for(const t of ["j'aime la VMA","pas de fartlek"]){ await p.fill("#pref",t); await p.waitForTimeout(250); const fx=await p.evaluate(()=>{ const f=document.querySelector("#prefFx"); return f.hidden?"":f.textContent; });
+   // ajustement produit : un refus sans remplaçant (« pas de fartlek ») devient un footing facile, il agit donc sans IA et doit être annoncé
+   { await p.fill("#pref","pas de fartlek"); await p.waitForTimeout(250); const fx=await p.evaluate(()=>{ const f=document.querySelector("#prefFx"); return f.hidden?"":f.textContent; });
+     ok(/pas de fartlek \(remplacé par une séance plus douce ou un footing facile/.test(fx),"U9b rappel pour « pas de fartlek » : footing facile annoncé",fx); }
+   for(const t of ["j'aime la VMA"]){ await p.fill("#pref",t); await p.waitForTimeout(250); const fx=await p.evaluate(()=>{ const f=document.querySelector("#prefFx"); return f.hidden?"":f.textContent; });
      ok(!/VMA|fartlek/.test(fx),"U9 rappel « Appliqué sans IA » pour « "+t+" » : ne promet pas un changement que le moteur ne fait jamais sans IA",fx); }
-   await p.fill("#pref","pas de VMA"); await p.waitForTimeout(300);
+   await p.fill("#pref","pas de côtes"); await p.waitForTimeout(300);
    await p.reload(); await p.waitForTimeout(800); await p.evaluate(()=>{ const d=document.querySelector("#ps-trn"); if(d) d.open=true; });
    const rl=await p.evaluate(()=>({v:document.querySelector("#pref").value,cnt:document.querySelector("#prefCnt").textContent,fx:document.querySelector("#prefFx").textContent}));
-   ok(rl.v==="pas de VMA"&&rl.cnt==="10 / 300"&&/VMA/.test(rl.fx),"U8 rechargement : valeur, compteur et rappel restaurés",rl);
+   ok(rl.v==="pas de côtes"&&rl.cnt==="12 / 300"&&/côtes/.test(rl.fx),"U8 rechargement : valeur, compteur et rappel restaurés",rl);
    await ctx.close(); S.close(); }
 
  /* ---- 6. page de confidentialité ---- */
