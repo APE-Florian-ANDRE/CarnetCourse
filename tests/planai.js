@@ -128,6 +128,9 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
    ok(await p.evaluate(()=>/en simple/.test(document.querySelector("#aipSt").textContent)),"U17 statut : ajusté en simple");
    await p.click("#aipOff"); await p.waitForTimeout(300);
    ok(await p.evaluate(()=>/Pas encore/.test(document.querySelector("#aipSt").textContent)&&document.querySelector("#aipOff").hidden),"U18 Retirer : le plan suit de nouveau les règles");
+   await p.click("#notifBtn"); await p.waitForTimeout(200);
+   ok(await p.evaluate(()=>{ const t=document.querySelector('.sheet[data-kind="notif"]').textContent; return !/Plan ajusté par l'IA|Conseil de l'IA/.test(t); }),"U18b après Retirer : plus d'ajustement ni de conseil de l'IA dans le panneau Notifications");
+   await p.keyboard.press("Escape"); await p.waitForTimeout(150);
    mode="429"; await p.click("#aipGo"); await p.waitForSelector(".sheet #aipSend"); await p.check("#aipOk"); await p.click("#aipSend"); await p.waitForTimeout(800);
    ok(await p.evaluate(()=>/Trop de demandes/.test(document.querySelector("#aipErr").textContent)&&!!document.querySelector(".sheet")),"U19 erreur 429 : message dans la feuille");
    mode="bad"; await p.click("#aipSend"); await p.waitForTimeout(800);
