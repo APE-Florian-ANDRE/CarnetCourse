@@ -39,6 +39,12 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
      for(const w of plan0){ const qs=w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind); wk[w.w]={f:"But "+w.w,c:"Conseil "+w.w,q:qs.map(d=>T.qOpts(d.run.kind,n)[1]||""),a:w.w%3===0?1:0}; }
      T.state.aip=T.cleanAip({p:{sig:T.planSig(n),at:Date.now(),cplx:"standard",resume:"r",wk}});
      const plan1=T.buildPlan(n); out.ai={before:wkInfo(plan0,n),after:wkInfo(plan1,n),n:plan1.ai&&plan1.ai.n,tips:plan1.filter(w=>w.aiTip).length,N:plan1.length,opts:plan0.map(w=>w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind).map(d=>T.qOpts(d.run.kind,n)))};
+     // avant / après : chaque séance modifiée garde le résumé de la séance du plan qu'elle remplace (aiFrom), jamais ailleurs
+     out.snap=(()=>{ const v=T.vmaOf(n).vma, mods=[]; plan1.forEach((w,k)=>w.days.forEach((d,i)=>{ if(!d.run||!d.run.aiFrom) return; const f=d.run.aiFrom, o=plan0[k].days[i];
+         mods.push({ok:!!(o.run&&o.run.title===f.t&&Math.abs(T.sessionKm(o.run,v)-f.km)<1e-9&&f.s&&f.min>0&&d.run.ai), light:!!d.run.aiLight, same:o.run&&o.run.title===d.run.title&&!d.run.aiLight}); }));
+       const none=pl=>!pl.some(w=>w.days.some(d=>d.run&&(d.run.aiFrom||d.run.aiLight)));
+       const sv=T.state.aip; T.state.aip={}; const off=T.buildPlan(n); T.state.aip=sv;
+       return {mods,n:plan1.ai.n,none0:none(plan0),noneOff:none(off),sigEq:T.planSig(n)===T.planSig({...n})}; })();
      out.aiRace=(()=>{ const n2=P({objectif:"10",raceDate:"2026-12-20"}), p0=T.buildPlan({...n2,noAi:true}), wk2={}; for(const w of p0) wk2[w.w]={f:"",c:"x",q:["fartlek","fartlek"],a:1};
        T.state.aip=T.cleanAip({p:{sig:T.planSig(n2),at:Date.now(),cplx:"standard",resume:"",wk:wk2}}); const p1=T.buildPlan(n2);
        return p0.filter(w=>w.phase==="taper"||w.phase==="race").every(w=>JSON.stringify(w.days)===JSON.stringify(p1[w.w-1].days)); })();
@@ -78,6 +84,10 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
    ok(aft.every((w,i)=>w.q.every(x=>!x.k||A.opts[i].flat().includes(x.k))),"M11 IA : types choisis parmi les remplaçants permis");
    ok(aft.every(w=>new Set(w.q.map(x=>x.k)).size===w.q.length),"M12 IA : jamais deux fois le même type dans une semaine");
    ok(aft.filter((w,i)=>w.w%3===0&&bef[i].q.length&&w.phase!=="taper"&&w.phase!=="race").every(w=>w.q.length===bef[w.w-1].q.length-1),"M13 IA : semaine allégée = une séance d'intensité en moins");
+   const SN=R.snap;
+   ok(SN.mods.length===SN.n&&SN.mods.every(m=>m.ok),"M23 avant / après : chaque séance modifiée garde la séance du plan qu'elle remplace (titre, distance, durée, contenu)",SN);
+   ok(SN.mods.some(m=>m.light)&&SN.mods.every(m=>!m.same),"M24 avant / après : allègements marqués, aucune séance identique signalée comme modifiée");
+   ok(SN.none0&&SN.noneOff,"M25 avant / après : rien sans ajustement ou ajustement retiré");
    ok(R.aiRace,"M14 IA : affûtage et semaine de course jamais modifiés");
    ok(R.aiDeb,"M15 IA : débutant, aucune séance d'intensité changée de type");
    ok(R.sig,"M16 IA : profil modifié depuis l'ajustement, ajustement ignoré");
@@ -111,10 +121,21 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
    ok(Array.isArray(h.body.semaines)&&h.body.semaines[0].s===4&&h.body.semaines.every(w=>(w.qualite||[]).every(x=>x.options[0]===x.type)),"U8 semaines à venir seulement (à partir de la semaine en cours), options permises",h.body.semaines&&h.body.semaines[0]);
    ok(await p.evaluate(()=>!document.querySelector(".sheet")&&/Ajusté le/.test(document.querySelector("#aipSt").textContent)&&!document.querySelector("#aipOff").hidden),"U9 succès : feuille fermée, statut « Ajusté le », bouton Retirer");
    ok(await p.evaluate(()=>/Plan ajusté par l'IA/.test(document.querySelector("#toasts").textContent)),"U10 message de confirmation");
+   const am=await p.evaluate(()=>{ const d=document.querySelector("#aipMods"); return {vis:!d.hidden,sum:document.querySelector("#aipModsT").textContent,li:[...document.querySelectorAll("#aipModsL li")].map(x=>x.textContent)}; });
+   ok(am.vis&&am.li.length>0&&new RegExp("\\("+am.li.length+" séance").test(am.sum)&&am.li.every(t=>/^Semaine \d+ · /.test(t)&&/Avant/.test(t)&&/Après/.test(t))&&am.li.some(t=>/semaine allégée/.test(t)),"U33 profil : liste repliée des séances modifiées (semaine, jour, avant → après)",am);
    await p.click("#tab-semaine"); await p.waitForTimeout(200);
    const wk=await p.evaluate(()=>({tip:(document.querySelector("#weekAlerts .aitip")||{}).textContent||"",img:!!document.querySelector("#weekAlerts img"),pwn:!!window.__pwn,light:/semaine allégée/.test(document.querySelector("#days").textContent)}));
    ok(/Conseil de l'IA/.test(wk.tip)&&/Couche-toi tôt/.test(wk.tip)&&!wk.img&&!wk.pwn,"U11 conseil de la semaine affiché comme du texte (HTML neutralisé)",wk);
    ok(wk.light,"U12 semaine allégée par l'IA : footing à la place de la dernière séance d'intensité");
+   const ab0=await p.evaluate(()=>{ const b=document.querySelector("#days [data-aiba]"), c=b&&document.getElementById(b.getAttribute("aria-controls")); return {chip:[...document.querySelectorAll("#days .chip.ai")].map(x=>x.textContent),n:document.querySelectorAll("#days [data-aiba]").length,exp:b&&b.getAttribute("aria-expanded"),hid:!!(c&&c.hidden&&!c.offsetHeight)}; });
+   ok(ab0.n>0&&ab0.chip.length===ab0.n&&ab0.chip.includes("Allégée par l'IA")&&ab0.exp==="false"&&ab0.hid,"U29 cartes : repère « Modifiée / Allégée par l'IA », avant / après replié (aria-expanded=false)",ab0);
+   await p.setViewportSize({width:375,height:800}); await p.click("#days [data-aiba]"); await p.waitForTimeout(150);
+   const ab1=await p.evaluate(()=>{ const b=document.querySelector("#days [data-aiba]"), c=document.getElementById(b.getAttribute("aria-controls")); return {exp:b.getAttribute("aria-expanded"),vis:!c.hidden&&c.offsetHeight>0,t:c.textContent,html:c.innerHTML,sw:document.documentElement.scrollWidth}; });
+   ok(ab1.exp==="true"&&ab1.vis&&/Avant/.test(ab1.t)&&/Après/.test(ab1.t)&&/km/.test(ab1.t)&&/Footing facile \(semaine allégée\)/.test(ab1.t)&&!/<img|<script/i.test(ab1.html),"U30 avant / après déplié : les deux séances, distance et contenu",ab1.t);
+   ok(ab1.sw<=375,"U31 avant / après sur téléphone (375 px) : pas de défilement horizontal",ab1.sw);
+   await p.click("#days [data-aiba]"); await p.waitForTimeout(100);
+   ok(await p.evaluate(()=>{ const b=document.querySelector("#days [data-aiba]"); return b.getAttribute("aria-expanded")==="false"&&document.getElementById(b.getAttribute("aria-controls")).hidden; }),"U32 avant / après : se replie au second appui");
+   await p.setViewportSize({width:1280,height:900});
    await p.click("#tab-plan"); await p.waitForTimeout(200);
    ok(await p.evaluate(()=>/Plan ajusté par l'IA/.test(document.querySelector("#planAlerts").textContent)),"U13 onglet Plan : ajustement signalé");
    await p.reload(); await p.waitForTimeout(900);
@@ -127,6 +148,7 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
    ok(await p.evaluate(()=>/en simple/.test(document.querySelector("#aipSt").textContent)),"U17 statut : ajusté en simple");
    await p.click("#aipOff"); await p.waitForTimeout(300);
    ok(await p.evaluate(()=>/Pas encore/.test(document.querySelector("#aipSt").textContent)&&document.querySelector("#aipOff").hidden),"U18 Retirer : le plan suit de nouveau les règles");
+   ok(await p.evaluate(()=>document.querySelector("#aipMods").hidden&&!document.querySelector("#days .chip.ai, #days [data-aiba]")),"U34 Retirer : plus de repère ni d'avant / après");
    mode="429"; await p.click("#aipGo"); await p.waitForSelector(".sheet #aipSend"); await p.check("#aipOk"); await p.click("#aipSend"); await p.waitForTimeout(800);
    ok(await p.evaluate(()=>/Trop de demandes/.test(document.querySelector("#aipErr").textContent)&&!!document.querySelector(".sheet")),"U19 erreur 429 : message dans la feuille");
    mode="bad"; await p.click("#aipSend"); await p.waitForTimeout(800);
