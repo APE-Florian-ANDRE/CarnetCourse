@@ -71,8 +71,8 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
      ok(r.avance.info.every((w,i)=>Math.abs(w.km-r.standard.info[i].km)<=Math.max(2,r.standard.info[i].km*.12)),"M6 "+k+" avancé : volume de chaque semaine proche de standard");
      // affûtage et course : pas de footing simple à raccourcir (footing + lignes droites, course), 1 km de marge
      ok(r.simple.info.every((w,i)=>w.km<=r.standard.info[i].km+(w.phase==="taper"||w.phase==="race"?1.1:.1)),"M23 "+k+" simple : volume de chaque semaine au plus celui du standard",r.simple.info.map((w,i)=>[w.w,+w.km.toFixed(1),+r.standard.info[i].km.toFixed(1)]).filter(x=>x[1]>x[2]+.1));
-     if(!r.standard.deb){ const ks=r.standard.info.map(w=>w.q.map(x=>x.k).filter(Boolean)), early=new Set(ks.slice(0,4).flat()), all=new Set(ks.flat());
-       ok([...early].every(x=>x==="fartlek"||x==="cotes")&&all.size>=3,"M24 "+k+" variété croissante : fartlek et côtes les 4 premières semaines, 3 types ou plus sur le plan",{early:[...early],all:[...all]}); }
+     if(!r.standard.deb){ const ks=r.standard.info.map(w=>w.q.map(x=>x.k).filter(Boolean)), early=new Set(ks.slice(0,3).flat()), all=new Set(ks.flat());
+       ok([...early].every(x=>x==="fartlek"||x==="cotes")&&all.size>=3,"M24 "+k+" variété croissante : fartlek et côtes les 3 premières semaines, 3 types ou plus sur le plan",{early:[...early],all:[...all]}); }
    }
    const A=R.ai, bef=A.before, aft=A.after;
    ok(A.n>5&&A.tips===A.N,"M7 IA appliquée : "+A.n+" séances modifiées, un conseil sur chaque semaine",[A.n,A.tips,A.N]);
