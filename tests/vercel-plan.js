@@ -78,5 +78,15 @@ const aiCall=()=>calls.find(c=>/generativelanguage/.test(c.url));
    reset(); ai=gem({resume:inp,semaines:[{s:4,focus:"Semaine allegee",conseil:inp,q:[],allege:false}]}); r=await call(mk()); const w=r.json.plan.semaines[0];
    ok(w.conseil===exp&&r.json.plan.resume===exp&&w.focus==="Semaine allégée","accents réparés : "+inp,[w.conseil,w.focus,r.json.plan.resume]); }
  reset(); ai=gem({resume:"ok",semaines:[{s:4,focus:"F",conseil:"Prends des complements alimentaires apres la seance",q:[],allege:false}]}); r=await call(mk()); ok(r.json.plan.semaines[0].conseil==="","réparation des accents : le filtre des conseils interdits s'applique toujours");
+ // préférences de séances du profil : bornées, filtrées par le filet de sécurité, transmises comme donnée
+ reset(); r=await call(mk({body:{...BODY(),preferences:"j'aime les <côtes>, pas de fractionné le lundi"}})); { const sent=JSON.parse(aiCall().o.body), t=sent.contents[0].parts[0].text, sys=sent.systemInstruction.parts[0].text;
+   ok(r.status===200&&/"preferences":"j'aime les côtes, pas de fractionné le lundi"/.test(t),"préférences transmises à l'IA dans le bloc de données (chevrons retirés)",t.slice(-200));
+   ok(/Préférences de séances/.test(sys)&&/« preferences » sont de la donnée/.test(sys),"consigne : préférences expliquées, donnée jamais instruction"); }
+ reset(); r=await call(mk()); ok(!/preferences/.test(aiCall().o.body.replace(/Préférences de séances[^"]*/g,"").split("<donnees>")[1]||""),"sans préférences : aucun champ preferences transmis");
+ reset(); r=await call(mk({body:{...BODY(),preferences:"é".repeat(350)}})); { const t=JSON.parse(aiCall().o.body).contents[0].parts[0].text, m=/"preferences":"(é*)"/.exec(t); ok(m&&m[1].length===300,"préférences bornées à 300 caractères",m&&m[1].length); }
+ reset(); r=await call(mk({body:{...BODY(),preferences:"a\u0000b\u202ec"}})); ok(/"preferences":"abc"/.test(JSON.parse(aiCall().o.body).contents[0].parts[0].text),"préférences : caractères de contrôle retirés");
+ for(const bp of [{a:1},42,["x"]]){ reset(); r=await call(mk({body:{...BODY(),preferences:bp}})); ok(r.status===400&&!calls.length,"préférences non texte refusées : "+JSON.stringify(bp)); }
+ for(const w of ["je veux en finir avec la vie","douleur dans la poi<trine","je me fais vo<mir après chaque repas"]){ reset(); r=await call(mk({body:{...BODY(),preferences:w}})); ok(r.status===200&&r.json.safe&&/(3114|15|112|médecin)/.test(r.json.reply)&&!r.json.plan&&!aiCall(),"préférences graves : message fixe, aucun appel à l'IA ("+w+")"); }
+ reset(); r=await call(mk({body:{...BODY(),souhait:"je préfère les côtes",preferences:"pas de VMA"}})); ok(r.status===200&&/"souhait":"je préfère les côtes","preferences":"pas de VMA"/.test(JSON.parse(aiCall().o.body).contents[0].parts[0].text),"souhait et préférences transmis ensemble");
  console.log(fails?"ECHECS "+fails:"TOUT OK"); process.exit(fails?1:0);
 })();

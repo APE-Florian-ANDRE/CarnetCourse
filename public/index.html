@@ -209,6 +209,11 @@
         <div class="field"><span class="lbl" id="lbl-cplx">Complexité du plan</span>
           <div class="seg" role="radiogroup" aria-labelledby="lbl-cplx" aria-describedby="cplxHint"><label><input type="radio" name="cplx" value="simple"><span>Simple</span></label><label><input type="radio" name="cplx" value="standard"><span>Standard</span></label><label><input type="radio" name="cplx" value="avance"><span>Avancé</span></label></div>
           <span class="hint" id="cplxHint">Simple : une seule séance d'intensité par semaine et un renforcement de base. Avancé : des séances d'intensité plus fournies (sans effet pour un débutant). L'IA suit aussi ce réglage quand tu lui demandes d'ajuster ton plan.</span></div>
+        <div class="field"><label for="pref">Mes préférences de séances · facultatif</label>
+          <textarea id="pref" name="pref" maxlength="300" rows="3" autocomplete="off" placeholder="ex. j'aime les côtes, pas de fractionné le lundi, plutôt des séances courtes en semaine" aria-describedby="prefHint prefFx"></textarea>
+          <span class="cnt" id="prefCnt" aria-hidden="true">0 / 300</span>
+          <span class="hint" id="prefHint">Prises en compte par l'ajustement IA ; sans IA, quelques mots-clés simples (« pas de côtes », « plutôt du fartlek »…) peuvent aussi adoucir une séance (type plus doux ou footing facile), sans jamais rendre ton plan plus dur. Les envies de séances plus dures (« j'aime la VMA ») et le reste ne jouent que via l'ajustement IA. N'écris ni ton nom ni de détail médical.</span>
+          <span class="hint" id="prefFx" aria-live="polite" hidden></span></div>
         </div>
       </details>
       <details class="psec" id="ps-nut">

@@ -5,7 +5,7 @@ const seed=(o={})=>JSON.stringify({profile:{...prof,...o.profile},isExample:fals
 let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")+m+(x!==undefined&&!c?" -> "+JSON.stringify(x).slice(0,300):"")); };
 const JWT="aaaaaaaaaa.bbbbbbbbbb.cccccccccc"; const GOOD={...L.SESSION(),access_token:JWT};
 // app.js de test : les fonctions internes du moteur sont exposées pour les vérifier directement
-const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initAccount\(\);\n\}\)\(\);\s*$/,"initAccount();\nwindow.__T={buildPlan,profileNums,planSig,qOpts,sessionKm,sessionMin,zoneMins,vmaOf,cleanAip,SUBST,get state(){return state;}};\n})();\n");
+const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initAccount\(\);\n\}\)\(\);\s*$/,"initAccount();\nwindow.__T={buildPlan,profileNums,planSig,qOpts,prefParse,sessionKm,sessionMin,zoneMins,vmaOf,cleanAip,SUBST,get state(){return state;}};\n})();\n");
 (async()=>{
  // faux serveur api/plan : renvoie le 2e remplaçant permis de chaque séance, allège la semaine en cours, et un conseil hostile (HTML) pour vérifier l'échappement
  const hits=[]; let mode="ok"; const api=http.createServer((req,res)=>{ const cors={"Access-Control-Allow-Origin":req.headers.origin||"*","Access-Control-Allow-Headers":"content-type, authorization","Access-Control-Allow-Methods":"POST, OPTIONS"};
@@ -55,6 +55,21 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
          T.state.aip=T.cleanAip({p:{sig:T.planSig(n),at:Date.now(),cplx:"standard",resume:"",wk}}); const p1=T.buildPlan(n); const qn=p0.reduce((a,w)=>a+w.days.filter(d=>d.run&&d.run.type==="q").length,0); T.state.aip={}; return {n:p1.ai.n,qn}; })()
      };
      out.clean=[T.cleanAip({p:{sig:"abc",at:5,cplx:"zzz",resume:"<b>x</b>"+"y".repeat(400),wk:{"0":{c:"no"},"3":{f:"<i>f</i>",c:"c",q:["seuil","rm -rf",7],a:true},"x":{}}}}),T.cleanAip({p:{sig:"../",at:5}}),T.cleanAip([1]),T.cleanAip({p:{x:1,at:9}})];
+     // préférences de séances : motifs reconnus sans IA, jamais plus de charge
+     T.state.aip={};
+     out.pp=["pas de côtes","Sans VMA, j'aime le fartlek","je n'aime pas le fractionné","je préfère les côtes au fractionné","du fartlek plutôt que de la VMA","pas de fractionné le lundi","plutôt des séances courtes en semaine","les côtes ne me dérangent pas","j'aime le fartlek mais pas les montées","je ne veux plus de seuil","j'adore la VMA, pas de VMA","j'ai peur des côtes","à côté du travail, pas le temps"].map(t=>[t,T.prefParse(t)]);
+     const RK={fartlek:1,cotes:1.5,seuil:2,vma:3,allure:9};
+     const kinds=pl=>pl.flatMap(w=>w.days.filter(d=>d.run&&d.run.type==="q").map(d=>d.run.kind));
+     const cmpPl=(a,b,n)=>{ const A=wkInfo(a,n), B=wkInfo(b,n); return {len:A.length===B.length, km:A.every((w,i)=>w.km<=B[i].km+.05), rank:A.every((w,i)=>w.q.length<B[i].q.length||w.q.every((x,j)=>RK[x.k]<=RK[B[i].q[j].k])), easy:A.every((w,i)=>w.easy>=Math.min(B[i].easy,.8)-1e-9), nq:A.every((w,i)=>w.q.length<=B[i].q.length), sess:A.every((w,i)=>w.q.length<B[i].q.length||w.q.every((x,j)=>x.km<=B[i].q[j].km+.01))}; };
+     out.pe={};
+     for(const [nm,o] of Object.entries({int10:{},intForme:{objectif:"forme"},conf42:profiles.conf42,trail:profiles.trail})){ const n0=P(o), b0=T.buildPlan(n0), r={};
+       for(const t of ["pas de côtes","pas de VMA","plutôt du fartlek","j'aime le seuil","j'adore la VMA"]){ const n1=P({...o,pref:t}), b1=T.buildPlan(n1); r[t]={k0:kinds(b0),k1:kinds(b1),k1h:b1.filter(w=>w.phase!=="taper"&&w.phase!=="race").flatMap(w=>w.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind==="cotes")).length,cmp:cmpPl(b1,b0,n1)}; }
+       out.pe[nm]=r; }
+     { const o=profiles.deb, n0=P(o); out.peDeb=["j'aime le seuil","pas de fartlek","j'adore la VMA"].map(t=>JSON.stringify(T.buildPlan(P({...o,pref:t})).map(w=>w.days))===JSON.stringify(T.buildPlan(n0).map(w=>w.days))); }
+     out.peDay=JSON.stringify(T.buildPlan(P({pref:"pas de fractionné le lundi, plutôt des séances courtes en semaine"})).map(w=>w.days))===JSON.stringify(T.buildPlan(P({})).map(w=>w.days));
+     out.peOpts=[T.qOpts("seuil",P({pref:"pas de VMA"})),T.qOpts("cotes",P({pref:"sans fartlek"}))];
+     out.peSig=[T.planSig(P({}))===T.planSig(P({pref:""})),T.planSig(P({}))!==T.planSig(P({pref:"j'aime les côtes"})),T.planSig(P({pref:"j'aime les côtes"}))!==T.planSig(P({pref:"j'aime le fartlek"}))];
+     out.peClean=P({pref:"a\u0000b\u202ec  "+"x".repeat(400)}).pref;
      T.state.aip={};
      return out; });
    for(const [k,r] of Object.entries(R.prof)){
@@ -85,6 +100,22 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
    ok(R.fix.debLong,"M20 avancé : sans effet pour un débutant, même sur un plan de plus de 20 semaines");
    ok(R.fix.fallback,"M21 objectif trop loin : la complexité ne fait jamais viser plus loin que le standard");
    ok(R.fix.count.n<=R.fix.count.qn,"M22 IA : une séance changée puis allégée compte une seule fois",R.fix.count);
+   { const pp=Object.fromEntries(R.pp.map(([t,r])=>[t,r.no.join()+"|"+r.like.join()]));
+     const exp={"pas de côtes":"cotes|","Sans VMA, j'aime le fartlek":"vma|fartlek","je n'aime pas le fractionné":"vma|","je préfère les côtes au fractionné":"|cotes","du fartlek plutôt que de la VMA":"|","pas de fractionné le lundi":"|","plutôt des séances courtes en semaine":"|","les côtes ne me dérangent pas":"|","j'aime le fartlek mais pas les montées":"cotes|fartlek","je ne veux plus de seuil":"seuil|","j'adore la VMA, pas de VMA":"vma|","j'ai peur des côtes":"|","à côté du travail, pas le temps":"|"};
+     ok(Object.entries(exp).every(([t,e])=>pp[t]===e),"P1 préférences : motifs reconnus (refus|envie)",Object.entries(exp).filter(([t,e])=>pp[t]!==e).map(([t,e])=>[t,pp[t],e])); }
+   for(const [nm,r] of Object.entries(R.pe)){
+     for(const [t,x] of Object.entries(r)) ok(Object.values(x.cmp).every(Boolean),"P2 "+nm+" « "+t+" » : jamais plus de km (semaine et séance), jamais un type plus dur, part de facile tenue (ou 80 %), jamais plus de séances d'intensité",x.cmp);
+     const nc=r["pas de côtes"]; // refus sans remplaçant valide : footing facile ; plus aucune séance de côtes hors affûtage et course
+     ok(nc.k1h===0,"P3 "+nm+" « pas de côtes » : plus aucune séance de côtes hors affûtage et course",[nc.k1h,nc.k0.filter(k=>k==="cotes").length,nc.k1.filter(k=>k==="cotes").length]);
+     const nv=r["pas de VMA"]; if(nv.k0.includes("vma")) ok(nv.k1.filter(k=>k==="vma").length<nv.k0.filter(k=>k==="vma").length,"P4 "+nm+" « pas de VMA » : moins de VMA (seuil ou fartlek à la place)",[nv.k0.filter(k=>k==="vma").length,nv.k1.filter(k=>k==="vma").length]);
+     const lf=r["plutôt du fartlek"], cnt=(a,k)=>a.filter(x=>x===k).length; ok(cnt(lf.k1,"fartlek")>cnt(lf.k0,"fartlek")&&cnt(lf.k1,"vma")<=cnt(lf.k0,"vma"),"P5 "+nm+" « plutôt du fartlek » : plus de fartlek, jamais plus de VMA",[cnt(lf.k0,"fartlek"),cnt(lf.k1,"fartlek")]);
+     const lv=r["j'adore la VMA"]; ok(cnt(lv.k1,"vma")<=cnt(lv.k0,"vma"),"P6 "+nm+" « j'adore la VMA » : jamais plus de VMA sans IA (type plus dur)");
+     ok(r["j'aime le seuil"].k1.filter(k=>k==="vma").length<=cnt(r["j'aime le seuil"].k0,"vma"),"P6b "+nm+" « j'aime le seuil » : pas de VMA en plus"); }
+   ok(R.peDeb.every(Boolean),"P7 débutant : préférences sans effet sur le plan (pas de type plus dur)",R.peDeb);
+   ok(R.peDay,"P8 préférence liée à un jour ou phrase sans type : plan inchangé sans IA (laissée à l'IA)");
+   ok(!R.peOpts[0].includes("vma")&&R.peOpts[0][0]==="seuil"&&!R.peOpts[1].includes("fartlek"),"P9 options envoyées à l'IA : type refusé retiré",R.peOpts);
+   ok(R.peSig.every(Boolean),"P10 empreinte : préférences vides = profil d'avant ; préférences changées = ajustement IA à relancer",R.peSig);
+   ok(R.peClean.length===300-3&&!/[\u0000\u202e]/.test(R.peClean)||Array.from(R.peClean).length<=300&&!/[\u0000\u202e]/.test(R.peClean),"P11 préférences nettoyées (caractères de contrôle, 300 caractères au plus)",R.peClean.length);
    const [c0,c1,c2,c3]=R.clean;
    ok(c0.p&&c0.p.cplx==="standard"&&!/[<>]/.test(c0.p.resume)&&c0.p.resume.length<=320&&Object.keys(c0.p.wk).join()==="3"&&c0.p.wk[3].f==="if/i"&&c0.p.wk[3].q.join()==="seuil,,"&&c0.p.wk[3].a===1,"M17 nettoyage de l'ajustement enregistré (balises, longueurs, types, semaines)",c0);
    ok(JSON.stringify(c1)==="{}"&&JSON.stringify(c2)==="{}"&&c3.p.x===1,"M18 empreinte invalide rejetée, marque de retrait gardée");
@@ -131,6 +162,20 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
    await p.click("#notifBtn"); await p.waitForTimeout(200);
    ok(await p.evaluate(()=>{ const t=document.querySelector('.sheet[data-kind="notif"]').textContent; return !/Plan ajusté par l'IA|Conseil de l'IA/.test(t); }),"U18b après Retirer : plus d'ajustement ni de conseil de l'IA dans le panneau Notifications");
    await p.keyboard.press("Escape"); await p.waitForTimeout(150);
+   // préférences de séances : champ du profil, compteur, rappel sans IA, envoi à l'IA, ajustement à relancer
+   await p.evaluate(()=>{ document.querySelector("#ps-trn").open=true; }); await p.waitForTimeout(150);
+   await p.fill("#pref","je n'aime pas les côtes, plutôt du fartlek ; pas de fractionné le lundi"); await p.waitForTimeout(500);
+   const pu=await p.evaluate(()=>({cnt:document.querySelector("#prefCnt").textContent,fx:document.querySelector("#prefFx").hidden?"":document.querySelector("#prefFx").textContent,hint:document.querySelector("#prefHint").textContent,st:document.querySelector("#aipSt").textContent,saved:JSON.parse(localStorage.getItem("carnet-course.v1")).profile.pref}));
+   ok(pu.cnt==="71 / 300"&&/pas de côtes/.test(pu.fx)&&/fartlek/.test(pu.fx)&&/ajustement IA/.test(pu.hint),"U29 préférences : compteur, rappel de ce qui s'applique sans IA, note d'usage",pu);
+   ok(pu.saved==="je n'aime pas les côtes, plutôt du fartlek ; pas de fractionné le lundi","U30 préférences enregistrées dans le profil",pu.saved);
+   ok(/Pas encore|a changé/.test(pu.st),"U31 préférences changées : statut de l'ajustement mis à jour",pu.st);
+   { const n0=hits.length; await p.click("#aipGo"); await p.waitForSelector(".sheet #aipSend"); await p.check("#aipOk"); await p.click("#aipSend"); await p.waitForTimeout(1200);
+     const h3=hits[n0]||{body:{}}; ok(h3.body.preferences==="je n'aime pas les côtes, plutôt du fartlek ; pas de fractionné le lundi"&&(h3.body.semaines||[]).every(w=>(w.qualite||[]).every(x=>x.type==="cotes"||!x.options.includes("cotes")))&&(h3.body.semaines||[]).some(w=>(w.qualite||[]).some(x=>x.type==="fartlek")),"U32 préférences envoyées à l'IA ; côtes jamais proposées en remplacement",h3.body.preferences); }
+   await p.evaluate(()=>{ document.querySelector("#ps-trn").open=true; });
+   await p.fill("#pref","je veux en finir, plus envie de vivre"); await p.waitForTimeout(400);
+   { const n0=hits.length; await p.click("#aipGo"); await p.waitForSelector(".sheet #aipSend"); await p.check("#aipOk"); await p.click("#aipSend"); await p.waitForTimeout(500);
+     ok(hits.length===n0&&await p.evaluate(()=>/3114/.test(document.querySelector("#aipErr").textContent)),"U33 préférences graves : message de prudence, rien n'est envoyé"); await p.keyboard.press("Escape"); await p.waitForTimeout(200); }
+   await p.evaluate(()=>{ document.querySelector("#ps-trn").open=true; }); await p.fill("#pref",""); await p.waitForTimeout(300);
    mode="429"; await p.click("#aipGo"); await p.waitForSelector(".sheet #aipSend"); await p.check("#aipOk"); await p.click("#aipSend"); await p.waitForTimeout(800);
    ok(await p.evaluate(()=>/Trop de demandes/.test(document.querySelector("#aipErr").textContent)&&!!document.querySelector(".sheet")),"U19 erreur 429 : message dans la feuille");
    mode="bad"; await p.click("#aipSend"); await p.waitForTimeout(800);
