@@ -72,5 +72,11 @@ const aiCall=()=>calls.find(c=>/generativelanguage/.test(c.url));
  for(const t of ["Mange un petit-déjeuner léger 3 h avant","Garde le moteur à plein régime en fin de séance","Comprime ta foulée en côte","Pyramide 200-400-600-800-600-400-200 m","Course le 20.10.2026, cadence 170-175-180","Bien.Me voilà prêt","Les jeunes coureurs progressent vite"]){
    reset(); ai=gem({resume:"ok",semaines:[{s:4,focus:"F",conseil:t,q:[],allege:false}]}); r=await call(mk()); ok(r.json.plan.semaines[0].conseil===t,"conseil normal conservé : "+t,r.json.plan.semaines[0].conseil); }
  for(const t of ["Prends de l'Advil","Va sur evil[.]com","evil dot com","Fais du fasting","Mange 1200 cals","Prends du magnésium"]){ reset(); ai=gem({resume:"ok",semaines:[{s:4,focus:"F",conseil:t,q:[],allege:false}]}); r=await call(mk()); ok(r.json.plan.semaines[0].conseil==="","vidé : "+t); }
+ // accents : exigés dans la consigne, et réparés sur les mots courants quand l'IA les oublie
+ reset(); await call(mk()); ok(/AVEC tous les accents/.test(JSON.parse(aiCall().o.body).systemInstruction.parts[0].text),"consigne : accents exigés");
+ for(const [inp,exp] of [["Semaine allegee de developpement","Semaine allégée de développement"],["Garde de la fraicheur pour la seance de cotes","Garde de la fraîcheur pour la séance de côtes"],["Apres l'echauffement, deja tres bien","Après l'échauffement, déjà très bien"],["SEANCE LEGERE","SÉANCE LÉGÈRE"],["Semaine allégée, déjà accentuée","Semaine allégée, déjà accentuée"],["Va a ton rythme ou marche","Va a ton rythme ou marche"],["Hydratation et sommeil","Hydratation et sommeil"],["Seances-cles","Séances-cles"]]){
+   reset(); ai=gem({resume:inp,semaines:[{s:4,focus:"Semaine allegee",conseil:inp,q:[],allege:false}]}); r=await call(mk()); const w=r.json.plan.semaines[0];
+   ok(w.conseil===exp&&r.json.plan.resume===exp&&w.focus==="Semaine allégée","accents réparés : "+inp,[w.conseil,w.focus,r.json.plan.resume]); }
+ reset(); ai=gem({resume:"ok",semaines:[{s:4,focus:"F",conseil:"Prends des complements alimentaires apres la seance",q:[],allege:false}]}); r=await call(mk()); ok(r.json.plan.semaines[0].conseil==="","réparation des accents : le filtre des conseils interdits s'applique toujours");
  console.log(fails?"ECHECS "+fails:"TOUT OK"); process.exit(fails?1:0);
 })();
