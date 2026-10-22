@@ -112,11 +112,12 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
    ok(await p.evaluate(()=>!document.querySelector(".sheet")&&/Ajusté le/.test(document.querySelector("#aipSt").textContent)&&!document.querySelector("#aipOff").hidden),"U9 succès : feuille fermée, statut « Ajusté le », bouton Retirer");
    ok(await p.evaluate(()=>/Plan ajusté par l'IA/.test(document.querySelector("#toasts").textContent)),"U10 message de confirmation");
    await p.click("#tab-semaine"); await p.waitForTimeout(200);
-   const wk=await p.evaluate(()=>({tip:(document.querySelector("#weekAlerts .aitip")||{}).textContent||"",img:!!document.querySelector("#weekAlerts img"),pwn:!!window.__pwn,light:/semaine allégée/.test(document.querySelector("#days").textContent)}));
-   ok(/Conseil de l'IA/.test(wk.tip)&&/Couche-toi tôt/.test(wk.tip)&&!wk.img&&!wk.pwn,"U11 conseil de la semaine affiché comme du texte (HTML neutralisé)",wk);
+   await p.click("#notifBtn"); await p.waitForTimeout(200);
+   const wk=await p.evaluate(()=>{ const nt=document.querySelector('.sheet[data-kind="notif"]'); return {tip:(nt&&nt.querySelector(".aitip")||{}).textContent||"",inWeek:!!document.querySelector("#weekAlerts .aitip"),img:!!(nt&&nt.querySelector("img")),pwn:!!window.__pwn,light:/semaine allégée/.test(document.querySelector("#days").textContent)}; });
+   ok(/Conseil de l'IA/.test(wk.tip)&&/Couche-toi tôt/.test(wk.tip)&&!wk.img&&!wk.pwn&&!wk.inWeek,"U11 conseil de la semaine dans le panneau Notifications, affiché comme du texte (HTML neutralisé)",wk);
    ok(wk.light,"U12 semaine allégée par l'IA : footing à la place de la dernière séance d'intensité");
-   await p.click("#tab-plan"); await p.waitForTimeout(200);
-   ok(await p.evaluate(()=>/Plan ajusté par l'IA/.test(document.querySelector("#planAlerts").textContent)),"U13 onglet Plan : ajustement signalé");
+   ok(await p.evaluate(()=>/Plan ajusté par l'IA/.test(document.querySelector('.sheet[data-kind="notif"]').textContent)),"U13 panneau Notifications : ajustement du plan signalé");
+   await p.keyboard.press("Escape"); await p.waitForTimeout(150);
    await p.reload(); await p.waitForTimeout(900);
    ok(await p.evaluate(()=>{ const d=JSON.parse(localStorage.getItem("carnet-course.v1")); return !!(d.aip&&d.aip.p&&d.aip.p.sig&&Object.keys(d.aip.p.wk).length>3); }),"U14 ajustement enregistré et rechargé");
    await p.click("#tab-profil"); await p.click("#ps-trn summary"); await p.waitForTimeout(150); await p.click('input[name="cplx"][value="simple"] + span'); await p.waitForTimeout(400);

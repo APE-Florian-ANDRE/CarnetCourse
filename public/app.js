@@ -1466,9 +1466,8 @@ function renderWeek(){
   // aria-disabled plutôt que disabled : le bouton garde le focus quand on arrive au bout du plan
   $("#prevW").setAttribute("aria-disabled",String(wk.w===1)); $("#nextW").setAttribute("aria-disabled",String(wk.w===plan.length));
   const tb=$("#todayW"); tb.hidden=!tp;
-  // alertes
-  const al=[];
-  if(plan.unreal) al.push(unrealAlert());
+  // alertes : la sécurité (santé, déplacements) reste en haut de la semaine ; le reste va dans le panneau Notifications (passif)
+  const al=[], keep=[];
   const tdy=todayIso(), st0=effStart(state.profile), endD=st0? addDays(st0,plan.length*7-1) : null;
   if(st0&&endD<tdy) al.push(`<div class="alert bad act"><span><b>Ce plan est terminé</b> depuis le ${longDate(endD)} (il a commencé le ${longDate(realStart())}). Pour en démarrer un nouveau, change le début du plan dans ton profil, ou recommence-le aujourd'hui.</span><button class="btn" type="button" id="restartPlan">Recommencer aujourd'hui</button></div>`);
   else if(st0&&realStart()>=addDays(tdy,7)) al.push(`<div class="alert ok">Ton plan commence le ${longDate(realStart())}. D'ici là, cours 2 à 3 fois par semaine en facile et fais ton renforcement, sans chercher à progresser vite.</div>`);
@@ -1482,11 +1481,11 @@ function renderWeek(){
   if(wk.moved||wk.moveBad){
     const mi=wk.days.filter(d=>d.movedFrom!=null).map(d=>d.i), ws=wk.moved? hardWarn(wk.days,mi,wk.w) : [];
     const txt= wk.moveBad&&!wk.moved? "Un déplacement enregistré ne correspond plus au plan (profil modifié) : il est ignoré." : ws.length? "<b>Attention</b> : "+ws.join(", ")+". Garde au moins un jour facile entre deux séances dures si tu peux." : "Tu as déplacé des séances cette semaine : les calories et l'équilibre suivent les jours réels.";
-    al.push(`<div class="alert ${ws.length?"warn":"ok"} act"><span>${txt}</span><button class="btn ghost sm" type="button" id="resetMoves">Rétablir la semaine</button></div>`);
+    keep.push(`<div class="alert ${ws.length?"warn":"ok"} act"><span>${txt}</span><button class="btn ghost sm" type="button" id="resetMoves">Rétablir la semaine</button></div>`);
   }
   if(d6&&iso(d6)<tdy&&!(endD&&endD<tdy)) al.push(`<div class="alert warn">Cette semaine est déjà passée. Reprends à la semaine en cours sans rattraper les séances manquées.</div>`);
-  if(f.minor) al.push(`<div class="alert bad">Tu as moins de 18 ans : l'outil ne met <b>aucun déficit</b> (maintien). À ton âge, perdre du poids en s'entraînant se fait seulement avec l'avis d'un médecin.</div>`);
-  else if(f.lowBmi) al.push(`<div class="alert bad">Ton IMC est de ${fmt1(E.bmi)}, sous 18,5 : l'outil ne met <b>aucun déficit</b> (maintien), quel que soit le réglage du profil. Perdre du poids n'est pas conseillé ici ; demande l'avis d'un médecin.</div>`);
+  if(f.minor) keep.push(`<div class="alert bad">Tu as moins de 18 ans : l'outil ne met <b>aucun déficit</b> (maintien). À ton âge, perdre du poids en s'entraînant se fait seulement avec l'avis d'un médecin.</div>`);
+  else if(f.lowBmi) keep.push(`<div class="alert bad">Ton IMC est de ${fmt1(E.bmi)}, sous 18,5 : l'outil ne met <b>aucun déficit</b> (maintien), quel que soit le réglage du profil. Perdre du poids n'est pas conseillé ici ; demande l'avis d'un médecin.</div>`);
   else if(!isNaN(P.cible)&&P.cible>=P.poids&&!f.noDef) al.push(`<div class="alert warn">Ton poids visé (${fmt1(P.cible)} kg) n'est pas sous ton poids actuel (${fmt1(P.poids)} kg) : mets le déficit fixe et le supplément à 0 pour rester au maintien, ou corrige le poids visé.</div>`);
   const longRace= P.objectif==="21"||P.objectif==="42";
   if(f.taper&&runSport()) al.push(`<div class="alert ok">${wk.phase==="race"?"Semaine de course":"Affûtage"} : le déficit fixe est gardé, mais sans supplément les jours faciles${wk.phase==="race"?", et le jour de la course est à l'équilibre":""}. ${wk.phase==="race"&&longRace?"Les 2 jours avant la course sont aussi à l'équilibre, avec des féculents à chaque repas.":"Si tu te sens à plat, repasse à l'équilibre les 2 jours avant la course."}</div>`);
@@ -1496,16 +1495,15 @@ function renderWeek(){
   else if(!f.noDef && f.ea<30) al.push(`<div class="alert ${f.ea<28?"warn":"ok"}">Énergie disponible : <b>${fmt1(f.ea)} kcal/kg</b> de masse maigre, ${f.ea<28?"sous":"juste sous"} le repère de 30. <details><summary>Pourquoi ?</summary><p>C'est ce qui reste à ton corps une fois le sport payé, rapporté à ta masse maigre. Sous 30, la récupération peut souffrir ; l'outil bloque sous 25. Surveille fatigue et sommeil dans l'onglet Suivi, et remonte un peu si les séances deviennent difficiles.</p></details></div>`);
   if(f.absHit) al.push(`<div class="alert bad">Certains jours, l'objectif est remonté à ${P.sexe==="F"?"1 200":"1 500"} kcal : en dessous, seulement avec un suivi médical. Le déficit réel de ces jours est plus petit que celui demandé.</div>`);
   else if(f.bmrHit && !f.floorHit) al.push(`<div class="alert warn">Certains jours, l'objectif est remonté à ton métabolisme de base (${fmt0(E.bmr)} kcal) : le déficit réel de ces jours est plus petit que celui demandé.</div>`);
-  if(E.bmi>=35||P.age>=65) al.push(`<div class="alert warn">${E.bmi>=35&&P.age>=65?"À "+P.age+" ans et avec un IMC de "+fmt1(E.bmi):E.bmi>=35?"Avec un IMC de "+fmt1(E.bmi):"À "+P.age+" ans"}, demande l'avis d'un médecin avant de commencer ce plan, surtout pour les séances intenses.</div>`);
+  if(E.bmi>=35||P.age>=65) keep.push(`<div class="alert warn">${E.bmi>=35&&P.age>=65?"À "+P.age+" ans et avec un IMC de "+fmt1(E.bmi):E.bmi>=35?"Avec un IMC de "+fmt1(E.bmi):"À "+P.age+" ans"}, demande l'avis d'un médecin avant de commencer ce plan, surtout pour les séances intenses.</div>`);
   if(runSport()&&P.niveau!=="deb"&&!(P.volume>0)&&wk.w===1) al.push(isNaN(P.volume)? `<div class="alert warn">Tu n'as pas indiqué ton volume actuel : le plan démarre prudemment. Renseigne « km par semaine » dans ton profil pour un plan adapté.</div>` : `<div class="alert warn">Tu pars de zéro : le plan démarre prudemment. Si tu cours déjà un peu, indique tes km par semaine dans ton profil.</div>`);
   if(runSport()&&P.niveau==="deb"&&tplWeek(wk.w,P.objectif!=="forme",plan.length)<=8&&wk.phase!=="race") al.push(`<div class="alert warn">Débutant : ${plan.length===12?"pendant les 8 premières semaines":"au début du plan"}, tout est en facile. Tes tendons et tes os ont besoin de ce temps, même si ton souffle suit déjà.</div>`);
   if(wk.L && P.longest>0 && wk.w===1 && wk.L>P.longest*1.1+1e-9) al.push(`<div class="alert warn">La sortie longue dépasse de plus de 10 % ta plus longue sortie du mois. Vérifie le champ « plus longue sortie » de ton profil.</div>`);
-  al.unshift(...feelAlerts14(wk,tp)); al.push(...sportAlerts14(wk,f,tp));
-  if(wk.aiTip&&wk.aiTip.c) al.push(`<div class="alert ok aitip"><span><b>Conseil de l'IA${wk.aiTip.f?" · "+esc(wk.aiTip.f):""}</b> ${esc(wk.aiTip.c)}</span></div>`);
-  $("#weekAlerts").innerHTML=al.join("");
-  const fp=$("#followedPlan"); if(fp) fp.addEventListener("click",()=>{ followed=realStart(); try{localStorage.setItem("carnet.suivi",followed);}catch(e){} recompute(); $("#weekTitle").focus({preventScroll:true}); });
+  keep.unshift(...feelAlerts14(wk,tp)); al.push(...sportAlerts14(wk,f,tp));
+  if(wk.aiTip&&wk.aiTip.c) al.unshift(`<div class="alert ok aitip"><span><b>Conseil de l'IA${wk.aiTip.f?" · "+esc(wk.aiTip.f):""}</b> ${esc(wk.aiTip.c)}</span></div>`);
+  $("#weekAlerts").innerHTML=keep.join("");
+  notif.week={w:wk.w,items:al}; refreshNotif();
   const rm=$("#resetMoves"); if(rm) rm.addEventListener("click",()=>resetWeekMoves(wk.w));
-  const rs=$("#restartPlan"); if(rs) rs.addEventListener("click",()=>{ regenPlan(false); $("#weekTitle").focus({preventScroll:true}); });
   // jours
   // jours d'avant le début : une seule carte compacte (la carte du jour reste près du haut sur téléphone)
   const bef=f.days.filter(d=>d.kind==="before"), bLast=bef.length?bef[bef.length-1].i:-1;
@@ -1640,7 +1638,7 @@ function unrealAlert(){
 }
 function renderPlan(){
   { const ld=$("#planLead"); if(ld){ if(!ld.dataset.o) ld.dataset.o=ld.textContent; setT(ld,runSport()?ld.dataset.o:sportLead14()); } }
-  $("#planAlerts").innerHTML=(plan.unreal?unrealAlert():"")+(plan.ai&&state.aip&&state.aip.p&&!state.aip.p.x? `<div class="alert ok aitip"><span><b>Plan ajusté par l'IA</b> (${esc(CPLX_LAB[state.aip.p.cplx]||"Standard").toLowerCase()}) : ${plan.ai.n? plan.ai.n+" séance"+(plan.ai.n>1?"s":"")+" modifiée"+(plan.ai.n>1?"s":"") : "séances gardées"}, un conseil par semaine dans l'onglet Semaine.${state.aip.p.resume?" "+esc(state.aip.p.resume):""}</span></div>` : "");
+  notif.plan=[plan.unreal?unrealAlert():"", plan.ai&&state.aip&&state.aip.p&&!state.aip.p.x? `<div class="alert ok aitip"><span><b>Plan ajusté par l'IA</b> (${esc(CPLX_LAB[state.aip.p.cplx]||"Standard").toLowerCase()}) : ${plan.ai.n? plan.ai.n+" séance"+(plan.ai.n>1?"s":"")+" modifiée"+(plan.ai.n>1?"s":"") : "séances gardées"}, un conseil par semaine dans les notifications.${state.aip.p.resume?" "+esc(state.aip.p.resume):""}</span></div>` : ""].filter(Boolean); refreshNotif();
   const nPrep=plan.filter(w=>w.phase==="prep").length, pl=$("#planLong"); pl.hidden=!nPrep;
   if(nPrep) setT(pl,"Plan long : d'abord "+nPrep+" semaines de préparation générale (volume qui monte de 3 à 5 % par semaine, sortie longue qui s'allonge, une séance de qualité qui change toutes les 4 semaines), puis "+(plan.length-nPrep)+" semaines de préparation à ta course.");
   const rows=plan.map(wk=>{const f=dayFuel(P,E,wk);const km=planVol14(wk,f);return {wk,f,km};});
@@ -2651,7 +2649,7 @@ function tmDraw(stepChanged){
 function closeTimer(){ if(!tm) return; clearInterval(tm.iv); lockOff(); const o=tm.opener; tm=null; if(timerEl) timerEl.remove(); timerEl=null; if(!sheetEl) document.documentElement.style.overflow=""; if(o&&document.contains(o)) o.focus({preventScroll:true}); else $("#weekTitle").focus({preventScroll:true}); }
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&tm&&tm.run) lockOn(); });
 
-/* nouveautés : journal des versions, bannière façon notification iOS, feuille « Quoi de neuf » */
+/* nouveautés : journal des versions, feuille « Quoi de neuf » ; les nouvelles versions sont aussi dans le panneau Notifications */
 const APP_V=15;
 const CHANGELOG=[
   {v:15,t:"Un profil mieux rangé et des imports plus robustes",items:["Ton profil est mieux rangé : l'objectif, tes données, tes entraînements et ta nutrition sont dans l'onglet Profil, en sections qui se replient et gardent un résumé visible. Le bilan chiffré (calories, déficit, poids visé) y est aussi.", "L'écran Semaine ne garde que le quotidien : le plan de la semaine, le jour, la nutrition du jour et la prochaine séance.", "Import des stats plus robuste : les fichiers piégés ou énormes ne figent plus l'écran, et « Annuler » répond tout de suite.", "Une même séance (date, type, durée, heure de début, distance) n'est jamais importée deux fois, et deux séances le même jour restent deux séances.", "Les sports sans course démarrent plus prudemment : la première semaine suit les heures de sport par semaine que tu déclares.", "Plans mieux dosés : en trail, le dénivelé monte de 10 % au plus par semaine (de 30 m au plus sous 100 m) et baisse en semaine allégée ; en VTT et remise en forme, les heures par semaine sont respectées (la semaine 2 part de la charge réellement placée en semaine 1, +10 % au plus ; une semaine allégée est plus légère que la précédente, ou égale au plancher) ; en force, le RPE ne saute plus de plus de 10 % au changement de phase, et la durée affichée correspond à celle du minuteur. Pour le VTT, la force et la remise en forme, le jour de l'objectif et sa veille sont à l'équilibre calorique (la course à pied reste comme avant). Un rappel discret apparaît si la première semaine de force dépasse 3 h.", "Nouveau, si ton site l'active : l'onglet Coach, un assistant à qui poser des questions. Rien n'est envoyé sans ton accord séparé, tu choisis si ton profil, ton ressenti ou tes stats sont joints (décoché par défaut), et il ne remplace pas un avis médical."]},
@@ -2674,35 +2672,31 @@ function openNews(opener){
   markSeen(true);
 }
 document.querySelectorAll("[data-news]").forEach(b=>b.addEventListener("click",()=>openNews(b)));
-let bannerEl=null;
-// la bannière ne cache jamais une alerte : en haut si la place est libre, sinon en bas, sinon elle attend
-function placeBanner(){
-  if(!bannerEl) return; const b=bannerEl;
-  const hit=()=>{ const r=b.getBoundingClientRect(); return [...document.querySelectorAll(".alert.bad,.alert.warn")].some(a=>{ const q=a.getBoundingClientRect(); return q.height&&q.bottom>r.top&&q.top<r.bottom; }); };
-  b.style.visibility=""; b.classList.remove("bottom"); if(!hit()) return;
-  b.classList.add("bottom"); if(!hit()) return;
-  b.style.visibility="hidden";
+/* notifications passives : un bouton à côté du Compte ouvre un panneau ; aucun point, compteur, badge ni animation pour signaler du nouveau */
+const notif={week:null,plan:[]};
+function notifHtml(){
+  const nw=CHANGELOG.filter(c=>c.v>newsFrom), wk=notif.week, sec=(t,body)=>`<section class="nt-s"><h4>${t}</h4>${body}</section>`, out=[];
+  if(wk&&wk.items.length) out.push(sec("Semaine "+wk.w,`<div class="alerts">${wk.items.join("")}</div>`));
+  if(notif.plan.length) out.push(sec("Ton plan",`<div class="alerts">${notif.plan.join("")}</div>`));
+  if(nw.length){ const n=nw.reduce((a,c)=>a+c.items.length,0);
+    out.push(sec("Nouveautés",`<div class="cl">${nw.map(c=>`<section><h5>Version ${c.v} · ${esc(c.t)}</h5><ul>${c.items.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></section>`).join("")}</div><p class="note">${n} nouveauté${n>1?"s":""} depuis ta dernière visite.</p>`)); }
+  return (out.length? out.join("") : `<p class="nt-empty">Rien de nouveau pour l'instant.</p>`)+`<button class="linkbtn" type="button" data-nt-news>Toutes les versions de Pacebook</button>`;
 }
-function dismissBanner(){ if(!bannerEl) return; const hadF=bannerEl.contains(document.activeElement); bannerEl.remove(); bannerEl=null; window.removeEventListener("scroll",placeBanner); if(hadF) $("#weekTitle").focus({preventScroll:true}); }
-function showNewsBanner(){
-  const nw=CHANGELOG.filter(c=>c.v>newsFrom); if(!nw.length||bannerEl||seenV()>=APP_V) return;   // déjà vue sur un autre appareil (compte)
-  const n=nw.reduce((a,c)=>a+c.items.length,0), b=document.createElement("div");
-  b.className="banner"; b.setAttribute("role","region"); b.setAttribute("aria-label","Notification");
-  b.innerHTML=`<div class="ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="14" cy="4" r="2"/><path d="M8 21l3-6 3 2v5M6 12l3-4 4 1 3 4h3M11 15l-1-5"/></svg></div><button class="bmain" type="button"><span class="bk"><span>Nouveautés</span><span>maintenant</span></span><span class="bt">Pacebook, version ${APP_V}</span><span class="bs">${esc(nw[0].t)} : ${n} nouveauté${n>1?"s":""}. Touche pour tout voir.</span></button><button class="bx" type="button" aria-label="Fermer la notification">×</button>`;
-  document.body.prepend(b); bannerEl=b; placeBanner(); window.addEventListener("scroll",placeBanner,{passive:true});
-  setT($("#srLive"),"Nouveautés de la version "+APP_V+" : "+nw[0].t+". Notification en haut de la page ; la liste reste dans « Quoi de neuf », en bas de page.");
-  b.querySelector(".bmain").addEventListener("click",()=>{ const op=$("#weekTitle"); dismissBanner(); openNews(op); });
-  b.querySelector(".bx").addEventListener("click",dismissBanner);
-  // glisser vers le haut pour fermer
-  let y0=null; b.addEventListener("pointerdown",e=>{ y0=e.clientY; });
-  b.addEventListener("pointermove",e=>{ if(y0==null) return; const dy=Math.min(0,e.clientY-y0); b.style.transform=dy?`translateY(${dy}px)`:""; });
-  const up=e=>{ if(y0==null) return; const dy=e.clientY-y0; y0=null; b.style.transform=""; if(dy<-40) dismissBanner(); };
-  b.addEventListener("pointerup",up); b.addEventListener("pointercancel",()=>{ y0=null; b.style.transform=""; });
-  // repli automatique après 10 s (pas tant que le focus ou le pointeur y est)
-  let tmo=setTimeout(function fold(){ if(!bannerEl) return; if(b.matches(":hover")||b.contains(document.activeElement)){ tmo=setTimeout(fold,3000); return; } dismissBanner(); },10000);
+const notifSheet=()=>sheetEl&&sheetEl.querySelector('.sheet[data-kind="notif"]');
+// panneau ouvert : son contenu suit la semaine, le plan et le profil (synchro, action faite depuis le panneau)
+function refreshNotif(){ const sh=notifSheet(); if(!sh) return; const b=sh.querySelector(".sh-b"), hadF=b.contains(document.activeElement);
+  b.innerHTML=notifHtml(); if(hadF) sh.querySelector(".sh-x").focus({preventScroll:true}); }
+function openNotif(opener){
+  openSheet({title:"Notifications",kind:"notif",opener,html:notifHtml(),onReady:sh=>{
+    sh.querySelector(".sh-b").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return;
+      if(b.matches("[data-nt-news]")){ openNews(opener); return; }
+      // actions des alertes : elles changent le plan ; le panneau se ferme et la semaine reprend le focus
+      if(b.id==="restartPlan"){ closeSheet(true); regenPlan(false); $("#weekTitle").focus({preventScroll:true}); }
+      else if(b.id==="followedPlan"){ closeSheet(true); followed=realStart(); try{localStorage.setItem("carnet.suivi",followed);}catch(e){} recompute(); $("#weekTitle").focus({preventScroll:true}); }
+      else if(b.matches("[data-safedate]")){ closeSheet(true); setTimeout(()=>$("#weekTitle").focus({preventScroll:true}),0); } }); }});
   markSeen(true);
 }
-
+document.querySelectorAll("[data-notif]").forEach(b=>b.addEventListener("click",()=>openNotif(b)));
 /* ---------- v14 : ressenti après séance, activités importées, FC de repos ---------- */
 const PAIN_ZONES={dos:"Dos",epaule:"Épaule",coude:"Coude",poignet:"Poignet",hanche:"Hanche",cuisse:"Cuisse",genou:"Genou",mollet:"Mollet",achille:"Tendon d'Achille",cheville:"Cheville",pied:"Pied",autre:"Autre zone"};
 const RPE_LAB=["","1 · très facile","2 · facile","3 · modéré","4 · un peu dur","5 · dur","6 · assez dur","7 · très dur","8 · intense","9 · presque maximal","10 · maximal"];
@@ -3837,15 +3831,15 @@ function safeStart(d){ try{ if(d) loadState(d); fillForm(); recompute(); return 
 if(!safeStart(local)) local=null;
 try{const t=localStorage.getItem("carnet.tab");if(t&&document.getElementById("p-"+t)&&!document.getElementById("tab-"+t).hidden)selectTab(t);}catch(e){}
 // téléphone : on va à la carte du jour, sauf à la première visite (ou sur l'exemple), où l'on montre d'abord l'en-tête
-if(window.innerWidth<=520 && $(".wrap").dataset.tab==="semaine" && local && !state.isExample && !$("#followedPlan")) requestAnimationFrame(scrollToToday);   // alerte « début dans le passé » : elle reste visible en haut
+if(window.innerWidth<=520 && $(".wrap").dataset.tab==="semaine" && local && !state.isExample) requestAnimationFrame(scrollToToday);
 localSaved=!!(local&&!local.isExample);
 setStore(!lsOK? LS_BLOCKED : local&&!local.isExample? "sur cet appareil." : "données d'exemple, rien d'enregistré encore.");
 renderAcct();
 // première visite (aucune donnée à toi) : page d'accueil ; rien n'est enregistré tant que tu n'agis pas
 if(!local&&!hvSeen()) showHome();
 
-// nouveautés : première visite, rien (la version est notée) ; sinon bannière si une version plus récente est sortie
-{ const sv=seenV(); if(!local&&!sv){ /* rien n'est écrit avant la première action (voir showApp) */ } else { newsFrom= sv||10; if(newsFrom<APP_V) setTimeout(showNewsBanner,900); } }
+// nouveautés : première visite, rien (la version est notée) ; sinon elles attendent dans le panneau Notifications, sans aucun signal (passif)
+{ const sv=seenV(); if(!local&&!sv){ /* rien n'est écrit avant la première action (voir showApp) */ } else { newsFrom= sv||10; } }
 // export Calendrier : seulement si la page peut proposer un fichier (capacité « downloads »)
 // téléchargement : fichier local (Blob), aucune capacité externe
 dlCap={ save:async({filename,data})=>{ const mime=/\.json$/.test(filename)?"application/json":/\.zip$/.test(filename)?"application/zip":"application/octet-stream";
