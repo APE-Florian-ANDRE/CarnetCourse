@@ -703,9 +703,11 @@ const EV_NO="Ne fais pas ce test si tu as mal quelque part, si tu es malade ou f
 const EV_NO_SOFT="Si tu as mal quelque part, si tu es malade ou très fatigué, remplace-le par de la marche ou du repos et décale-le de quelques jours.";
 const evBmi=p=> p.poids/Math.pow(p.taille/100,2);
 // douleur notée ces 14 derniers jours (ressenti après séance, ou suivi) : pas de test maximal
-function evPainNow(){ try{ const tdy=todayIso(), lim=addDays(tdy,-14), f=(state&&state.feel)||{};
-  if(Object.entries(f).some(([k,v])=>v&&!(v.x===1||v.x===true)&&+v.pain>=1&&k>=lim&&k<=tdy)) return true;
-  const lg=(state&&state.log)||[], l=lg[lg.length-1]; return !!(l&&l.douleur==="oui"&&l.date>=lim&&l.date<=tdy); }catch(e){ return false; } }
+// douleur à une date : notée dans les 14 jours qui la précèdent (ressenti, ou dernière mesure du suivi à cette date) ; ce qui est noté après ne compte pas
+function evPainAt(day){ try{ const lim=addDays(day,-14), f=(state&&state.feel)||{};
+  if(Object.entries(f).some(([k,v])=>v&&!(v.x===1||v.x===true)&&+v.pain>=1&&k>=lim&&k<=day)) return true;
+  const lg=((state&&state.log)||[]).filter(e=>e.date<=day), l=lg[lg.length-1]; return !!(l&&l.douleur==="oui"&&l.date>=lim); }catch(e){ return false; } }
+const evPainNow=()=>evPainAt(todayIso());
 // variante prudente : aucun test maximal. Profil (stable) : débutant, moins de 18 ans, 65 ans et plus, IMC de 35 et plus.
 // Douleur notée (p.evPain la force, pour les tests) : seulement pour les tests à venir, ni passés, ni cochés, ni notés (evalPlan)
 function evProfPrud(p){ return p.niveau==="deb"||!!p.minor||p.age>=65||evBmi(p)>=35; }
@@ -764,12 +766,18 @@ function evEasyFb(km0,vma){ let k=Math.max(1.5,Math.floor(km0*2)/2); while(k>1.5
   return {...easyRun(k,vma,"Footing facile"),note:"Douleur notée récemment : footing facile à la place du test. Fais le test plus tard, quand tu n'as plus mal (décoche puis recoche la case du profil)."}; }
 function evalPlan(weeks,p){
   if(evWhyNot(p,weeks)) return;
-  const vma=vmaOf(p).vma, deb=p.niveau==="deb", prud=evProfPrud(p), pain=evPain(p), lk=dayLock(p), N=weeks.length, j0=evAnchor(p,weeks), wA=weeks[j0], wB=weeks[j0+1];
+  const vma=vmaOf(p).vma, deb=p.niveau==="deb", prud=evProfPrud(p), lk=dayLock(p), N=weeks.length, j0=evAnchor(p,weeks), wA=weeks[j0], wB=weeks[j0+1];
   const st=effStart(p), from=evFrom(p), tdy=todayIso(), dn=(state&&state.done)||{}, er=(state&&state.evr)||{};
   const dateOf=(wk,d)=> st? addDays(st,(wk.w-1)*7+d.i) : "";
   const kmOf=wk=>wk.days.reduce((a,d)=>a+(d.run&&d.run.type!=="race"?sessionKm(d.run,vma):0),0), hardOf=wk=>wk.days.reduce((a,d)=>a+(d.run&&d.run.type==="q"?d.run.hardMin||0:0),0);
-  // test passé, coché (fait ou pas fait) ou noté : une douleur notée ensuite ne change plus son type (jamais selon la date du jour pour une séance passée)
-  const settled=(wk,d)=>{ const k=dateOf(wk,d); if(!k||k<tdy) return true; const m=dn[k]; if(m&&m.v&&m.v!=="none") return true; const e=er[k]; return !!(e&&!(e.x===1||e.x===true)); };
+  // variante (douce ou non) d'un test : une fois la séance réglée, rien ne la change plus, ni la douleur ni la date.
+  // Résultat noté : le type de ce résultat ; séance cochée : la variante dont la signature correspond à la coche ;
+  // sinon la douleur à la date de la séance (passée) ou d'aujourd'hui (à venir) ; p.evPain la force (tests)
+  const isSoft=(wk,d,hardRun,softRun)=>{ const k=dateOf(wk,d); if(!k) return false; const e=er[k];
+    if(e&&!(e.x===1||e.x===true)&&e.t){ if(softRun&&softRun.ev&&e.t===softRun.ev.t) return true; if(hardRun&&hardRun.ev&&e.t===hardRun.ev.t) return false; }
+    const m=dn[k]; if(m&&m.v&&m.v!=="none"&&m.sig){ const sg=r=>r? daySig({...d,run:r,kind:r.type}) : daySig(d);
+      if(m.sig===sg(softRun)) return true; if(m.sig===sg(hardRun)) return false; }
+    return p.evPain!=null? !!p.evPain : evPainAt(k<tdy? k : tdy); };
   const okW=wk=> !!wk&&!wk.deload&&wk.phase!=="taper"&&wk.phase!=="race";
   const free=(wk,d)=> !!d.run&&d.kind!=="before"&&d.kind!=="race"&&d.run.type!=="race"&&!d.run.ev&&!lk(wk.w,d)&&(!from||dateOf(wk,d)>=from);   // séance cochée avant : jamais changée
   const qDays=wk=> okW(wk)? wk.days.filter(d=>free(wk,d)&&d.run.type==="q"&&d.run.kind&&d.run.kind!=="allure").map(d=>({wk,d})) : [];
@@ -781,7 +789,7 @@ function evalPlan(weeks,p){
     if(b&&(hardOf(s.wk)>b.h+6+1e-9||zoneMins(s.wk.days).easy<Math.min(b.e,.8)-1e-9)){ s.wk.days[i]=old; return false; }
     s.wk.evN=(s.wk.evN||0)+1; s.d=s.wk.days[i]; return true; };
   // douleur notée : un test exigeant à venir devient le test en aisance (ou un footing facile) ; mêmes emplacements qu'avec le test, jamais de type d'intensité en plus ou en moins
-  const soften=s=>{ if(!pain||settled(s.wk,s.d)) return; const i=s.wk.days.indexOf(s.d), km0=sessionKm(s.d.run,vma); s.wk.days[i]={...s.d,run:evCont(km0,vma)||evEasyFb(km0,vma),kind:"easy"}; };
+  const soften=s=>{ const i=s.wk.days.indexOf(s.d), km0=sessionKm(s.d.run,vma), soft=evCont(km0,vma)||evEasyFb(km0,vma); if(isSoft(s.wk,s.d,s.d.run,soft)) s.wk.days[i]={...s.d,run:soft,kind:"easy"}; };
   const slots=[...qDays(wA),...qDays(wB)];
   if(deb){ const d=wA.days.find(x=>free(wA,x)&&x.run.type==="easy"&&x.run.deb)||wA.days.find(x=>free(wA,x)&&x.run.deb); if(d) put({wk:wA,d},evDeb(d.run,vma)); }
   else if(prud){ let done=false; for(const s of slots) if(put(s,evCont(sessionKm(s.d.run,vma),vma))){ done=true; break; }
@@ -794,7 +802,7 @@ function evalPlan(weeks,p){
         const km0=sessionKm(s.d.run,vma), d0=s.d, cands= t==="vma6"? [evVma6(km0,vma)] : [...evEnd(km0,vma),evCont(km0,vma)];   // endurance : durée raccourcie, sinon test en aisance
         if(cands.some(r=>put(s,r))){ taken.add(d0); used.add(s.wk.w); if(s.d.run.type==="q") soften(s); break; } } }
     const fr=wA.days.find(d=>d.run&&d.kind!=="before"&&(!from||dateOf(wA,d)>=from));
-    if(nT>=3&&fr&&free(wA,fr)&&evRefOk(fr.run)&&!(pain&&!settled(wA,fr))) put({wk:wA,d:fr},evRef(fr.run));   // douleur notée : pas de nouveau test à venir
+    if(nT>=3&&fr&&free(wA,fr)&&evRefOk(fr.run)&&!isSoft(wA,fr,evRef(fr.run),null)) put({wk:wA,d:fr},evRef(fr.run));   // douleur : footing simple, sans consigne de test
   }
   // volume réellement placé : les km qu'un test a en moins reviennent sur un footing facile de la même semaine (jamais au-delà du plan sans tests),
   // pour que la règle des +8 % tienne aussi entre la semaine des tests et la suivante
@@ -2711,7 +2719,7 @@ function openMoveSheet(i,opener){
 let evTapAt=0;   // dernière mise à jour du plan avec un résultat de test (double appui)
 $("#days").addEventListener("click",e=>{
   const b=e.target.closest("button"); if(!b) return; const w=state.week;
-  if(Date.now()-evTapAt<800&&b.dataset.evap==null){ e.preventDefault(); return; }   // second appui d'un double appui : la carte vient d'être redessinée
+  if(performance.now()-evTapAt<800&&b.dataset.evap==null){ e.preventDefault(); return; }   // second appui d'un double appui : la carte vient d'être redessinée
   if(b.dataset.done!=null||b.dataset.skip!=null){ const i=+(b.dataset.done??b.dataset.skip), k=b.dataset.done!=null?"done":"skip"; setDone(w,i,k,`#days [data-${k}="${i}"]`); }
   else if(b.dataset.move!=null) openMoveSheet(+b.dataset.move,b);
   else if(b.dataset.vm!=null){ const a=b.closest("article"), open=a.classList.contains("cmp"); setTile(a,open); if(a.dataset.iso){ tiles.o[a.dataset.iso]=open; saveTiles(); } updFoldAll(); }
@@ -2722,7 +2730,7 @@ $("#days").addEventListener("click",e=>{
   else if(b.dataset.exo!=null) openExo(w,+b.dataset.exo,b);
   else if(b.dataset.feel!=null) openFeel(w,+b.dataset.feel,b);
   else if(b.dataset.evr!=null) openEval(w,+b.dataset.evr,b);
-  else if(b.dataset.evap!=null){ if(Date.now()-evTapAt>=800){ evTapAt=Date.now(); evApplyRes(w,+b.dataset.evap); } }
+  else if(b.dataset.evap!=null){ if(performance.now()-evTapAt>=800&&evApplyRes(w,+b.dataset.evap)) evTapAt=performance.now(); }   // posé seulement après une mise à jour réussie
 });
 
 /* schémas des mouvements : silhouette de profil (tournée vers la droite) dessinée par angles, départ puis arrivée.
@@ -3320,8 +3328,8 @@ function openEval(w,i,opener){
 }
 // mise à jour du plan avec un résultat : référence du profil (VMA) ou point de départ du débutant ; jamais sans ce bouton, toujours annulable
 function evApplyRes(w,i){
-  const wk=plan[w-1], d=wk&&wk.days[i], e=evRec(w,i), mk=markKey(w,i); if(!d||!e||!mk||!mk.k) return;
-  const ev=evOf(d.run.ev,e), r=evEst(ev,e); if(!r||r.err){ toast(r&&r.err||"Résultat illisible : modifie-le."); return; } if(!evCanApply(r)) return;
+  const wk=plan[w-1], d=wk&&wk.days[i], e=evRec(w,i), mk=markKey(w,i); if(!d||!e||!mk||!mk.k) return false;
+  const ev=evOf(d.run.ev,e), r=evEst(ev,e); if(!r||r.err){ toast(r&&r.err||"Résultat illisible : modifie-le."); return false; } if(!evCanApply(r)) return false;
   const before={profile:{...state.profile},rec:{...e}}, hadAi=!!aiOf(profileNums(state.profile)), cur=vmaOf(P).vma; let msg;
   const rp=r.vma!=null? evRepl() : "", g=evGap(r);
   if(r.vma!=null){ state.profile={...state.profile,ref:"vma",refVal:fmt1(r.vma)}; msg="Plan mis à jour : VMA de "+fmt1(r.vma)+" km/h (avant "+fmt1(cur)+"). Toutes tes allures sont recalculées et la distance de certaines séances peut changer un peu ; la progression reste la même."+(rp?" Ta référence chrono est remplacée.":"")+(g?" Écart de plus de 20 % : vérifie ta mesure.":"")+" "+EV_SURE; }
@@ -3330,6 +3338,7 @@ function evApplyRes(w,i){
   state.evr=cleanEvr({...state.evr,[mk.k]:{...e,ap:Date.now(),at:Date.now()}}); state.isExample=false; fillForm(); persist(); recompute();
   const f=document.querySelector(`#days [data-evr="${i}"]`); if(f) f.focus({preventScroll:true});
   toast(msg,{action:"Annuler",fn:()=>{ state.profile=before.profile; state.evr=cleanEvr({...state.evr,[mk.k]:{...before.rec,at:Date.now()}}); fillForm(); persist(); recompute(); toast("Mise à jour annulée : ton plan est revenu comme avant."); }});
+  return true;
 }
 // panneau Notifications (section « Ton plan ») : tests à faire, résultat en attente ; information passive, sans bouton ni badge
 function evNotif(){ if(!runSport()||!plan.length) return []; const tdy=todayIso(), todo=[], wait=[];

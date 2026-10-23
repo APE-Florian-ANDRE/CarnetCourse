@@ -4,7 +4,7 @@
 // Usage : NODE_PATH=… node tests/evaltest.js [--n=400]
 const {chromium}=require("playwright"); const L=require("./lib"); const fs=require("fs"), path=require("path");
 const NF=+((process.argv.find(x=>x.startsWith("--n="))||"--n=400").slice(4));
-const inject=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initAccount\(\);\n\}\)\(\);\s*$/,"initAccount();\nwindow.__T={buildPlan,profileNums,sessionKm,sessionMin,vmaOf,planSig,evEst,evDebStart,zoneMins,cleanEvr};\n})();\n");
+const inject=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initAccount\(\);\n\}\)\(\);\s*$/,"initAccount();\nwindow.__T={buildPlan,profileNums,sessionKm,sessionMin,vmaOf,planSig,evEst,evDebStart,zoneMins,cleanEvr,daySig,getState(){return state;}};\n})();\n");
 const iso=d=>d.toISOString().slice(0,10), addD=(s,n)=>{ const d=new Date(s+"T12:00:00Z"); d.setUTCDate(d.getUTCDate()+n); return iso(d); };
 const TODAY=iso(new Date()), monday=s=>{ const d=new Date(s+"T12:00:00Z"); return addD(s,-((d.getUTCDay()+6)%7)); };
 const base={sexe:"H",age:35,taille:178,poids:75,cible:"",mg:"",activite:"1.25",niveau:"int",objectif:"10",volume:25,longest:10,ref:"none",refVal:"",fcmax:"",seances:"4",renfo:"2",longDay:"6",
@@ -60,6 +60,38 @@ function engine(arr){ const T=window.__T; return arr.map(pr=>{ try{
   { const r=await pe.evaluate(pr=>{ const T=window.__T, n=T.profileNums(pr), q=pl=>pl.map(wk=>wk.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind).map(d=>d.i+d.run.kind).join()).join("|");
       const a=T.buildPlan({...n,evPain:false,noAi:true}), b=T.buildPlan({...n,evPain:true,noAi:true}); return {same:q(a)===q(b),sig:T.planSig({...n,evPain:false})===T.planSig({...n,evPain:true}),ev:b.slice(0,2).flatMap(wk=>wk.days.filter(d=>d.run&&d.run.ev).map(d=>d.run.ev.t))}; },{...base,seances:"5",volume:40,longest:14,raceDate:race(12)});
     ok(r.same&&r.sig&&r.ev.every(t=>t==="cont"),"E2 douleur notée : tests à venir en aisance, séances d'intensité typées inchangées (planSig et choix de l'IA alignés)",r); }
+  // séance de test réglée : rien ne la change plus (douleur réelle notée dans le ressenti, sans evPain ; semaine 1 passée)
+  { const st=addD(monday(TODAY),-7);
+    const r=await pe.evaluate(({pr,st})=>{ const T=window.__T, s=T.getState(), keep={feel:s.feel,evr:s.evr,done:s.done}, n=T.profileNums(pr);
+      const dt=(w,i)=>{ const e=new Date(st+"T12:00:00Z"); e.setUTCDate(e.getUTCDate()+(w-1)*7+i); return e.toISOString().slice(0,10); }, add=(k,n_)=>{ const e=new Date(k+"T12:00:00Z"); e.setUTCDate(e.getUTCDate()+n_); return e.toISOString().slice(0,10); };
+      const set=o=>{ s.feel=o.feel||{}; s.evr=o.evr||{}; s.done=o.done||{}; };
+      const day=k=>{ for(const wk of T.buildPlan({...n,noAi:true})) for(const d of wk.days) if(dt(wk.w,d.i)===k) return d; return null; };
+      const out={};
+      set({}); const W=T.buildPlan({...n,noAi:true}); let D=null; for(const wk of W.slice(0,1)) for(const d of wk.days) if(d.run&&d.run.ev&&d.run.ev.t==="vma6") D=dt(wk.w,d.i);
+      out.D=D; const pain={[add(D,-2)]:{rpe:5,mood:3,pain:1,zone:"",note:"",at:1}};
+      // A : douleur avant la séance, résultat « cont » noté, puis la douleur est effacée
+      set({feel:pain}); out.A0=day(D).run.ev.t; set({evr:{[D]:{t:"cont",v:4.5,T:30,rpe:4,ap:0,at:2}}}); out.A1=day(D).run.ev.t;
+      // B : douleur, séance cochée (signature de la variante douce), puis la douleur est effacée
+      set({feel:pain}); const sg=T.daySig(day(D)); set({done:{[D]:{v:"done",sig:sg,at:2}}}); const dB=day(D); out.B=[dB.run.ev.t,T.daySig(dB)===sg];
+      // C : douleur notée avant la séance, séance passée sans rien de noté : variante prudente, quelle que soit la date du jour
+      set({feel:pain}); out.C=day(D).run.ev.t;
+      // C2 : douleur notée seulement après la séance passée : elle ne la change pas
+      set({feel:{[add(D,1)]:{rpe:5,mood:3,pain:1,zone:"",note:"",at:1}}}); out.C2=day(D).run.ev.t;
+      // D : sans douleur, test VMA coché, puis une douleur apparaît avant la date de la séance
+      set({}); const sh=T.daySig(day(D)); set({done:{[D]:{v:"done",sig:sh,at:2}},feel:pain}); const dD=day(D); out.Dd=[dD.run.ev.t,T.daySig(dD)===sh];
+      set(keep); return out; },{pr:{...base,start:st,raceDate:race(12)},st});
+    ok(r.D&&r.A0==="cont"&&r.A1==="cont","S1 douleur puis résultat « en aisance » noté : la séance reste en aisance, le résultat reste visible",r);
+    ok(r.B[0]==="cont"&&r.B[1],"S2 douleur puis séance cochée : la séance reste en aisance, la coche reste valable (même signature)",r);
+    ok(r.C==="cont"&&r.C2==="vma6","S3 séance passée : variante d'après la douleur à sa date (avant : en aisance ; notée après : inchangée)",r);
+    ok(r.Dd[0]==="vma6"&&r.Dd[1],"S4 sans douleur, test VMA coché, puis douleur : la séance reste un test VMA, la coche reste valable",r); }
+  // interface : douleur notée, résultat « en aisance » noté, puis la douleur disparaît : le résultat reste affiché
+  { const st=addD(monday(TODAY),-7), ctx=await b.newContext({viewport:{width:375,height:800},locale:"fr-FR"});
+    const pr={...base,start:st,raceDate:race(12)}, D=await pe.evaluate(({pr,st})=>{ const T=window.__T, n=T.profileNums(pr); for(const wk of T.buildPlan({...n,noAi:true,evPain:false}).slice(0,1)) for(const d of wk.days) if(d.run&&d.run.ev&&d.run.ev.t==="vma6"){ const e=new Date(st+"T12:00:00Z"); e.setUTCDate(e.getUTCDate()+d.i); return e.toISOString().slice(0,10); } return null; },{pr,st});
+    const u=await page(JSON.stringify({profile:pr,isExample:false,log:[],week:1,seen:99,evr:{[D]:{t:"cont",v:4.5,T:30,rpe:4,ap:0,at:Date.now()-1000}}}),{ctx});
+    for(let k=0;k<3&&await u.evaluate(()=>document.querySelector("#weekTitle").textContent!=="Semaine 1");k++){ await u.click("#prevW"); await u.waitForTimeout(250); }
+    const t=await u.evaluate(D=>{ const a=document.querySelector(`#days article[data-iso="${D}"]`); return a? a.textContent : ""; },D);
+    ok(/Test en aisance/.test(t)&&/Résultat : 4,5 km en 30 min/.test(t),"S5 interface : sans douleur aujourd'hui, la séance notée en aisance garde son type et son résultat",t.slice(0,240));
+    await ctx.close(); }
   // plans courts, semaine 1 = course, autres sports
   { const R=await run([{...base,raceDate:race(4)},{...base,raceDate:race(5)},{...base,sport:"vtt",hSem:"4"},{...base,objectif:"forme"}]);
     ok(R[0].N===4&&R[0].tests.length===0,"E3 plan de 4 semaines : aucun test",R[0]);
