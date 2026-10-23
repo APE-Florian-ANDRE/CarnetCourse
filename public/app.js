@@ -336,7 +336,7 @@ const IMP14=(function(){
 })();
 /*PURE14:end*/
 
-const EXAMPLE = {sexe:"H",age:32,taille:178,poids:82,cible:76,mg:"",activite:"1.25",niveau:"int",objectif:"10",volume:20,longest:10,ref:"none",refVal:"",fcmax:"",seances:"4",renfo:"2",longDay:"6",start:todayIso(),deficit:300,bonus:100,adj:0,lieu:"dehors",equip:"salle",types:["seuil","vma","cotes","fartlek","ld"],cross:"non",sport:"course",sObj:"",hSem:"",cplx:"standard",pref:""};
+const EXAMPLE = {sexe:"H",age:32,taille:178,poids:82,cible:76,mg:"",activite:"1.25",niveau:"int",objectif:"10",volume:20,longest:10,ref:"none",refVal:"",fcmax:"",seances:"4",renfo:"2",longDay:"6",start:todayIso(),deficit:300,bonus:100,adj:0,lieu:"dehors",equip:"salle",types:["seuil","vma","cotes","fartlek","ld"],cross:"non",sport:"course",sObj:"",hSem:"",cplx:"standard",pref:"",evalOn:"0",debRun:""};
 
 let state = {profile:{...EXAMPLE}, isExample:true, log:[], week:1, feel:{}, acts:{}, rhr:{}};
 let save = ()=>{};
@@ -388,6 +388,9 @@ function profileNums(p){
   if(n.sexe!=="F") n.sexe="H";
   n.lieu=["dehors","tapis","mixte"].includes(p.lieu)?p.lieu:"dehors"; n.equip=["salle","maison","aucun"].includes(p.equip)?p.equip:"salle"; n.cross=Object.hasOwn(CROSS,p.cross)?p.cross:"non"; n.types=Array.isArray(p.types)?p.types.filter(t=>EXAMPLE.types.includes(t)):EXAMPLE.types;
   n.minor=n.age<18;
+  // séances de test en début de plan (case du profil) ; minutes de course continue notées au test du débutant (0 : pas de résultat appliqué)
+  n.evalOn= p.evalOn==="1"||p.evalOn===1||p.evalOn===true? 1 : 0;
+  { const r=numOf(p.debRun); n.debRun= r>=0&&r<=60? Math.round(r) : 0; }
   // complexité du plan : simple (une seule séance d'intensité, renforcement de base), standard, avancé (séances plus fournies, jamais pour un débutant)
   n.cplx=["simple","standard","avance"].includes(p.cplx)?p.cplx:"standard";
   // préférences de séances en texte libre : envoyées à l'IA (ajustement du plan) ; sans IA, seuls quelques motifs simples et sûrs s'appliquent (prefParse)
@@ -468,8 +471,10 @@ function longRun(km,vma,obj,phase){
   return S("long","Sortie longue",b,{note});
 }
 const RW_LADDER=[1,2,3,4,5,6,8,10,12,15];
-function runWalk(w,total,maxBout){
+// minBout : point de départ fixé par le test course/marche du débutant (evDebStart) ; les paliers du modèle reprennent dès qu'ils le dépassent
+function runWalk(w,total,maxBout,minBout){
   let bouts=[1,2,2,3,3,4,5,6,8,10,12,15][w-1]||15;
+  if(minBout) bouts=Math.max(bouts,minBout);
   if(maxBout) bouts=Math.min(bouts,maxBout);
   const wOf=b=>b>=10?1.5:1;
   let reps=Math.floor((total-10)/(bouts+wOf(bouts)));
@@ -638,7 +643,7 @@ const LONG_NEED={5:3.5,10:7,21:16,42:28};
 const reachable=(o,wk,deb)=> !LONG_NEED[o] || (!(deb&&((o==="21"&&wk.length<30)||(o==="42"&&wk.length<52))) && wk.topLong>=LONG_NEED[o]-.05);
 function buildPlan(p){
   if(evSport(p.sport)){ const w=buildSportPlan(p); applyAi(w,p); return w; }
-  const weeks=buildPlanRun(p); prefApply(weeks,p); applyAi(weeks,p); if(p.sport==="trail") trailize(weeks,p); return weeks;
+  const weeks=buildPlanRun(p); evalPlan(weeks,p); prefApply(weeks,p); applyAi(weeks,p); if(p.sport==="trail") trailize(weeks,p); return weeks;
 }
 /* ---- ajustement par l'IA (api/plan.js) : appliqué sur le plan déjà construit, jamais au-delà de ses limites ----
    L'IA choisit le type des séances d'intensité parmi les remplaçants permis, peut alléger une semaine (sa dernière séance d'intensité devient un footing
@@ -647,7 +652,9 @@ function buildPlan(p){
 // préférences ajoutées seulement si écrites : les ajustements déjà enregistrés sans préférences restent valables
 // "e2" : version du moteur (progression linéaire, variété croissante) ; un ajustement IA fait pour un plan d'une autre version est à relancer
 function planSig(p){ const a=["e2",p.sport,p.sObj,p.objectif,p.runObjectif,p.niveau,p.seances,p.renfo,p.longDay,p.raceDate||"",p.start||"",p.volume,p.longest,p.ref,p.refVal,(p.types||[]).join(","),p.lieu,p.equip,p.cross,p.cplx,p.hSem,p.startIdx,!!p.minor];
-  if(p.pref) a.push(p.pref); const t=JSON.stringify(a);
+  if(p.pref) a.push(p.pref);
+  if(p.evalOn) a.push("ev"); if(p.debRun>0) a.push("dr"+p.debRun);   // séances de test, point de départ course/marche (ajoutés seulement s'ils servent)
+  const t=JSON.stringify(a);
   let h=5381; for(let i=0;i<t.length;i++) h=((h*33)^t.charCodeAt(i))>>>0; return h.toString(36); }
 function aiOf(p){ if(p.noAi) return null; const a=state&&state.aip&&state.aip.p; return a&&!a.x&&a.sig===planSig(p)? a : null; }
 // remplaçants permis : les séances cochées dans le profil, proches de celle du plan (SUBST) ; l'allure course et les séances d'un débutant ne changent pas
@@ -683,6 +690,97 @@ function prefApply(weeks,p){ const pf=p.prefK; if(!pf||(!pf.no.length&&!pf.like.
       if(!done&&pf.no.includes(k0)){ const i=wk.days.indexOf(d), km=sessionKm(d.run,vma); let k2=Math.max(1.5,Math.floor(km*2)/2); while(k2>1.5&&sessionKm(easyRun(k2,vma),vma)>km+1e-9) k2-=.5;
         if(sessionKm(easyRun(k2,vma),vma)<=km+1e-9){ const L={cotes:"côtes",fartlek:"fartlek",seuil:"seuil",vma:"VMA"}[k0];
           wk.days[i]={...d,run:{...easyRun(k2,vma,"Footing facile",p.types.includes("ld")?4:0),pref:1,note:"Préférence : pas de "+L+". Footing facile à la place, même distance au plus."},kind:"easy"}; } } } } }
+/* ---- séances de test en début de plan (case « Commencer par des séances de test » du profil ; inspiré du test d'entrée de Kiprun Pacer) ----
+   Une à trois séances pour jauger le niveau déjà acquis : elles remplacent des séances d'intensité de la semaine 1 (et de la 2), jamais plus longues
+   que la séance remplacée (le volume du plan n'est jamais dépassé) ; la première séance reste facile (firstWeekFix : seuls des tests faciles peuvent la remplacer).
+   Le résultat noté sur la carte donne une estimation (VMA, ou minutes de course continue du débutant) ; le plan n'est recalculé que si tu le demandes
+   (bouton « Mettre à jour mon plan avec ce résultat »), jamais en silence.
+   Intermédiaire et confirmé : test VMA de 6 min, test d'endurance de 30 min (ou 5 km), footing de référence (selon les séances par semaine et la durée du plan).
+   Débutant, moins de 18 ans, 65 ans et plus, IMC de 35 et plus, douleur notée : variante prudente seulement, sans aucun test maximal.
+   Aucun test sur un plan de 4 semaines ou moins, ni quand la semaine 1 est déjà l'affûtage ou la semaine de course. */
+const EV_T={vma6:"Test VMA : 6 minutes",end:"Test d'endurance",cont:"Test en aisance : course continue",ref:"Footing de référence",deb:"Test course / marche"};
+const EV_NO="Ne fais pas ce test si tu as mal quelque part, si tu es malade ou fiévreux, ou après une mauvaise nuit ou une grosse fatigue : fais un footing facile à la place et décale le test de quelques jours.";
+const EV_NO_SOFT="Si tu as mal quelque part, si tu es malade ou très fatigué, remplace-le par de la marche ou du repos et décale-le de quelques jours.";
+const evBmi=p=> p.poids/Math.pow(p.taille/100,2);
+// douleur notée ces 14 derniers jours (ressenti après séance, ou suivi) : pas de test maximal
+function evPainNow(){ try{ const tdy=todayIso(), lim=addDays(tdy,-14), f=(state&&state.feel)||{};
+  if(Object.entries(f).some(([k,v])=>v&&!(v.x===1||v.x===true)&&+v.pain>=1&&k>=lim&&k<=tdy)) return true;
+  const lg=(state&&state.log)||[], l=lg[lg.length-1]; return !!(l&&l.douleur==="oui"&&l.date>=lim&&l.date<=tdy); }catch(e){ return false; } }
+// variante prudente : aucun test maximal (débutant, moins de 18 ans, 65 ans et plus, IMC de 35 et plus, douleur notée) ; p.evPain force la douleur (tests)
+function evPrudent(p){ return p.niveau==="deb"||!!p.minor||p.age>=65||evBmi(p)>=35||(p.evPain!=null? !!p.evPain : evPainNow()); }
+// pourquoi pas de test : "" si les tests sont possibles
+function evWhyNot(p,weeks){ if(!p.evalOn) return "off"; if(evSport(p.sport)) return "sport"; if(!weeks||weeks.length<=4) return "court";
+  const w1=weeks[0]; if(!w1||w1.phase==="taper"||w1.phase==="race") return "course"; return ""; }
+// débutant : la plus longue période de course continue fixe le premier palier de course/marche (la moitié, 8 min au plus)
+function evDebStart(m){ if(!(m>=2)) return 0; let b=0; for(const x of RW_LADDER) if(x<=Math.min(8,m/2)) b=x; return b; }
+// première variante (dans l'ordre de préférence) qui tient dans km0 : jamais plus longue que la séance remplacée
+function evFit(cands,km0,vma){ for(const r of cands) if(sessionKm(r,vma)<=km0+1e-9) return r; return null; }
+function evVma6(km0,vma){ const c=[];
+  for(const wu of [20,15,12,10]) for(const cd of [25,20,15,12,10,8,5]) c.push(S("q",EV_T.vma6,[
+    {l:"Échauffement : footing facile, puis gammes (montées de genoux, talons-fesses)",min:wu,z:"z1",lo:E_LO,hi:E_HI},
+    {l:"3 accélérations progressives de 20 s, retour en trottinant",min:0,z:"z3",lo:.9,hi:1,noPace:true,iv:{n:3,on:20,off:60,onL:"Accélération progressive",offL:"Trot"}},
+    {l:"6 min à fond : la plus grande distance possible, à allure régulière",min:6,z:"z3",lo:.97,hi:1.03,eff:"Effort maximal tenu 6 min"},
+    {l:"Retour au calme : footing très lent, puis marche",min:cd,z:"z1",lo:.6,hi:.66}],
+    {hardMin:6,ev:{t:"vma6"},note:"Sur du plat (piste, chemin plat) ou sur tapis à 1 % de pente. Pars vite sans partir à bloc : l'allure doit tenir les 6 minutes et tu finis vidé. Mesure la distance parcourue en 6 min (montre GPS, tours de piste de 400 m, ou compteur du tapis) : VMA ≈ distance en mètres ÷ 100 (1 500 m → 15 km/h). "+EV_NO}));
+  return evFit(c,km0,vma); }
+function evEnd(km0,vma){ const c=[];
+  for(const T of [30,25,20]) for(const wu of [15,10]) for(const cd of [20,15,10,8,5]){ const k5= T===30&&vma*.83*.5>=5;   // 5 km à cette allure en 30 min au plus : jamais plus long que le test
+    c.push(S("q",EV_T.end+" : "+T+" minutes",[
+    {l:"Échauffement : footing facile, puis gammes (montées de genoux, talons-fesses)",min:wu,z:"z1",lo:E_LO,hi:E_HI},
+    {l:T+" min en continu à allure soutenue mais contrôlée : note la distance"+(k5?" (ou fais 5 km chrono à cette allure et note ton temps)":""),min:T,z:"z2",lo:.8,hi:.86,eff:"Soutenu, régulier, sans finir à bloc"},
+    {l:"Retour au calme : footing très lent",min:cd,z:"z1",lo:.6,hi:.66}],
+    {hardMin:T,ev:{t:"end",T,k5:k5?1:0},note:"Sur du plat. Effort soutenu mais contrôlé : tu peux dire quelques mots, pas tenir une conversation. Garde une allure régulière du début à la fin. Note la distance parcourue en "+T+" min"+(k5?" (ou ton temps sur 5 km)":"")+". "+EV_NO})); }
+  return evFit(c,km0,vma); }
+function evCont(km0,vma){ const c=[];
+  for(const T of [30,25,20,15]) c.push(S("easy",EV_T.cont,[
+    {l:"Échauffement : footing très lent",min:5,z:"z1",lo:.58,hi:.62},
+    {l:T+" min en continu à allure confortable (tu peux parler en phrases complètes) : note la distance",min:T,z:"z1",lo:E_LO,hi:E_HI},
+    {l:"Retour au calme en marchant",min:5,z:"walk"}],
+    {ev:{t:"cont",T},note:"Ce n'est pas un test maximal : reste à une allure où tu peux parler, ralentis ou marche si tu en as besoin. Note la distance parcourue en "+T+" min et ton effort perçu. "+EV_NO_SOFT}));
+  return evFit(c,km0,vma); }
+// débutant : la séance course/marche remplacée garde sa durée et sa part de course (même volume au plus), sans fractions imposées
+function evDeb(r,vma){ const km0=sessionKm(r,vma), M=sessionMin(r), mb=r.blocks.find(b=>b.mix), fr=mb? mb.mix.run/Math.max(1,mb.mix.run+mb.mix.walk) : .5, c=[];
+  for(let T=Math.min(30,Math.round(M));T>=Math.min(20,Math.round(M));T--){ if(T<15) break; const m=T-10;
+    c.push(S("easy",EV_T.deb,[{l:"Échauffement en marche rapide",min:5,z:"walk"},
+      {l:m+" min de course / marche libre à allure confortable : cours tant que tu es à l'aise, marche dès que tu en as besoin, puis repars",min:m,z:"z1",lo:.58,hi:.65,mix:{run:m*fr,walk:m*(1-fr)}},
+      {l:"Retour au calme en marche",min:5,z:"walk"}],
+      {deb:r.deb,ev:{t:"deb",T},note:"Pas de test maximal : tout se fait à allure confortable, sans jamais être essoufflé. Note combien de minutes tu as couru sans t'arrêter (ta plus longue période de course) et ton ressenti : ton plan pourra partir de là. "+EV_NO_SOFT})); }
+  return evFit(c,km0,vma); }
+// footing de référence : le footing facile prévu, tel quel (mêmes blocs, même distance), avec la consigne de noter son ressenti
+const evRefOk=r=> r&&r.type==="easy"&&!r.deb&&!r.ev&&r.blocks[0]&&r.blocks[0].l==="Footing facile"&&!r.blocks.some(b=>b.cross);
+const evRef=r=>({...r,title:EV_T.ref,ev:{t:"ref"},note:"Footing à allure vraiment facile (tu peux parler). À la fin, note ton effort perçu (RPE de 1 à 10) et, si tu les as, la durée et la distance : ce sera ton repère d'allure facile. "+EV_NO_SOFT});
+function evalPlan(weeks,p){
+  if(evWhyNot(p,weeks)) return;
+  const vma=vmaOf(p).vma, deb=p.niveau==="deb", prud=evPrudent(p), lk=dayLock(p), N=weeks.length, w1=weeks[0];
+  const okW=wk=> !!wk&&!wk.deload&&wk.phase!=="taper"&&wk.phase!=="race";
+  const free=(wk,d)=> !!d.run&&d.kind!=="before"&&d.kind!=="race"&&d.run.type!=="race"&&!d.run.ev&&!lk(wk.w,d);   // séance cochée avant : jamais changée
+  const qDays=wk=> okW(wk)? wk.days.filter(d=>free(wk,d)&&d.run.type==="q"&&d.run.kind&&d.run.kind!=="allure").map(d=>({wk,d})) : [];
+  const put=(s,run)=>{ const i=s.wk.days.indexOf(s.d); if(i<0||!run) return false; s.wk.days[i]={...s.d,run,kind:run.type}; s.wk.evN=(s.wk.evN||0)+1; return true; };
+  const slots=[...qDays(w1),...qDays(weeks[1])];
+  const firstRun=w1.days.find(d=>d.run&&d.kind!=="before");
+  if(deb){ const d=w1.days.find(x=>free(w1,x)&&x.run.type==="easy"&&x.run.deb)||w1.days.find(x=>free(w1,x)&&x.run.deb); if(d) put({wk:w1,d},evDeb(d.run,vma)); return; }
+  if(prud){ for(const s of slots) if(put(s,evCont(sessionKm(s.d.run,vma),vma))) return;
+    const d=w1.days.find(x=>free(w1,x)&&evRefOk(x.run)); if(d) put({wk:w1,d},evCont(sessionKm(d.run,vma),vma)); return; }
+  // 1 test (3 séances par semaine, ou plan de 6 semaines ou moins), 2 tests à partir de 4 séances et 7 semaines, 3 à partir de 5 séances et 9 semaines
+  const nT=1+(p.seances>=4&&N>=7?1:0)+(p.seances>=5&&N>=9?1:0), noVma=!p.types.includes("vma")||((p.prefK||PREF0).no||[]).includes("vma");
+  const hard= noVma? ["end"] : nT>=2? ["vma6","end"] : ["vma6"], used=new Set();
+  for(const t of hard){ for(const s of slots){ if(used.has(s.wk.w)||s.wk.days[s.wk.days.indexOf(s.d)]!==s.d) continue;   // un test exigeant par semaine au plus
+      const km0=sessionKm(s.d.run,vma); if(put(s,t==="vma6"? evVma6(km0,vma) : evEnd(km0,vma))){ used.add(s.wk.w); break; } } }
+  if(nT>=3&&firstRun&&free(w1,firstRun)&&evRefOk(firstRun.run)) put({wk:w1,d:firstRun},evRef(firstRun.run));
+}
+// estimation d'après un résultat noté (rec) pour la séance de test ev ; cur : VMA utilisée aujourd'hui
+// vma6 : VMA ≈ distance en 6 min (m) ÷ 100 ; end : VMA ≈ vitesse moyenne ÷ 0,87 (30 min ou 5 km soutenus mais contrôlés, ≈ 87 % de la VMA : estimation prudente)
+// cont : VMA ≈ vitesse en aisance ÷ 0,75 (une allure confortable est sous 75 % de la VMA : estimation basse, donc prudente) ; deb : minutes de course continue
+const EV_VMA=[8,25];
+function evEst(ev,rec){ if(!ev||!rec) return null; const out={t:ev.t};
+  let spd=null;
+  if(ev.t==="vma6") out.vma=rec.v/100;
+  else if(ev.t==="end"){ spd= rec.m==="5k"? 5/(rec.v/3600) : rec.v/((ev.T||30)/60); out.vma=spd/.87; }
+  else if(ev.t==="cont"){ spd=rec.v/((ev.T||30)/60); out.vma=spd/.75; if(rec.rpe>=7) out.err="Effort noté à "+rec.rpe+"/10 : ce n'était pas une allure confortable, l'estimation ne serait pas fiable. Refais ce test plus doucement un autre jour."; }
+  else if(ev.t==="deb"){ out.run=rec.v; out.start=evDebStart(rec.v); }
+  else if(ev.t==="ref"){ if(rec.v2>0&&rec.v>0) out.pace=rec.v2/(rec.v/60); }
+  if(out.vma!=null){ out.vma=Math.round(out.vma*10)/10; if(!(out.vma>=EV_VMA[0]&&out.vma<=EV_VMA[1])) out.err="Résultat peu plausible : il donnerait une VMA de "+fmt1(out.vma)+" km/h, hors de "+EV_VMA[0]+" à "+EV_VMA[1]+" km/h. Vérifie ta saisie (unité, distance, temps)."; }
+  return out; }
 // avant / après : résumé de la séance remplacée par l'IA (celle affichée avant l'IA, préférences comprises), gardé sur la séance (run.aiFrom) ; recalculé à chaque construction du plan, jamais enregistré
 const runSum=r=>r.blocks.map(b=>b.l+(b.min&&!b.mix&&b.z!=="walk"&&b.work==null?" "+fmt0(b.min)+" min":"")).join(" · ");
 const aiSnap=(r,vma,trail)=>({t:trail? trailTitle(r.title) : r.title,s:runSum(r),km:sessionKm(r,vma),min:sessionDur(r)});   // trail : titre tel que trailize l'affichera
@@ -1051,7 +1149,7 @@ function buildWeek(p,w,phase,deload,V,L,vma,ctx){
   if(p.cplx==="simple"){ k2=null; if(k1==="vma") k1="fartlek"; }
   if(p.seances===3) k2=null;
   // débutant : durées réduites en affûtage, pas de nouveau palier de course après la semaine 10
-  const debF= phase==="taper"?.7 : phase==="race"?.6 : 1, maxBout= wt>10&&ctx.debBout? ctx.debBout : 0;
+  const debF= phase==="taper"?.7 : phase==="race"?.6 : 1, maxBout= wt>10&&ctx.debBout? ctx.debBout : 0, minB= deb? evDebStart(p.debRun) : 0;
   // sortie longue / course
   if(phase==="race"&&deb){
     // débutant : course en course/marche, à allure facile, avec la fraction de la dernière sortie longue
@@ -1065,9 +1163,9 @@ function buildWeek(p,w,phase,deload,V,L,vma,ctx){
   }else if(deb){
     let tot=Math.max(25,Math.round([40,40,42,36,45,48,50,40,52,55,58,45][wt-1]*debF));
     if(phase==="taper"&&ctx.debS10LongMin) tot=Math.min(tot,Math.max(20,Math.floor(ctx.debS10LongMin*.8))); // affûtage : −20 % au moins sur la sortie
-    let rw=runWalk(wt,tot,maxBout), s;
+    let rw=runWalk(wt,tot,maxBout,minB), s;
     const capKm=ctx.debLong>0? ctx.debLong*1.1 : Infinity;
-    for(;;){ s=S("long","Sortie un peu plus longue",rw.blocks,{deb:rw,note:"Doit rester facile du début à la fin."}); if(kmOf(s)<=capKm+.02||tot<=(phase==="taper"?20:25))break; tot-=2; rw=runWalk(wt,tot,maxBout); }
+    for(;;){ s=S("long","Sortie un peu plus longue",rw.blocks,{deb:rw,note:"Doit rester facile du début à la fin."}); if(kmOf(s)<=capKm+.02||tot<=(phase==="taper"?20:25))break; tot-=2; rw=runWalk(wt,tot,maxBout,minB); }
     days[longIdx].run=s;
   }else days[longIdx].run=longRun(L,vma,p.objectif,phase);
   // qualité
@@ -1086,7 +1184,7 @@ function buildWeek(p,w,phase,deload,V,L,vma,ctx){
   const buildQ=x=>{ let o={short:opts.short&&!x.noShort,fewer:opts.fewer+x.fewer,...(ctx.qW?{w:ctx.qW}:{})}, s=quality(x.k,w,p,vma,phase,o);
     while(tooLong(s) && o.fewer<4){ if(!o.short)o.short=true; else o.fewer++; s=quality(x.k,w,p,vma,phase,o); }
     // séance impossible à faire tenir sous la plus longue sortie faite : footing court avec lignes droites
-    if(tooLong(s)) s= deb? S("easy","Course / marche + lignes droites",runWalk(wt,Math.max(20,Math.min(30,longMin||30)),maxBout).blocks.concat([{l:"4 lignes droites de 15 s, relâchées",min:0,z:"z3",noPace:true}]),{deb:runWalk(wt,Math.max(20,Math.min(30,longMin||30)),maxBout)})
+    if(tooLong(s)) s= deb? S("easy","Course / marche + lignes droites",runWalk(wt,Math.max(20,Math.min(30,longMin||30)),maxBout,minB).blocks.concat([{l:"4 lignes droites de 15 s, relâchées",min:0,z:"z3",noPace:true}]),{deb:runWalk(wt,Math.max(20,Math.min(30,longMin||30)),maxBout,minB)})
       : easyRun(Math.max(3,Math.floor(sessCap*2)/2),vma,null,p.types.includes("ld")?4:0);
     days[x.idx].run=s; };
   qPlan.forEach(buildQ);
@@ -1142,7 +1240,7 @@ function buildWeek(p,w,phase,deload,V,L,vma,ctx){
       let tot=Math.max(25,Math.round([30,30,32,28,34,36,38,30,40,40,42,32][wt-1]*debF));
       if(longMin) tot=Math.min(tot,Math.max(25,longMin));
       if(phase==="taper"&&ctx.debS10Min) tot=Math.min(tot,Math.max(20,Math.round(ctx.debS10Min*.8/(easyIdx.length+qPlan.length+1))));
-      const rw=runWalk(wt,tot,maxBout);
+      const rw=runWalk(wt,tot,maxBout,minB);
       const strides= wt>8 && j===easyIdx.length-1;
       days[idx].run=S("easy","Course / marche",rw.blocks.concat(strides?[{l:"4 lignes droites de 15 s, relâchées",min:0,z:"z3",noPace:true}]:[]),{deb:rw});
     });
@@ -1150,7 +1248,7 @@ function buildWeek(p,w,phase,deload,V,L,vma,ctx){
     if(normal){
       const capKm= w===1? (ctx.vol||8)*1.05 : ctx.lastKm>0? Math.max(ctx.lastKm*1.1,ctx.lastKm+1) : Infinity;
       const total=()=>days.reduce((a,d)=>a+kmOf(d.run),0);
-      const shrink=(i,title,note)=>{ const r=days[i].run, m=sessionMin(r); if(m<=25)return false; const strides=r.blocks.length>3?r.blocks.slice(3):[]; const rw=runWalk(wt,m-2,maxBout);
+      const shrink=(i,title,note)=>{ const r=days[i].run, m=sessionMin(r); if(m<=25)return false; const strides=r.blocks.length>3?r.blocks.slice(3):[]; const rw=runWalk(wt,m-2,maxBout,minB);
         days[i].run=S(r.type,r.title,rw.blocks.concat(strides),{deb:rw,note:r.note}); return true; };
       for(let g=0; g<40 && total()>capKm+1e-9; g++){
         const order=easyIdx.filter(i=>days[i].run).sort((a,b)=>sessionMin(days[b].run)-sessionMin(days[a].run));
@@ -1564,7 +1662,7 @@ function trailize(weeks,p){
   let prev=0;
   weeks.forEach((wk,i)=>{
     const t= N>1? Math.min(1,i/Math.max(1,N-3)) : 0, base=r0+(r1-r0)*t, items=[];
-    for(const d of wk.days){ if(!d.run||d.kind==="before"||d.kind==="race"||d.run.type==="race"||d.run.blocks.some(b=>b.cross)) continue;
+    for(const d of wk.days){ if(!d.run||d.kind==="before"||d.kind==="race"||d.run.type==="race"||d.run.ev||d.run.blocks.some(b=>b.cross)) continue;   // séance de test : sur le plat
       const km=sessionKm(d.run,vma), isCote=/côte/i.test(d.run.title), ratio= d.run.type==="long"? base : isCote? base*1.1 : d.run.type==="q"? base*.7 : base*.5;
       items.push({d,dp:Math.round(km*ratio*(wk.deload?.8:wk.phase==="taper"?.6:1)/10)*10}); }
     let tot=items.reduce((a,x)=>a+x.dp,0);
@@ -1627,6 +1725,7 @@ function recompute(){
   if(state.week>plan.length) state.week=plan.length;
   syncSportUI14(); renderPsec(); renderRegen(); renderAip(); renderSummary(); psecSum(); renderWeek(); renderNext(); renderPlan(); renderLog(); renderReg(); renderZones(); renderRaceHint(); syncLongDay();
   try{ renderFeel(); renderImp(); }catch(e){ console.warn("v14",e); }
+  evHint();
   $("#exampleBanner").hidden=!state.isExample&&!P.incomplete;
   $("#exampleTxt").textContent= P.incomplete&&!state.isExample? "Ton profil est incomplet (âge, taille ou poids manquant) : des valeurs d'exemple sont utilisées à la place. Complète ton profil pour que le plan et les calories soient justes." : "Ce sont des données d'exemple. Remplis l'onglet « Profil » avec les tiennes pour que le plan et les calories soient justes.";
   const rv=$("#refVal"); rv.disabled=P.ref==="none"||!P.ref; { const PH={vma:"ex. 14,5",5:"ex. 25:30",10:"ex. 52:10"}; rv.placeholder= Object.hasOwn(PH,P.ref)? PH[P.ref] : "choisis d'abord le type"; }
@@ -1780,6 +1879,7 @@ function renderWeek(){
         chips=zs.map(z=>z===top||zs.length<2? zoneChip(z) : zoneChip(z).replace('class="chip ','class="chip zlow ')).join("");
         const dm=sessionDur(d.run); chips+=` <span class="chip rest">${dm?"≈ "+fmt0(dm)+" min":""}${d.km>0.1?(dm?" · ":"")+fmt1(d.km)+" km":""}</span>`;
         chips+= cross?' <span class="chip rest">Sans impact</span>' : ` <span class="chip rest loc">${d.run.where||(tap?"Tapis":"Dehors")}</span>`+(d.run.dplus?` <span class="chip rest">D+ ${fmt0(d.run.dplus)} m</span>`:"");
+        if(d.run.ev) chips+=` <span class="chip ev">Test</span>`;
         if(d.run.aiFrom) chips+=` <span class="chip ai">${d.run.aiLight?"Allégée par l'IA":"Modifiée par l'IA"}</span>`;
       }
       sum=d.run.blocks.map(b=>b.l+(b.min&&!b.mix&&b.z!=="walk"&&b.work==null?" "+fmt0(b.min)+" min":"")+(b.race?" · "+fmt1(raceKm()).replace(",0","")+" km":"")).join(" · ");
@@ -1841,7 +1941,7 @@ function renderWeek(){
     const pillC= d.def>15?`<span class="pill def">Déficit ${fmt0(shown)}</span>`:d.def<-15?`<span class="pill sur">Surplus ${fmt0(-d.def)}</span>`:`<span class="pill eq">Équilibre</span>`;
     const kl=`<div class="kl"><span class="kc">${fmt0(d.kcal)} <small>kcal</small></span>${pillC}<button class="vm" type="button" data-vm="${d.i}" aria-expanded="${op}" aria-controls="${did}">${op?"Voir moins":"Voir plus"}</button></div>`;
     const fuelDet=`<div class="fuel">${macros}${whyTxt?`<div class="why">${whyTxt.charAt(0).toUpperCase()+whyTxt.slice(1)}</div>`:""}${d.ex>20?`<div class="why">Dépense du jour ≈ ${fmt0(Math.round(d.maint/10)*10)} kcal : base ${fmt0(Math.round(E.base/10)*10)}${d.ex-d.exRf>20?" + "+exLab14(d)+" "+fmt0(Math.round((d.ex-d.exRf)/10)*10):""}${d.exRf?" + renfo "+fmt0(Math.round(d.exRf/10)*10):""}</div>`:""}${raceNote}</div><p class="tip">${tip}</p>`;
-    return `<article class="${cls}${op?"":" cmp"}" data-day="${d.i}" data-iso="${dIso}"${isToday?' id="todayCard"':''}>${head}<div class="chips">${chips}</div>${body}${sum?`<p class="sum">${sum}</p>`:""}${d.run?aibaHtml(wk.w,d):""}${acts}${kl}<div class="det" id="${did}"><div class="det-i">${det}${fuelDet}</div></div></article>`;
+    return `<article class="${cls}${op?"":" cmp"}" data-day="${d.i}" data-iso="${dIso}"${isToday?' id="todayCard"':''}>${head}<div class="chips">${chips}</div>${body}${sum?`<p class="sum">${sum}</p>`:""}${d.run?aibaHtml(wk.w,d):""}${d.run&&d.run.ev?evBox(wk.w,d,dIso):""}${acts}${kl}<div class="det" id="${did}"><div class="det-i">${det}${fuelDet}</div></div></article>`;
   }).join("");
   // équilibre : mêmes couleurs que les puces (facile, seuil, intense)
   const z=zoneMins(wk.days), tot=z.tot||1;
@@ -1896,7 +1996,7 @@ function unrealAlert(){
 }
 function renderPlan(){
   { const ld=$("#planLead"); if(ld){ if(!ld.dataset.o) ld.dataset.o=ld.textContent; setT(ld,runSport()?ld.dataset.o:sportLead14()); } }
-  notif.plan=[plan.unreal?unrealAlert():"", plan.ai&&state.aip&&state.aip.p&&!state.aip.p.x? `<div class="alert ok aitip"><span><b>Plan ajusté par l'IA</b> (${esc(CPLX_LAB[state.aip.p.cplx]||"Standard").toLowerCase()}) : ${plan.ai.n? plan.ai.n+" séance"+(plan.ai.n>1?"s":"")+" modifiée"+(plan.ai.n>1?"s":"") : "séances gardées"}, un conseil par semaine dans les notifications.${state.aip.p.resume?" "+esc(state.aip.p.resume):""}</span></div>` : ""].filter(Boolean); refreshNotif();
+  notif.plan=[plan.unreal?unrealAlert():"", plan.ai&&state.aip&&state.aip.p&&!state.aip.p.x? `<div class="alert ok aitip"><span><b>Plan ajusté par l'IA</b> (${esc(CPLX_LAB[state.aip.p.cplx]||"Standard").toLowerCase()}) : ${plan.ai.n? plan.ai.n+" séance"+(plan.ai.n>1?"s":"")+" modifiée"+(plan.ai.n>1?"s":"") : "séances gardées"}, un conseil par semaine dans les notifications.${state.aip.p.resume?" "+esc(state.aip.p.resume):""}</span></div>` : "",...evNotif()].filter(Boolean); refreshNotif();
   const nPrep=plan.filter(w=>w.phase==="prep").length, pl=$("#planLong"); pl.hidden=!nPrep;
   if(nPrep) setT(pl,"Plan long : d'abord "+nPrep+" semaines de préparation générale (volume qui monte de 3 à 5 % par semaine, sortie longue qui s'allonge, une séance de qualité qui change toutes les 4 semaines), puis "+(plan.length-nPrep)+" semaines de préparation à ta course.");
   const rows=plan.map(wk=>{const f=dayFuel(P,E,wk);const km=planVol14(wk,f);return {wk,f,km};});
@@ -2149,6 +2249,7 @@ function fillForm(){
   document.querySelectorAll('input[name="types"]').forEach(c=>c.checked=ty.includes(c.value));
   if(!p.cross) $("#cross").value="non";
   const pf=$("#pref"); if(pf){ pf.value=prefClean(p.pref); prefUi(); }
+  const ec=$("#evalOn"); if(ec) ec.checked=String(p.evalOn)==="1";
   syncSeances();
 }
 // préférences de séances : compteur et rappel de ce qui s'applique sans IA
@@ -2164,6 +2265,7 @@ function readForm(){
   RADIOS.forEach(k=>{ if(k==="longDay"&&$("#segLongDay").dataset.locked) return; const r=document.querySelector(`input[name="${k}"]:checked`); if(r)p[k]=r.value;});
   p.types=[...document.querySelectorAll('input[name="types"]:checked')].map(c=>c.value);
   const pf=$("#pref"); if(pf) p.pref=prefClean(pf.value);
+  const ec=$("#evalOn"); if(ec) p.evalOn=ec.checked?"1":"0";
   if(p.niveau==="deb"&&+p.seances>4) p.seances="4";
   readSport14(p);
   return p;
@@ -2221,6 +2323,8 @@ $("#profileForm").addEventListener("change",e=>{
   if(el&&el.id==="start"&&raceOn(readForm())){ const e2=effStart(readForm()); if(e2!==mondayOf(el.value)){ el.value=e2; const h=$("#startHint"); h.hidden=false; h.dataset.race="1"; h.dataset.at=e2; h.textContent="Ramené au "+new Date(e2+"T12:00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"})+" : avec ta date de course, le plan fait de 4 à 52 semaines."; } state.recenter=true; }
   // type de référence changé : l'ancienne valeur n'a plus de sens
   if(el&&el.id==="ref") $("#refVal").value="";
+  // référence de vitesse saisie : les séances de test deviennent facultatives (case décochée, tant qu'aucun résultat n'est noté)
+  if(el&&el.id==="refVal"){ const cb=$("#evalOn"), q=readForm(); if(cb&&cb.checked&&!vmaOf(profileNums(q)).estimated&&!Object.keys(liveOf(state.evr||{})).length){ cb.checked=false; fieldNote(cb,"Tu as indiqué une référence de vitesse : les séances de test sont décochées. Recoche la case si tu veux quand même les faire."); } }
   clearTimeout(rcT);
   const p=readForm(); if(!valid(p)){ state.recenter=false; return; }
   state.profile=p; state.isExample=false;
@@ -2232,7 +2336,7 @@ $("#profileForm").addEventListener("change",e=>{
 $("#resetEx").addEventListener("click",()=>{$("#resetConfirm").hidden=false;});
 $("#resetNo").addEventListener("click",()=>{$("#resetConfirm").hidden=true;});
 $("#resetYes").addEventListener("click",()=>{hideToast(); $("#logMsg").innerHTML=""; // un « Annuler » de retrait ne survit pas à la remise à zéro
-  state={profile:{...EXAMPLE},isExample:true,log:[],week:1,appliedByDate:{},deleted:{},moves:{},done:{},feel:{},acts:{},rhr:{},aip:cleanAip({p:{x:1,at:Date.now()}}),seen:state.seen,savedAtLocal:Date.now()};localSaved=false;$("#resetConfirm").hidden=true;fillForm();persist();recompute();setStore(lsOK?EXAMPLE_MSG:LS_BLOCKED);});
+  state={profile:{...EXAMPLE},isExample:true,log:[],week:1,appliedByDate:{},deleted:{},moves:{},done:{},feel:{},acts:{},rhr:{},evr:{},aip:cleanAip({p:{x:1,at:Date.now()}}),seen:state.seen,savedAtLocal:Date.now()};localSaved=false;$("#resetConfirm").hidden=true;fillForm();persist();recompute();setStore(lsOK?EXAMPLE_MSG:LS_BLOCKED);});
 
 // erreur de saisie reliée au champ : aria-invalid + message sous le champ (aria-describedby) ; msg vide = erreur retirée
 function fieldErr(el,msg){ if(!el) return; const id=el.id+"Err", f=el.closest(".field")||el.parentElement; let n=document.getElementById(id);
@@ -2568,6 +2672,8 @@ $("#days").addEventListener("click",e=>{
   else if(b.dataset.timer!=null) openTimer(w,+b.dataset.timer,b);
   else if(b.dataset.exo!=null) openExo(w,+b.dataset.exo,b);
   else if(b.dataset.feel!=null) openFeel(w,+b.dataset.feel,b);
+  else if(b.dataset.evr!=null) openEval(w,+b.dataset.evr,b);
+  else if(b.dataset.evap!=null) evApplyRes(w,+b.dataset.evap);
 });
 
 /* schémas des mouvements : silhouette de profil (tournée vers la droite) dessinée par angles, départ puis arrivée.
@@ -3010,7 +3116,7 @@ function cleanAip(o){ if(!o||typeof o!=="object"||Array.isArray(o)) return {}; c
   const wk={}; if(v.wk&&typeof v.wk==="object"&&!Array.isArray(v.wk)) for(const [k,x] of Object.entries(v.wk).slice(0,60)){ if(!/^[1-9]\d?$/.test(k)||!x||typeof x!=="object"||Array.isArray(x)) continue;
     wk[k]={f:t(x.f,60),c:t(x.c,220),q:Array.isArray(x.q)? x.q.slice(0,3).map(q=>Object.hasOwn(SUBST,q)?q:"") : [],a:x.a===1||x.a===true?1:0}; }
   return {p:{sig,at,cplx:["simple","standard","avance"].includes(v.cplx)?v.cplx:"standard",resume:t(v.resume,320),wk}}; }
-const X14={feel:cleanFeel,acts:cleanActs,rhr:cleanRhr,aip:cleanAip};
+const X14={feel:cleanFeel,acts:cleanActs,rhr:cleanRhr,aip:cleanAip,evr:cleanEvr};   // evr : résultats des séances de test
 const x14Keys=Object.keys(X14);
 const x14Clean=d=>{ const o={}; for(const k of x14Keys) o[k]=X14[k](d&&typeof d==="object"&&Object.hasOwn(d,k)? d[k] : undefined); return o; };
 const x14Merge=(a,b)=>{ const o={}; for(const k of x14Keys) o[k]=mergeStamped(a&&typeof a==="object"?a[k]:undefined,b&&typeof b==="object"?b[k]:undefined,X14[k]); return o; };
@@ -3056,6 +3162,131 @@ function feelSafety14(){
 const lighterSet14=()=>{ const s=feelSafety14(); return s.msgs.length&&s.next? new Set([s.next.dt]) : new Set(); };
 function feelAlerts14(wk,tp){ const s=feelSafety14(); if(!s.msgs.length) return []; if(!((tp&&tp.w===wk.w)||(s.next&&s.next.w===wk.w))) return []; return s.msgs.map(m=>`<div class="alert ${m.c}" role="note">${m.h}</div>`); }
 
+/* ---------- séances de test : résultat noté sur la carte, estimation, mise à jour du plan seulement sur demande ---------- */
+// résultats : {date de la séance: {t, v, m, v2, T, rpe, ap, sig, at}} ou {x:1, at} (effacé) ; enregistrement horodaté (X14, fusion par mergeStamped)
+// v : mètres (vma6), km (end, cont), secondes (end en 5 km, m="5k"), minutes (ref : durée ; deb : minutes de course continue) ; v2 : km du footing de référence ;
+// T : durée du test au moment de la saisie ; ap : date de la mise à jour du plan avec ce résultat (0 : pas appliqué)
+const EV_KEYS=["vma6","end","cont","ref","deb"], EV_V={vma6:[300,4000],end:[1,15],end5k:[600,3600],cont:[.5,12],ref:[5,180],deb:[0,60]};
+function cleanEvr(o){ if(!o||typeof o!=="object"||Array.isArray(o)) return {};
+  const out=[]; for(const [k,v] of Object.entries(o).slice(0,400)){ if(!okIso(k)||k<"2020-01-01"||k>"2100-01-01"||!v||typeof v!=="object"||Array.isArray(v)) continue;
+    const at=atOf(v);
+    if(v.x===1||v.x===true){ if(at) out.push([k,{x:1,at}]); continue; }
+    const t=EV_KEYS.includes(v.t)? v.t : null; if(!t) continue; const m= t==="end"&&v.m==="5k"? "5k" : "";
+    const b=EV_V[m? "end5k" : t], val=numIn(v.v,b[0],b[1]); if(val==null) continue;
+    const r=numIn(v.rpe,1,10), v2= t==="ref"? numIn(v.v2,.5,40) : null, T=numIn(v.T,10,40), ap=numIn(v.ap,1,8.64e15);
+    out.push([k,{t,v: t==="end"&&!m||t==="cont"? Math.round(val*100)/100 : Math.round(val),...(m?{m}:{}),...(v2!=null?{v2:Math.round(v2*100)/100}:{}),...(T!=null?{T:Math.round(T)}:{}),
+      rpe:r==null?0:Math.round(r),ap:ap==null?0:Math.round(ap),sig:String(v.sig??"").replace(/[<>"'`&]/g,"").slice(0,160),at}]); }
+  return Object.fromEntries(out.sort((a,b)=>a[0]<b[0]?1:-1).slice(0,60)); }
+// résultat de la séance de test affichée (w, i) : même date (elle suit un déplacement) et même type de test
+function evRec(w,i){ const wk=plan[w-1], d=wk&&wk.days[i], mk=markKey(w,i); if(!mk||!mk.k||!d||!d.run||!d.run.ev) return null;
+  const e=(state.evr||{})[mk.k]; return e&&!isGone(e)&&e.t===d.run.ev.t? e : null; }
+const evOf=(ev,e)=>({...ev,T:(e&&e.T)||ev.T||30});
+// mise à jour possible : estimation valide et différente de ce que le plan utilise déjà
+function evCanApply(r){ if(!r||r.err) return false; if(r.vma!=null) return Math.abs(r.vma-vmaOf(P).vma)>=.05; if(r.start!=null) return r.start>0&&r.start!==evDebStart(P.debRun); return false; }
+const evDate=d=>new Date(d).toLocaleDateString("fr-FR",{day:"numeric",month:"long"});
+function evResTxt(ev,e){ const rp=e.rpe? ", effort "+e.rpe+"/10" : "";
+  if(ev.t==="vma6") return fmt0(e.v)+" m en 6 min"+rp;
+  if(ev.t==="end") return (e.m==="5k"? "5 km en "+mmss(e.v) : kmTxt(e.v)+" km en "+ev.T+" min")+rp;
+  if(ev.t==="cont") return kmTxt(e.v)+" km en "+ev.T+" min"+rp;
+  if(ev.t==="ref") return "Footing de "+fmt0(e.v)+" min"+(e.v2? " ("+kmTxt(e.v2)+" km)" : "")+rp;
+  return fmt0(e.v)+" min de course sans t'arrêter"+rp; }
+function evEstTxt(ev,e,r){ if(r.err) return "";
+  if(r.vma!=null){ const c=vmaOf(P); return "VMA estimée : "+fmt1(r.vma)+" km/h (ton plan utilise "+fmt1(c.vma)+" km/h, d'après "+c.src+")."+(ev.t==="vma6"&&e.rpe&&e.rpe<8? " Effort noté sous 8/10 : si tu n'étais pas à fond, ta VMA est sans doute un peu plus haute." : ev.t==="end"&&e.rpe>=9? " Effort presque maximal : l'estimation peut être un peu haute, garde des allures prudentes." : ""); }
+  if(r.start!=null) return r.start? "Point de départ possible : des fractions de "+r.start+" min de course (la moitié de ta plus longue période, 8 min au plus)." : "Moins de 2 min de course continue : ton plan garde son point de départ prudent, des fractions de 1 min.";
+  if(ev.t==="ref") return (e.rpe<=4? "Bonne allure facile : garde ce ressenti sur tes footings." : e.rpe<=6? "Un peu soutenu pour un footing facile : ralentis un peu la prochaine fois." : "Trop dur pour un footing facile : ralentis nettement, marche si besoin. Si ça se répète, note-le dans ton ressenti.")+(r.pace? " Allure moyenne : "+pace(r.pace)+"." : "");
+  return ""; }
+const EV_WHY={vma6:"ton résultat estime ta VMA et peut recalibrer tes allures.",end:"ton résultat estime ta VMA et peut recalibrer tes allures.",cont:"un test prudent, sans effort maximal : il estime une VMA basse, donc des allures prudentes.",ref:"il te donne ton repère d'allure facile.",deb:"tes minutes de course continue peuvent fixer le point de départ de ta progression course / marche."};
+function evBox(w,d,dIso){ const ev=d.run.ev, e=evRec(w,d.i), dl=DAYS[d.i].toLowerCase(), can=!!dIso&&dIso<=todayIso();
+  let h=`<div class="evb" role="group" aria-label="Séance de test, ${esc(dl)}"><p class="evh"><b>Séance de test</b> : ${esc(EV_WHY[ev.t])}</p>`;
+  if(e){ const ev2=evOf(ev,e), r=evEst(ev2,e)||{}, t=evEstTxt(ev2,e,r);
+    h+=`<p class="evr">Résultat : ${esc(evResTxt(ev2,e))}.${t?" "+esc(t):""}</p>`;
+    if(r.err) h+=`<p class="evw" role="note">${esc(r.err)}</p>`;
+    else if(e.ap&&!evCanApply(r)) h+=`<p class="evok">Plan mis à jour avec ce résultat le ${esc(evDate(e.ap))}.</p>`;
+    else if(evCanApply(r)) h+=`<p class="evx">${r.vma!=null? "Tes allures seraient recalculées avec cette VMA ; ton volume de départ et ta progression ne changent pas." : "Tes séances course / marche partiraient de là ; ton volume ne change pas."} Rien ne change sans ton accord.</p><button class="btn sm evap" type="button" data-evap="${d.i}">Mettre à jour mon plan avec ce résultat</button>`;
+    else if(r.vma!=null||r.start!=null) h+=`<p class="evok">Ton plan utilise déjà cette valeur : rien à changer.</p>`;
+    h+=`<button class="linkbtn" type="button" data-evr="${d.i}" aria-haspopup="dialog" aria-label="Modifier le résultat du test de ${esc(dl)}">Modifier le résultat</button>`; }
+  else if(can) h+=`<button class="cbtn ev" type="button" data-evr="${d.i}" aria-haspopup="dialog" aria-label="Noter le résultat du test de ${esc(dl)}">Noter mon résultat</button>`;
+  else h+=`<p class="evn">Après la séance, note ton résultat ici.</p>`;
+  return h+`</div>`; }
+// saisie du résultat : champs selon le test, valeurs bornées, résultat aberrant refusé (rien n'est enregistré)
+function openEval(w,i,opener){
+  const wk=plan[w-1], d=wk&&wk.days[i], mk=markKey(w,i); if(!d||!d.run||!d.run.ev||!mk||!mk.k) return;
+  const has=evRec(w,i), ev=evOf(d.run.ev,has), t=ev.t, k5=t==="end"&&!!d.run.ev.k5, mode0= has&&has.m==="5k"? "5k" : "km";
+  const needR= t!=="vma6"&&t!=="end", maxDeb=Math.max(1,Math.min(60,Math.round(sessionMin(d.run))));
+  const rpeOpt=RPE_LAB.map((x,k)=> k? `<option value="${k}"${has&&has.rpe===k?" selected":""}>${esc(x)}</option>` : `<option value=""${has&&has.rpe?"":" selected"}>${needR?"Choisis…":"Non noté"}</option>`).join("");
+  const val= has? (t==="end"&&has.m==="5k"? mmss(has.v) : String(has.v).replace(".",",")) : "";
+  const F={vma6:["Distance parcourue en 6 min (mètres)","numeric","ex. 1450","En mètres, entre 300 et 4 000 (une piste fait 400 m au tour)."],
+    end:["Distance parcourue en "+ev.T+" min (km)","decimal","ex. 6,2","En km, entre 1 et 15."],
+    cont:["Distance parcourue en "+ev.T+" min (km)","decimal","ex. 4,5","En km, entre 0,5 et 12."],
+    ref:["Durée du footing (minutes)","numeric","ex. 35","En minutes, entre 5 et 180."],
+    deb:["Minutes de course sans t'arrêter","numeric","ex. 6","Ta plus longue période de course sans marcher, de 0 à "+maxDeb+" min."]}[t];
+  const rad=(v,tx,on)=>`<label><input type="radio" name="evMode" value="${v}"${on?" checked":""}><span>${esc(tx)}</span></label>`;
+  openSheet({title:"Résultat : "+d.run.title,kind:"eval",opener,
+    html:`<p class="note">${esc(DAYS[i])} ${esc(dfmt(weekDate(w,i)))}. ${esc(d.run.note||"")}</p>
+    ${k5?`<div class="field"><span class="lbl" id="evModeL">Ce que tu as fait</span><div class="seg" role="radiogroup" aria-labelledby="evModeL">${rad("km",ev.T+" min",mode0==="km")}${rad("5k","5 km chrono",mode0==="5k")}</div></div>`:""}
+    <div class="field"><label for="evV" id="evVL">${esc(F[0])}</label><input id="evV" type="text" inputmode="${F[1]}" maxlength="8" autocomplete="off" placeholder="${esc(F[2])}" aria-describedby="evVH" data-first><span class="hint" id="evVH">${esc(F[3])}</span></div>
+    ${t==="ref"?`<div class="field"><label for="evV2">Distance (km) · facultatif</label><input id="evV2" type="text" inputmode="decimal" maxlength="6" autocomplete="off" placeholder="ex. 5,2" aria-describedby="evV2H"><span class="hint" id="evV2H">En km, entre 0,5 et 40.</span></div>`:""}
+    <div class="field"><label for="evR">Effort perçu (RPE)${needR?"":" · facultatif"}</label><select id="evR" aria-describedby="evRH">${rpeOpt}</select><span class="hint" id="evRH">De 1 (très facile) à 10 (effort maximal).</span></div>
+    <div class="alerts msg" id="evMsg" role="alert"></div>${has?`<button class="linkbtn" type="button" id="evDel">Effacer ce résultat</button>`:""}
+    <p class="note legal">Une estimation, pas une mesure de laboratoire ni un avis médical. Ton plan ne change que si tu le demandes.</p>`,
+    foot:`<button class="btn" type="button" id="evSave">Enregistrer</button>`,
+    onReady:sh=>{
+      const iv=sh.querySelector("#evV"), msg=m=>{ sh.querySelector("#evMsg").innerHTML=m? `<div class="alert warn">${esc(m)}</div>` : ""; };
+      iv.value=val; const v2=sh.querySelector("#evV2"); if(v2&&has&&has.v2) v2.value=String(has.v2).replace(".",",");
+      const modeOf=()=> k5? (sh.querySelector('input[name="evMode"]:checked')||{value:"km"}).value : "km";
+      const syncMode=()=>{ if(!k5) return; const m=modeOf(); setT(sh.querySelector("#evVL"),m==="5k"? "Temps sur 5 km (mm:ss)" : F[0]); iv.placeholder= m==="5k"? "ex. 26:30" : F[2]; iv.inputMode= m==="5k"? "text" : "decimal"; setT(sh.querySelector("#evVH"),m==="5k"? "Minutes et secondes, entre 10:00 et 60:00." : F[3]); };
+      syncMode(); sh.querySelectorAll('input[name="evMode"]').forEach(r=>r.addEventListener("change",()=>{ syncMode(); iv.value=""; }));
+      const back=sel=>{ const b=document.querySelector(`#days [data-${sel}="${i}"]`)||document.querySelector(`#days [data-evr="${i}"]`); if(b) b.focus({preventScroll:true}); };
+      const del=sh.querySelector("#evDel");
+      if(del) del.addEventListener("click",()=>{ state.evr=cleanEvr({...state.evr,[mk.k]:{x:1,at:Date.now()}}); persist(); recompute(); closeSheet(true); back("evr"); toast("Résultat effacé. Ton plan n'a pas changé."); });
+      const bad=(el,m)=>{ ["#evV","#evV2","#evR"].forEach(x=>{ const e=sh.querySelector(x); if(!e) return; e.removeAttribute("aria-invalid"); e.setAttribute("aria-describedby",(e.getAttribute("aria-describedby")||"").replace(/\s*evMsg/g,"").trim()); });
+        if(!el){ msg(""); return false; } el.setAttribute("aria-invalid","true"); el.setAttribute("aria-describedby",((el.getAttribute("aria-describedby")||"")+" evMsg").trim()); msg(m); el.focus(); return false; };
+      const num=s=>{ const x=String(s||"").replace(/\s| | /g,"").replace(",","."); return /^\d+(\.\d+)?$/.test(x)? +x : NaN; };
+      sh.querySelector("#evSave").addEventListener("click",()=>{
+        const m=modeOf(), raw=iv.value.trim(), rpe=+sh.querySelector("#evR").value||0; let v, x2=null;
+        if(!raw) return bad(iv,"Écris ton résultat.");
+        if(t==="end"&&m==="5k"){ const mn=chronoMin(raw,5); if(!(mn>=10&&mn<=60)) return bad(iv,"Écris ton temps sur 5 km en mm:ss (ex. 26:30), entre 10:00 et 60:00."); v=Math.round(mn*60); }
+        else { v=num(raw); const b=EV_V[t];
+          if(isNaN(v)||((t==="vma6"||t==="ref"||t==="deb")&&v!==Math.round(v))) return bad(iv,t==="vma6"? "Écris la distance en mètres, sans virgule (ex. 1450)." : t==="end"||t==="cont"? "Écris la distance en km (ex. 6,2)." : "Écris un nombre entier de minutes (ex. "+(t==="ref"?"35":"6")+").");
+          const hi= t==="deb"? maxDeb : b[1]; if(v<b[0]||v>hi) return bad(iv,F[3].replace(/\.$/,"")+" : "+fmt1(v).replace(/,0$/,"")+" n'est pas plausible."); }
+        if(t==="ref"&&v2&&v2.value.trim()){ x2=num(v2.value); if(isNaN(x2)||x2<.5||x2>40) return bad(v2,"Écris la distance en km, entre 0,5 et 40 (ex. 5,2)."); const sp=x2/(v/60); if(sp<3||sp>20) return bad(v2,"Distance et durée peu plausibles ensemble ("+fmt1(sp)+" km/h) : vérifie les deux."); }
+        if(needR&&!(rpe>=1&&rpe<=10)) return bad(sh.querySelector("#evR"),"Choisis l'effort perçu (RPE) de 1 à 10.");
+        const rec={t,v,...(t==="end"&&m==="5k"?{m:"5k"}:{}),...(x2!=null?{v2:x2}:{}),...(ev.T&&(t==="end"||t==="cont")?{T:ev.T}:{}),rpe,ap:0,sig:mk.sig,at:Date.now()};
+        const r=evEst(ev,rec); if(r&&r.err&&r.vma!=null) return bad(iv,r.err);   // résultat aberrant : refusé, rien n'est enregistré
+        bad(null);
+        state.evr=cleanEvr({...state.evr,[mk.k]:rec}); state.isExample=false; persist(); recompute(); closeSheet(true);
+        const ap=document.querySelector(`#days [data-evap="${i}"]`); if(ap) ap.focus({preventScroll:true}); else back("evr");
+        toast("Résultat enregistré."+(ap? " Ton plan n'a pas changé : touche « Mettre à jour mon plan avec ce résultat » pour le recalibrer." : "")); });
+    }});
+}
+// mise à jour du plan avec un résultat : référence du profil (VMA) ou point de départ du débutant ; jamais sans ce bouton, toujours annulable
+function evApplyRes(w,i){
+  const wk=plan[w-1], d=wk&&wk.days[i], e=evRec(w,i), mk=markKey(w,i); if(!d||!e||!mk||!mk.k) return;
+  const ev=evOf(d.run.ev,e), r=evEst(ev,e); if(!r||r.err){ toast(r&&r.err||"Résultat illisible : modifie-le."); return; } if(!evCanApply(r)) return;
+  const before={profile:{...state.profile},rec:{...e}}, hadAi=!!aiOf(profileNums(state.profile)), cur=vmaOf(P).vma; let msg;
+  if(r.vma!=null){ state.profile={...state.profile,ref:"vma",refVal:fmt1(r.vma)}; msg="Plan mis à jour : VMA de "+fmt1(r.vma)+" km/h (avant "+fmt1(cur)+"). Toutes tes allures sont recalculées ; ton volume de départ et ta progression ne changent pas."; }
+  else { state.profile={...state.profile,debRun:String(r.run)}; msg="Plan mis à jour : tes séances course / marche partent de fractions de "+r.start+" min de course, puis la progression reprend. Ton volume ne change pas."; }
+  if(hadAi) msg+=" L'ajustement de l'IA ne s'applique plus à ce plan : relance-le dans le Profil si tu veux.";
+  state.evr=cleanEvr({...state.evr,[mk.k]:{...e,ap:Date.now(),at:Date.now()}}); state.isExample=false; fillForm(); persist(); recompute();
+  const f=document.querySelector(`#days [data-evr="${i}"]`); if(f) f.focus({preventScroll:true});
+  toast(msg,{action:"Annuler",fn:()=>{ state.profile=before.profile; state.evr=cleanEvr({...state.evr,[mk.k]:{...before.rec,at:Date.now()}}); fillForm(); persist(); recompute(); toast("Mise à jour annulée : ton plan est revenu comme avant."); }});
+}
+// panneau Notifications (section « Ton plan ») : tests à faire, résultat en attente ; information passive, sans bouton ni badge
+function evNotif(){ if(!runSport()||!plan.length) return []; const tdy=todayIso(), todo=[], wait=[];
+  plan.slice(0,2).forEach(wk=>wk.days.forEach(d=>{ if(!d.run||!d.run.ev) return; const dt=isoOf(wk.w,d.i); if(!dt||dt<addDays(tdy,-14)) return; const e=evRec(wk.w,d.i);
+    if(!e){ if(markOf(wk.w,d.i)!=="skip") todo.push(DAYS[d.i].toLowerCase()+" "+dfmt(weekDate(wk.w,d.i))+" ("+d.run.title+")"); }
+    else { const ev=evOf(d.run.ev,e), r=evEst(ev,e); if(!e.ap&&evCanApply(r)) wait.push(r.vma!=null? "VMA estimée à "+fmt1(r.vma)+" km/h" : "fractions de "+r.start+" min de course"); } }));
+  const out=[];
+  if(todo.length) out.push(`<div class="alert ok evnt"><span><b>Séance${todo.length>1?"s":""} de test</b> : ${esc(todo.join(", "))}. Après le test, note ton résultat sur la carte de la séance : ton plan pourra se recalibrer, si tu le décides.</span></div>`);
+  if(wait.length) out.push(`<div class="alert ok evnt"><span><b>Résultat de test en attente</b> : ${esc(wait.join(", "))}. Ton plan n'a pas changé : sur la carte de la séance, touche « Mettre à jour mon plan avec ce résultat » si tu veux le recalibrer.</span></div>`);
+  return out; }
+// profil : ce que la case « Commencer par des séances de test » donne pour ce plan
+function evHint(){ const h=$("#evalHint"), cb=$("#evalOn"); if(!h||!cb) return; const why=evWhyNot({...P,evalOn:1},plan), n=plan.slice(0,2).reduce((a,wk)=>a+wk.days.filter(d=>d.run&&d.run.ev).length,0);
+  const base="Une à trois séances en semaine 1 (et 2) pour jauger ton niveau, à la place de séances d'intensité. Tu notes ton résultat sur la carte, puis tu choisis de mettre à jour ton plan.";
+  const ref=!vmaOf(P).estimated? " Tu as déjà une référence de vitesse : les tests sont facultatifs." : "";
+  const x= why==="court"? " Plan de 4 semaines ou moins : pas de test, la préparation passe avant." : why==="course"? " Ta première semaine est déjà l'affûtage ou la course : pas de test." : why==="sport"? "" :
+    P.niveau==="deb"? " Débutant : un test prudent en course / marche, sans effort maximal." : evPrudent(P)? " Variante prudente, sans test maximal ("+(P.minor?"moins de 18 ans":P.age>=65?"65 ans et plus":evBmi(P)>=35?"IMC de 35 et plus":"douleur notée récemment")+")." : "";
+  setT(h,base+ref+x+(cb.checked&&!why? " Ce plan en prévoit "+n+"." : "")); }
 function openFeel(w,i,opener){
   const wk=plan[w-1], d=wk&&wk.days[i]; if(!d||!hasSession(d)) return; const mk=markKey(w,i); if(!mk||!mk.k) return;
   const cur=(state.feel||{})[mk.k], has=cur&&!isGone(cur)? cur : null, name=d.run? d.run.title : "Renforcement";
@@ -3540,7 +3771,7 @@ function persistLocal(){ try{
   state.savedAtLocal=Date.now(); const out=JSON.stringify(state); localStorage.setItem(LS,out); lastRaw=out; lsOK=true; return true; }catch(e){ lsOK=false; return false; } }
 // fusion de données d'un autre appareil ou onglet : suivi en union, coches et déplacements par date de modification, profil le plus récent ; tout est nettoyé
 function mergeInto(d,srcT){
-  const snap=()=>JSON.stringify([state.profile,state.isExample,state.log,state.done,state.moves,state.deleted,state.seen,state.feel,state.acts,state.rhr,state.aip]), before=snap();
+  const snap=()=>JSON.stringify([state.profile,state.isExample,state.log,state.done,state.moves,state.deleted,state.seen,state.feel,state.acts,state.rhr,state.aip,state.evr]), before=snap();
   const del=mergeDeleted(state.deleted,d.deleted), week=state.week;
   const hasP=!!(d.profile&&typeof d.profile==="object"&&!Array.isArray(d.profile)), pl=+state.profileAt||0, pr=+d.profileAt||0;
   const prof= hasP&&((state.isExample&&!d.isExample&&!pl)||((pl||pr)? pr>pl : (+srcT||0)>(+state.savedAtLocal||0)));
@@ -3573,7 +3804,7 @@ function resetLocal(){
   try{ if(window.CarnetCoach) window.CarnetCoach.wipe(); }catch(e){}   // le Coach (site) efface sa conversation, en mémoire et à l'écran
   clearTimeout(timer); dirty=false; pending=false;
   try{ Object.keys(localStorage).filter(k=>k===LS||k.startsWith("carnet.")).forEach(k=>localStorage.removeItem(k)); }catch(e){}
-  state={profile:{...EXAMPLE},isExample:true,log:[],week:1,appliedByDate:{},deleted:{},moves:{},done:{},feel:{},acts:{},rhr:{},seen:APP_V}; localSaved=false; followed=null; tiles.all=null; tiles.o={}; lastRaw=null; lastPJ=JSON.stringify(state.profile);
+  state={profile:{...EXAMPLE},isExample:true,log:[],week:1,appliedByDate:{},deleted:{},moves:{},done:{},feel:{},acts:{},rhr:{},evr:{},seen:APP_V}; localSaved=false; followed=null; tiles.all=null; tiles.o={}; lastRaw=null; lastPJ=JSON.stringify(state.profile);
   hideToast(); $("#logMsg").innerHTML=""; fillForm(); recompute(); homeEl.dataset.has="";
 }
 // données effacées depuis un autre appareil ou onglet : on vide cet appareil sans rien écrire
@@ -3607,7 +3838,7 @@ async function flush(){
     if(hasEpoch(rd)&&state.eid!==undefined&&ep!==state.eid){ writing=false; pending=false; erasedElsewhere(!rd.erased); return; }   // le compte a changé d'époque (effacement) depuis notre dernière synchro : on n'écrit rien
     if(hasEpoch(rd)&&state.eid!==ep){ state.eid=ep; persistLocal(); } else if(state.eid===undefined) state.eid="";
     if(rd&&!rd.erased&&rd.profile&&typeof rd.profile==="object"&&!Array.isArray(rd.profile)){ const r=mergeInto(rd,+rd.savedAt||0); if(r.changed){ persistLocal(); rerender(r); } }
-    await dbRef.set(JSON.parse(JSON.stringify({profile:state.profile,isExample:state.isExample,log:state.log,week:state.week,appliedByDate:state.appliedByDate||{},deleted:state.deleted||{},moves:state.moves||{},done:state.done||{},feel:state.feel||{},acts:state.acts||{},rhr:state.rhr||{},aip:state.aip||{},seen:+state.seen||0,profileAt:+state.profileAt||0,pAt:cleanPAt(state.pAt),eid:state.eid||"",savedAt:state.savedAtLocal||Date.now()}))); flushFailed=false; acct.lastAt=Date.now(); setStore(state.isExample&&!localSaved? EXAMPLE_MSG : ACCOUNT_OK); }
+    await dbRef.set(JSON.parse(JSON.stringify({profile:state.profile,isExample:state.isExample,log:state.log,week:state.week,appliedByDate:state.appliedByDate||{},deleted:state.deleted||{},moves:state.moves||{},done:state.done||{},feel:state.feel||{},acts:state.acts||{},rhr:state.rhr||{},aip:state.aip||{},evr:state.evr||{},seen:+state.seen||0,profileAt:+state.profileAt||0,pAt:cleanPAt(state.pAt),eid:state.eid||"",savedAt:state.savedAtLocal||Date.now()}))); flushFailed=false; acct.lastAt=Date.now(); setStore(state.isExample&&!localSaved? EXAMPLE_MSG : ACCOUNT_OK); }
   catch(e){ if(e&&e.code==="NOROW"){ writing=false; pending=false; consentLost(); return; }
     flushFailed=true;
     setStore(lsOK? "impossible dans le compte, gardé sur cet appareil seulement." : "impossible dans le compte, et le stockage de ce navigateur est bloqué. Tes changements seront perdus en fermant la page."); }
@@ -3626,8 +3857,8 @@ const cleanLog=l=>{ if(!Array.isArray(l)) return []; const m=new Map();
   return [...m.values()].sort((a,b)=>a.date<b.date?-1:1).slice(-520); };
 const cleanApplied=o=>{ if(!o||typeof o!=="object"||Array.isArray(o)) return {}; const out={}; for(const [k,v] of Object.entries(o).slice(0,600)){ const n=numIn(v,-600,600); if(okIso(k)&&n!=null) out[k]=n; } return out; };
 // profil : seulement les champs connus, avec leur type et leurs valeurs permises (le reste vient de l'exemple)
-const PENUM={sexe:["H","F"],niveau:["deb","int","conf"],ref:["none","vma","5","10"],seances:["3","4","5","6"],renfo:["0","1","2"],longDay:["5","6"],lieu:["dehors","tapis","mixte"],equip:["salle","maison","aucun"],sport:SPORTS,sObj:["court","moyen","long","ppl","oly"],cplx:["simple","standard","avance"]};
-const PNUM=["age","taille","poids","cible","mg","volume","longest","fcmax","adj","deficit","bonus","hSem"];
+const PENUM={sexe:["H","F"],niveau:["deb","int","conf"],ref:["none","vma","5","10"],seances:["3","4","5","6"],renfo:["0","1","2"],longDay:["5","6"],lieu:["dehors","tapis","mixte"],equip:["salle","maison","aucun"],sport:SPORTS,sObj:["court","moyen","long","ppl","oly"],cplx:["simple","standard","avance"],evalOn:["0","1"]};
+const PNUM=["age","taille","poids","cible","mg","volume","longest","fcmax","adj","deficit","bonus","hSem","debRun"];
 function cleanProfile(p){ const out={start:"",raceDate:""}; if(!p||typeof p!=="object"||Array.isArray(p)) return out;
   const own=k=> Object.prototype.hasOwnProperty.call(p,k)? p[k] : undefined, sc=v=> typeof v==="string"||typeof v==="number";
   for(const [k,vals] of Object.entries(PENUM)){ const v=own(k); if(sc(v)&&vals.includes(String(v))) out[k]=v; }
@@ -3635,7 +3866,7 @@ function cleanProfile(p){ const out={start:"",raceDate:""}; if(!p||typeof p!=="o
   const cr=own("cross"); if(typeof cr==="string"&&(cr==="non"||Object.hasOwn(CROSS,cr))) out.cross=cr;
   const ac=own("activite"); if(sc(ac)&&String(ac).trim()!==""&&isFinite(+ac)&&+ac>=1.1&&+ac<=2) out.activite=ac;
   for(const k of PNUM){ const v=own(k); if(typeof v==="number"){ if(isFinite(v)&&Math.abs(v)<1e6) out[k]=v; } else if(typeof v==="string"&&v.length<=14&&/^\s*(?:-?\d+(?:[.,]\d+)?)?\s*$/.test(v)) out[k]=v;
-    else if(v!==undefined&&["cible","mg","volume","longest","fcmax","adj","hSem"].includes(k)) out[k]=""; }   // illisible : vide, pas la valeur de l'exemple
+    else if(v!==undefined&&["cible","mg","volume","longest","fcmax","adj","hSem","debRun"].includes(k)) out[k]=""; }   // illisible : vide, pas la valeur de l'exemple
   const rv=own("refVal"); if(typeof rv==="string"&&rv.length<=24&&/^[0-9 .,:'’′″"hmins-]*$/i.test(rv)) out.refVal=rv; else if(typeof rv==="number"&&isFinite(rv)) out.refVal=rv;
   for(const k of ["start","raceDate"]){ const v=own(k); if(okIso(v)) out[k]=v; }
   const pr=own("pref"); if(typeof pr==="string") out.pref=prefClean(pr);
@@ -3759,6 +3990,7 @@ function wzProfile(){
   const p={...base,types:[...(base.types||EXAMPLE.types)],activite:wzr("wz_act")||base.activite,sexe:wzr("wz_sexe"),age:String(wzNum("#wzAge",15,90,true)),taille:String(wzNum("#wzTaille",130,220,true)),poids:wzv("#wzPoids"),cible:wzv("#wzCible"),
     niveau,objectif:$("#wzObjectif").value,raceDate,volume:wzv("#wzVolume"),longest:wzv("#wzLongest"),seances,renfo:wzr("wz_renfo"),lieu:wzr("wz_lieu"),equip:wzr("wz_equip"),longDay:wzr("wz_longDay"),deficit:wzr("wz_def"),sport:wzSport(),sObj:wzSObjVal(),hSem:wzSport()==="force"?"":wzv("#wzHSem")};
   if(p.sport==="force"&&+p.seances>5) p.seances="5";
+  p.evalOn= vmaOf(profileNums(p)).estimated? "1" : "0"; p.debRun="";   // nouveau plan : séances de test proposées, sauf si une référence de vitesse est déjà connue
   const lo=raceOn(p); p.start= lo? autoStart(lo) : todayIso();
   return p;
 }
@@ -4187,7 +4419,7 @@ async function initAccount(){
       const mp= lo&&!d.isExample? mergeProfile(d.profile,d.pAt,local.profile,local.pAt) : {profile:d.profile,pAt:cleanPAt(d.pAt)}, pmerged=JSON.stringify(mp.profile)!==JSON.stringify(d.profile);
       const ok=safeStart({...x14Merge(d,lo?local:null),profile:mp.profile,pAt:mp.pAt,profileAt:Math.max(+d.profileAt||0,pmerged?+(local&&local.profileAt)||0:0),isExample:d.isExample,log,week:d.week,appliedByDate:d.appliedByDate,deleted:del,moves,done,seen,eid:ep});
       const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
-      if(ok){ persistLocal(); if(pmerged||log.length!==cleanLog(d.log).length||Object.keys(del).length!==Object.keys(cleanDeleted(d.deleted)).length||!same(done,cleanDone(d.done))||!same(moves,cleanMoves(d.moves))||!same(cleanFeel(d.feel),state.feel)||!same(cleanActs(d.acts),state.acts)||!same(cleanRhr(d.rhr),state.rhr)||!same(cleanAip(d.aip),cleanAip(state.aip))) flush(); setStore(ACCOUNT_OK); }
+      if(ok){ persistLocal(); if(pmerged||log.length!==cleanLog(d.log).length||Object.keys(del).length!==Object.keys(cleanDeleted(d.deleted)).length||!same(done,cleanDone(d.done))||!same(moves,cleanMoves(d.moves))||!same(cleanFeel(d.feel),state.feel)||!same(cleanActs(d.acts),state.acts)||!same(cleanRhr(d.rhr),state.rhr)||!same(cleanAip(d.aip),cleanAip(state.aip))||!same(cleanEvr(d.evr),cleanEvr(state.evr))) flush(); setStore(ACCOUNT_OK); }
       else setStore("données du compte illisibles, rien n'a été écrasé.");
     }else if(local && !local.isExample){
       if(remoteOk){ state.deleted=del; state.log=dropDeleted(cleanLog([...cleanLog(d.log),...state.log]),del); state.done=mergeStamped(d.done,state.done,cleanDone); state.moves=mergeStamped(d.moves,state.moves,cleanMoves); Object.assign(state,x14Merge(d,state)); state.seen=Math.max(+state.seen||0,Math.min(APP_V,+d.seen||0)); recompute(); persistLocal(); }
