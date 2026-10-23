@@ -1225,3 +1225,12 @@ html.ck-on .cfab:not([aria-expanded="true"]){z-index:33}   /* sous la bannière 
 .aip-ml li{background:var(--sunk);border-radius:10px;padding:8px 10px;display:grid;gap:2px;min-width:0;overflow-wrap:anywhere}
 .aml-h{font-weight:700;font-size:.8rem;color:var(--fg2)}
 .aml-b .aiba-k{display:inline-block}
+/* séances de test (début de plan) : encadré sur la carte, saisie du résultat dans une feuille */
+.chip.ev,.cbtn.ev{background:var(--accent-soft);color:var(--accent-text)}
+.cbtn.ev{box-shadow:none}
+.evb{margin:6px 0 8px;padding:10px 12px;border-radius:12px;background:var(--sunk);box-shadow:inset 3px 0 0 var(--accent);display:grid;gap:6px;justify-items:start;min-width:0;font-size:.88rem}
+.evb p{margin:0;overflow-wrap:anywhere;max-width:100%}
+.evb .evw{color:var(--bad-fg);font-weight:600}
+.evb .evok,.evb .evn,.evb .evx{color:var(--muted)}
+.evb .btn.evap{white-space:normal;text-align:left;max-width:100%;min-height:44px}
+.evb .cbtn.ev,.evb .linkbtn{min-height:44px}
