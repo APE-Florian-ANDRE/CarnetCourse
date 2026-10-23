@@ -18,11 +18,13 @@ function engine(arr){ const T=window.__T; return arr.map(pr=>{ try{
   const km=wk=>wk.days.reduce((a,d)=>a+(d.run&&d.run.type!=="race"?T.sessionKm(d.run,v):0),0);
   const tests=[], bad=[];
   on.forEach((wk,j)=>wk.days.forEach((d,i)=>{ if(!d.run||!d.run.ev) return; const o=off[j].days[i];
-    tests.push({w:wk.w,i,t:d.run.ev.t,type:d.run.type,z3:d.run.blocks.some(b=>b.z==="z3"&&b.min>0),z2:d.run.blocks.some(b=>b.z==="z2"),km:T.sessionKm(d.run,v),km0:o&&o.run?T.sessionKm(o.run,v):-1,wasQ:!!(o&&o.run&&o.run.type==="q"),title:d.run.title,note:d.run.note||""}); }));
+    tests.push({w:wk.w,i,h:d.run.hardMin||0,h0:o&&o.run&&o.run.type==="q"?o.run.hardMin||0:0,t:d.run.ev.t,type:d.run.type,z3:d.run.blocks.some(b=>b.z==="z3"&&b.min>0),z2:d.run.blocks.some(b=>b.z==="z2"),km:T.sessionKm(d.run,v),km0:o&&o.run?T.sessionKm(o.run,v):-1,wasQ:!!(o&&o.run&&o.run.type==="q"),title:d.run.title,note:d.run.note||""}); }));
   on.forEach((wk,j)=>{ if(km(wk)>km(off[j])+1e-6) bad.push("S"+wk.w+" "+km(wk).toFixed(2)+" > "+km(off[j]).toFixed(2)); });
+  const hd=wk=>wk.days.reduce((a,d)=>a+(d.run&&d.run.type==="q"?d.run.hardMin||0:0),0), inten=[];
+  on.forEach((wk,j)=>{ const ea=T.zoneMins(wk.days).easy, eb=T.zoneMins(off[j].days).easy; if(hd(wk)>hd(off[j])+6+1e-9) inten.push("S"+wk.w+" dur "+hd(wk)+" > "+hd(off[j])+" + 6"); if(ea<Math.min(eb,.8)-1e-9) inten.push("S"+wk.w+" facile "+ea.toFixed(2)+" < "+Math.min(eb,.8).toFixed(2)); });
   const w1=on[0], first=w1&&w1.days.find(d=>d.run&&d.kind!=="before");
   const diff=on.slice(2).some((wk,j)=>JSON.stringify(wk.days)!==JSON.stringify(off[j+2].days));
-  return {N:on.length,tests,bad,first:first?first.run.type:null,ph1:w1?w1.phase:null,diff,sigOn:T.planSig({...n,evalOn:1}),sigOff:T.planSig({...n,evalOn:0})};
+  return {N:on.length,tests,bad,inten,first:first?first.run.type:null,ph1:w1?w1.phase:null,diff,sigOn:T.planSig({...n,evalOn:1}),sigOff:T.planSig({...n,evalOn:0})};
 }catch(e){ return {err:String(e&&e.stack||e).slice(0,300)}; } }); }
 
 (async()=>{
@@ -37,10 +39,10 @@ function engine(arr){ const T=window.__T; return arr.map(pr=>{ try{
 
   /* ---------- moteur ---------- */
   { const [a,b5,b5low,b3,off]=await run([{...base,raceDate:race(12)},{...base,seances:"5",volume:40,longest:14,raceDate:race(12)},{...base,seances:"5",raceDate:race(12)},{...base,seances:"3",raceDate:race(12)},{...base,evalOn:"0",raceDate:race(12)}]);
-    ok(a.tests.map(x=>x.t).join()==="vma6,end","E1 intermédiaire, 4 séances, 12 semaines : test VMA puis test d'endurance",a.tests);
+    ok(/^vma6,(end|cont)$/.test(a.tests.map(x=>x.t).join())&&a.tests.every(x=>x.h<=Math.max(2*x.h0,12)),"E1 intermédiaire, 4 séances, 12 semaines : test VMA puis test d'endurance (ou en aisance si la séance remplacée est trop courte en intensité)",a.tests);
     ok(a.tests[0].w===1&&a.tests[1].w===2,"E1 un test exigeant par semaine (S1 puis S2)",a.tests.map(x=>x.w));
     ok(b5.tests.length===3&&b5.tests.some(x=>x.t==="ref"),"E1 5 séances : trois tests dont le footing de référence",b5.tests.map(x=>x.t));
-    ok(b5low.tests.length===2&&b5low.tests.every(x=>x.km<=x.km0+1e-9),"E1 5 séances à 25 km : le test d'endurance ne tient dans aucune séance, il est retiré (jamais de volume en plus)",b5low.tests.map(x=>x.t+" "+x.km.toFixed(1)+"/"+x.km0.toFixed(1)));
+    ok(b5low.tests.length>=2&&!b5low.tests.some(x=>x.t==="end")&&b5low.tests.every(x=>x.km<=x.km0+1e-9),"E1 5 séances à 25 km : le test d'endurance ne tient pas, test en aisance ou rien (jamais de volume ni d'intensité en plus)",b5low.tests.map(x=>x.t+" "+x.km.toFixed(1)+"/"+x.km0.toFixed(1)));
     ok(b3.tests.length===1&&b3.tests[0].t==="vma6","E1 3 séances : un seul test",b3.tests.map(x=>x.t));
     ok(off.tests.length===0,"E1 case décochée : aucun test");
     ok(a.sigOn!==a.sigOff,"E1 le choix entre dans planSig");
@@ -48,12 +50,16 @@ function engine(arr){ const T=window.__T; return arr.map(pr=>{ try{
     ok(a.tests.every(x=>x.wasQ),"E1 les tests exigeants remplacent des séances d'intensité");
     const t0=a.tests[0]; ok(/échauffement|Pars vite/i.test(JSON.stringify(t0))&&/Ne fais pas ce test si tu as mal/.test(t0.note)&&/÷ 100/.test(t0.note),"E1 consignes : échauffement, mesure, quand ne pas faire le test",t0.note);
     ok(a.first!=="q"&&a.first!=="long"&&b5.first!=="q","E1 première séance du plan toujours facile (firstWeekFix)",[a.first,b5.first]); }
-  { const [noV]=await run([{...base,types:["seuil","cotes","fartlek"],raceDate:race(12)}]); ok(noV.tests.map(x=>x.t).join()==="end","E1 VMA décochée : test d'endurance seulement",noV.tests); }
+  { const [noV]=await run([{...base,types:["seuil","cotes","fartlek"],raceDate:race(12)}]); ok(/^(end|cont)$/.test(noV.tests.map(x=>x.t).join()),"E1 VMA décochée : pas de test VMA, un test d'endurance (ou en aisance)",noV.tests); }
   // variantes prudentes : jamais de test maximal
   { const R=await run([{...base,niveau:"deb",volume:8,longest:3,seances:"3",raceDate:race(12)},{...base,age:16,raceDate:race(12)},{...base,age:68,raceDate:race(12)},{...base,poids:120,taille:175,raceDate:race(12)},{...base,evPain:true,raceDate:race(12)}]);
     const nm=["débutant","moins de 18 ans","65 ans et plus","IMC de 35 et plus","douleur notée"];
     R.forEach((r,k)=>ok(r.tests.length>=1&&r.tests.every(x=>x.t===(k?"cont":"deb")&&!x.z3&&!x.z2&&x.type==="easy"),"E2 "+nm[k]+" : variante prudente, sans test maximal",r.tests));
     ok(/minutes tu as couru sans t'arrêter/.test(R[0].tests[0].note),"E2 débutant : consigne « combien de minutes tu as couru sans t'arrêter »",R[0].tests[0]); }
+  // douleur notée : mêmes emplacements, même nombre de séances d'intensité typées par semaine (les choix de l'IA, x.q[j], ne se décalent pas)
+  { const r=await pe.evaluate(pr=>{ const T=window.__T, n=T.profileNums(pr), q=pl=>pl.map(wk=>wk.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind).map(d=>d.i+d.run.kind).join()).join("|");
+      const a=T.buildPlan({...n,evPain:false,noAi:true}), b=T.buildPlan({...n,evPain:true,noAi:true}); return {same:q(a)===q(b),sig:T.planSig({...n,evPain:false})===T.planSig({...n,evPain:true}),ev:b.slice(0,2).flatMap(wk=>wk.days.filter(d=>d.run&&d.run.ev).map(d=>d.run.ev.t))}; },{...base,seances:"5",volume:40,longest:14,raceDate:race(12)});
+    ok(r.same&&r.sig&&r.ev.every(t=>t==="cont"),"E2 douleur notée : tests à venir en aisance, séances d'intensité typées inchangées (planSig et choix de l'IA alignés)",r); }
   // plans courts, semaine 1 = course, autres sports
   { const R=await run([{...base,raceDate:race(4)},{...base,raceDate:race(5)},{...base,sport:"vtt",hSem:"4"},{...base,objectif:"forme"}]);
     ok(R[0].N===4&&R[0].tests.length===0,"E3 plan de 4 semaines : aucun test",R[0]);
@@ -70,6 +76,9 @@ function engine(arr){ const T=window.__T; return arr.map(pr=>{ try{
     ok(!err.length,"E4 "+NF+" profils aléatoires : aucune erreur",err.slice(0,2));
     ok(!over.length,"E4 volume de chaque semaine jamais au-dessus du plan sans tests",over.slice(0,2).map(x=>x.bad));
     ok(!sess.length,"E4 chaque séance de test au plus aussi longue que la séance remplacée",sess.slice(0,2).map(x=>x.tests));
+    const hs=R.filter(x=>!x.err&&x.tests.some(t=>t.h>Math.max(2*t.h0,12)+1e-9)), hw=R.filter(x=>!x.err&&x.inten.length);
+    ok(!hs.length,"E4 intensité : séance de test ≤ max(2 × la séance remplacée, 12 min) de dur",hs.slice(0,2).map(x=>x.tests));
+    ok(!hw.length,"E4 intensité : semaine ≤ plan sans tests + 6 min de dur, part de facile ≥ min(sans tests, 80 %)",hw.slice(0,2).map(x=>x.inten));
     ok(!fst.length,"E4 première séance facile (firstWeekFix)",fst.length);
     ok(!late.length&&!short.length,"E4 tests en semaines 1 et 2 seulement, aucun sur un plan de 4 semaines",[late.length,short.length]);
     ok(!mx.length,"E4 débutant, mineur, 65 ans et plus, IMC 35 et plus : jamais de test maximal",mx.length);
@@ -134,7 +143,7 @@ function engine(arr){ const T=window.__T; return arr.map(pr=>{ try{
   L1=await lsP(); c=await card();
   const tst=await p.evaluate(()=>document.querySelector("#toasts").textContent);
   ok(L1.profile.ref==="vma"&&L1.profile.refVal==="14,5"&&Object.values(L1.evr)[0].ap>0,"U6 mise à jour : référence VMA 14,5 km/h dans le profil, résultat marqué appliqué",{p:[L1.profile.ref,L1.profile.refVal],evr:L1.evr});
-  ok(/Plan mis à jour : VMA de 14,5/.test(tst)&&/volume de départ/.test(tst),"U6 toast avec explication",tst);
+  ok(/Plan mis à jour : VMA de 14,5/.test(tst)&&/distance de certaines séances peut changer/.test(tst)&&/refais le test/.test(tst),"U6 toast exact : allures recalculées, distances qui peuvent changer, « refais le test »",tst);
   ok(/Plan mis à jour avec ce résultat/.test(c.txt)&&!c.ap,"U6 carte : résultat appliqué, plus de bouton",c);
   ok(await p.evaluate(()=>/14,5 km\/h/.test(document.querySelector("#vmaHint").textContent)&&document.querySelector("#refVal").value==="14,5"),"U6 profil recalculé : VMA utilisée 14,5 km/h");
   const pace1=await p.evaluate(()=>document.querySelector("#days .pace")?.textContent||""); ok(pace0&&pace1&&pace0!==pace1,"U6 allures recalculées",[pace0,pace1]);
@@ -166,10 +175,29 @@ function engine(arr){ const T=window.__T; return arr.map(pr=>{ try{
     ok(await d.evaluate(()=>/effort perçu/.test(document.querySelector("#evMsg").textContent)),"U11 débutant : effort perçu obligatoire");
     await d.fill("#evV","99"); await d.selectOption("#evR","4"); await d.click("#evSave"); await d.waitForTimeout(200);
     ok(await d.evaluate(()=>/plausible/.test(document.querySelector("#evMsg").textContent)),"U11 débutant : minutes au-delà de la séance refusées");
-    await d.fill("#evV","12"); await d.click("#evSave"); await d.waitForTimeout(300);
+    await d.fill("#evV","12"); await d.selectOption("#evR","8"); await d.click("#evSave"); await d.waitForTimeout(200);
+    { const m=await d.evaluate(()=>({msg:document.querySelector("#evMsg").textContent,inv:document.querySelector("#evR").getAttribute("aria-invalid"),evr:Object.keys(JSON.parse(localStorage.getItem("carnet-course.v1")).evr||{}).length}));
+      ok(/Reprends plus doucement/.test(m.msg)&&/refais le test à allure plus facile/.test(m.msg)&&m.inv==="true"&&!m.evr,"U11 débutant, RPE 8 : erreur explicite sur le champ RPE (« reprends plus doucement »), rien d'enregistré",m); }
+    await d.selectOption("#evR","4"); await d.click("#evSave"); await d.waitForTimeout(300);
     ok(await d.evaluate(()=>/fractions de 6 min|fractions de 5 min/.test(document.querySelector("#days .evb").textContent)),"U11 débutant : point de départ proposé",await d.evaluate(()=>document.querySelector("#days .evb").textContent));
     await d.click(`#days [data-evap="${i}"]`); await d.waitForTimeout(300);
     const pr=await d.evaluate(()=>JSON.parse(localStorage.getItem("carnet-course.v1")).profile); ok(pr.debRun==="12"&&pr.ref==="none","U11 débutant : debRun = 12 enregistré dans le profil, sans toucher à la VMA",pr);
+    await ctx.close(); }
+  // case cochée en cours de plan (5 semaines après le début) : tests à venir seulement, jamais dans le passé
+  { const ctx=await b.newContext({viewport:{width:375,height:800},locale:"fr-FR"}); const st=addD(monday(TODAY),-35);
+    const m=await page(JSON.stringify({profile:{...base,start:st,raceDate:addD(monday(TODAY),7*8+6),evalOn:"0"},isExample:false,log:[],week:1,seen:99}),{ctx});
+    await m.evaluate(()=>{ const c=document.querySelector("#evalOn"); c.checked=true; c.dispatchEvent(new Event("input",{bubbles:true})); c.dispatchEvent(new Event("change",{bubbles:true})); }); await m.waitForTimeout(500);
+    const r=await m.evaluate(()=>{ const T=window.__T, st=JSON.parse(localStorage.getItem("carnet-course.v1")).profile, n=T.profileNums(st), pl=T.buildPlan({...n,noAi:true}), s0=new Date(st.start+"T12:00:00");
+      const ds=pl.flatMap(wk=>wk.days.filter(d=>d.run&&d.run.ev).map(d=>{ const x=new Date(s0); x.setDate(x.getDate()+(wk.w-1)*7+d.i); return {w:wk.w,iso:x.toISOString().slice(0,10)}; }));
+      return {from:st.evalFrom,ds}; });
+    ok(r.from===TODAY&&r.ds.length>=1&&r.ds.every(x=>x.iso>=TODAY&&x.w>=6&&x.w<=8),"U12 case cochée en semaine 6 : evalFrom = aujourd'hui, tests dans les semaines à venir, aucun dans le passé",r);
+    await ctx.close(); }
+  // synchro : une fusion venue d'un autre onglet ne change jamais la semaine affichée (profileAt à 0 des deux côtés)
+  { const ctx=await b.newContext({viewport:{width:375,height:800},locale:"fr-FR"}); const a=await page(seedI({}),{ctx}); await toW1(a); const q=await page(null,{ctx}); await q.waitForTimeout(300);
+    const w0=await a.evaluate(()=>document.querySelector("#weekTitle").textContent);
+    await q.evaluate(()=>{ const x=document.querySelector("#volume"); x.value="27"; x.dispatchEvent(new Event("input",{bubbles:true})); x.dispatchEvent(new Event("change",{bubbles:true})); }); await q.waitForTimeout(700);
+    const r=await a.evaluate(()=>({t:document.querySelector("#weekTitle").textContent,v:document.querySelector("#volume").value,w:JSON.parse(localStorage.getItem("carnet-course.v1")).week}));
+    ok(w0==="Semaine 1"&&r.t==="Semaine 1"&&r.v==="27","U13 profil changé dans un autre onglet : cet onglet garde sa semaine affichée (Semaine 1) et reçoit le profil",{w0,r});
     await ctx.close(); }
   ok(!E.length,"aucune erreur de page",E.slice(0,3));
   await b.close(); S.close();

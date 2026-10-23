@@ -336,7 +336,7 @@ const IMP14=(function(){
 })();
 /*PURE14:end*/
 
-const EXAMPLE = {sexe:"H",age:32,taille:178,poids:82,cible:76,mg:"",activite:"1.25",niveau:"int",objectif:"10",volume:20,longest:10,ref:"none",refVal:"",fcmax:"",seances:"4",renfo:"2",longDay:"6",start:todayIso(),deficit:300,bonus:100,adj:0,lieu:"dehors",equip:"salle",types:["seuil","vma","cotes","fartlek","ld"],cross:"non",sport:"course",sObj:"",hSem:"",cplx:"standard",pref:"",evalOn:"0",debRun:""};
+const EXAMPLE = {sexe:"H",age:32,taille:178,poids:82,cible:76,mg:"",activite:"1.25",niveau:"int",objectif:"10",volume:20,longest:10,ref:"none",refVal:"",fcmax:"",seances:"4",renfo:"2",longDay:"6",start:todayIso(),deficit:300,bonus:100,adj:0,lieu:"dehors",equip:"salle",types:["seuil","vma","cotes","fartlek","ld"],cross:"non",sport:"course",sObj:"",hSem:"",cplx:"standard",pref:"",evalOn:"0",debRun:"",evalFrom:""};
 
 let state = {profile:{...EXAMPLE}, isExample:true, log:[], week:1, feel:{}, acts:{}, rhr:{}};
 let save = ()=>{};
@@ -653,7 +653,7 @@ function buildPlan(p){
 // "e2" : version du moteur (progression linéaire, variété croissante) ; un ajustement IA fait pour un plan d'une autre version est à relancer
 function planSig(p){ const a=["e2",p.sport,p.sObj,p.objectif,p.runObjectif,p.niveau,p.seances,p.renfo,p.longDay,p.raceDate||"",p.start||"",p.volume,p.longest,p.ref,p.refVal,(p.types||[]).join(","),p.lieu,p.equip,p.cross,p.cplx,p.hSem,p.startIdx,!!p.minor];
   if(p.pref) a.push(p.pref);
-  if(p.evalOn) a.push("ev"); if(p.debRun>0) a.push("dr"+p.debRun);   // séances de test, point de départ course/marche (ajoutés seulement s'ils servent)
+  if(p.evalOn) a.push("ev",evFrom(p)); if(p.debRun>0) a.push("dr"+p.debRun);   // séances de test, point de départ course/marche (ajoutés seulement s'ils servent)
   const t=JSON.stringify(a);
   let h=5381; for(let i=0;i<t.length;i++) h=((h*33)^t.charCodeAt(i))>>>0; return h.toString(36); }
 function aiOf(p){ if(p.noAi) return null; const a=state&&state.aip&&state.aip.p; return a&&!a.x&&a.sig===planSig(p)? a : null; }
@@ -706,11 +706,20 @@ const evBmi=p=> p.poids/Math.pow(p.taille/100,2);
 function evPainNow(){ try{ const tdy=todayIso(), lim=addDays(tdy,-14), f=(state&&state.feel)||{};
   if(Object.entries(f).some(([k,v])=>v&&!(v.x===1||v.x===true)&&+v.pain>=1&&k>=lim&&k<=tdy)) return true;
   const lg=(state&&state.log)||[], l=lg[lg.length-1]; return !!(l&&l.douleur==="oui"&&l.date>=lim&&l.date<=tdy); }catch(e){ return false; } }
-// variante prudente : aucun test maximal (débutant, moins de 18 ans, 65 ans et plus, IMC de 35 et plus, douleur notée) ; p.evPain force la douleur (tests)
-function evPrudent(p){ return p.niveau==="deb"||!!p.minor||p.age>=65||evBmi(p)>=35||(p.evPain!=null? !!p.evPain : evPainNow()); }
-// pourquoi pas de test : "" si les tests sont possibles
-function evWhyNot(p,weeks){ if(!p.evalOn) return "off"; if(evSport(p.sport)) return "sport"; if(!weeks||weeks.length<=4) return "court";
-  const w1=weeks[0]; if(!w1||w1.phase==="taper"||w1.phase==="race") return "course"; return ""; }
+// variante prudente : aucun test maximal. Profil (stable) : débutant, moins de 18 ans, 65 ans et plus, IMC de 35 et plus.
+// Douleur notée (p.evPain la force, pour les tests) : seulement pour les tests à venir, ni passés, ni cochés, ni notés (evalPlan)
+function evProfPrud(p){ return p.niveau==="deb"||!!p.minor||p.age>=65||evBmi(p)>=35; }
+const evPain=p=> p.evPain!=null? !!p.evPain : evPainNow();
+function evPrudent(p){ return evProfPrud(p)||evPain(p); }
+// début des tests : la case cochée en cours de plan (evalFrom) les place à partir de ce jour-là, jamais avant ; sinon dès le début du plan
+const evFrom=p=>{ const st=effStart(p); return st&&okIso(p.evalFrom)&&p.evalFrom>st? p.evalFrom : ""; };
+// semaine des premiers tests : la première qui a encore des séances à partir de evalFrom (la semaine en cours, sinon la suivante)
+function evAnchor(p,weeks){ const from=evFrom(p), st=effStart(p); if(!from) return 0;
+  for(let j=0;j<weeks.length;j++) if(weeks[j].days.some(d=>d.run&&d.kind!=="before"&&addDays(st,j*7+d.i)>=from)) return j; return weeks.length; }
+// pourquoi pas de test : "" si les tests sont possibles ; il faut plus de 4 semaines à partir de la semaine des tests, qui n'est ni l'affûtage ni la course
+function evWhyNot(p,weeks){ if(!p.evalOn) return "off"; if(evSport(p.sport)) return "sport"; if(!weeks) return "court";
+  const j=evAnchor(p,weeks); if(weeks.length-j<=4) return j? "tard" : "court";
+  const w=weeks[j]; if(!w||w.phase==="taper"||w.phase==="race") return j? "tard" : "course"; return ""; }
 // débutant : la plus longue période de course continue fixe le premier palier de course/marche (la moitié, 8 min au plus)
 function evDebStart(m){ if(!(m>=2)) return 0; let b=0; for(const x of RW_LADDER) if(x<=Math.min(8,m/2)) b=x; return b; }
 // première variante (dans l'ordre de préférence) qui tient dans km0 : jamais plus longue que la séance remplacée
@@ -723,6 +732,7 @@ function evVma6(km0,vma){ const c=[];
     {l:"Retour au calme : footing très lent, puis marche",min:cd,z:"z1",lo:.6,hi:.66}],
     {hardMin:6,ev:{t:"vma6"},note:"Sur du plat (piste, chemin plat) ou sur tapis à 1 % de pente. Pars vite sans partir à bloc : l'allure doit tenir les 6 minutes et tu finis vidé. Mesure la distance parcourue en 6 min (montre GPS, tours de piste de 400 m, ou compteur du tapis) : VMA ≈ distance en mètres ÷ 100 (1 500 m → 15 km/h). "+EV_NO}));
   return evFit(c,km0,vma); }
+// variantes qui tiennent dans km0, la plus longue durée d'abord (le plafond d'intensité est vérifié par evalPlan)
 function evEnd(km0,vma){ const c=[];
   for(const T of [30,25,20]) for(const wu of [15,10]) for(const cd of [20,15,10,8,5]){ const k5= T===30&&vma*.83*.5>=5;   // 5 km à cette allure en 30 min au plus : jamais plus long que le test
     c.push(S("q",EV_T.end+" : "+T+" minutes",[
@@ -730,7 +740,7 @@ function evEnd(km0,vma){ const c=[];
     {l:T+" min en continu à allure soutenue mais contrôlée : note la distance"+(k5?" (ou fais 5 km chrono à cette allure et note ton temps)":""),min:T,z:"z2",lo:.8,hi:.86,eff:"Soutenu, régulier, sans finir à bloc"},
     {l:"Retour au calme : footing très lent",min:cd,z:"z1",lo:.6,hi:.66}],
     {hardMin:T,ev:{t:"end",T,k5:k5?1:0},note:"Sur du plat. Effort soutenu mais contrôlé : tu peux dire quelques mots, pas tenir une conversation. Garde une allure régulière du début à la fin. Note la distance parcourue en "+T+" min"+(k5?" (ou ton temps sur 5 km)":"")+". "+EV_NO})); }
-  return evFit(c,km0,vma); }
+  return c.filter(r=>sessionKm(r,vma)<=km0+1e-9); }
 function evCont(km0,vma){ const c=[];
   for(const T of [30,25,20,15]) c.push(S("easy",EV_T.cont,[
     {l:"Échauffement : footing très lent",min:5,z:"z1",lo:.58,hi:.62},
@@ -749,35 +759,72 @@ function evDeb(r,vma){ const km0=sessionKm(r,vma), M=sessionMin(r), mb=r.blocks.
 // footing de référence : le footing facile prévu, tel quel (mêmes blocs, même distance), avec la consigne de noter son ressenti
 const evRefOk=r=> r&&r.type==="easy"&&!r.deb&&!r.ev&&r.blocks[0]&&r.blocks[0].l==="Footing facile"&&!r.blocks.some(b=>b.cross);
 const evRef=r=>({...r,title:EV_T.ref,ev:{t:"ref"},note:"Footing à allure vraiment facile (tu peux parler). À la fin, note ton effort perçu (RPE de 1 à 10) et, si tu les as, la durée et la distance : ce sera ton repère d'allure facile. "+EV_NO_SOFT});
+// pas de test possible (douleur notée) et pas de place pour le test en aisance : footing facile de même distance au plus, sans type d'intensité
+function evEasyFb(km0,vma){ let k=Math.max(1.5,Math.floor(km0*2)/2); while(k>1.5&&sessionKm(easyRun(k,vma),vma)>km0+1e-9) k-=.5;
+  return {...easyRun(k,vma,"Footing facile"),note:"Douleur notée récemment : footing facile à la place du test. Fais le test plus tard, quand tu n'as plus mal (décoche puis recoche la case du profil)."}; }
 function evalPlan(weeks,p){
   if(evWhyNot(p,weeks)) return;
-  const vma=vmaOf(p).vma, deb=p.niveau==="deb", prud=evPrudent(p), lk=dayLock(p), N=weeks.length, w1=weeks[0];
+  const vma=vmaOf(p).vma, deb=p.niveau==="deb", prud=evProfPrud(p), pain=evPain(p), lk=dayLock(p), N=weeks.length, j0=evAnchor(p,weeks), wA=weeks[j0], wB=weeks[j0+1];
+  const st=effStart(p), from=evFrom(p), tdy=todayIso(), dn=(state&&state.done)||{}, er=(state&&state.evr)||{};
+  const dateOf=(wk,d)=> st? addDays(st,(wk.w-1)*7+d.i) : "";
+  const kmOf=wk=>wk.days.reduce((a,d)=>a+(d.run&&d.run.type!=="race"?sessionKm(d.run,vma):0),0), hardOf=wk=>wk.days.reduce((a,d)=>a+(d.run&&d.run.type==="q"?d.run.hardMin||0:0),0);
+  // test passé, coché (fait ou pas fait) ou noté : une douleur notée ensuite ne change plus son type (jamais selon la date du jour pour une séance passée)
+  const settled=(wk,d)=>{ const k=dateOf(wk,d); if(!k||k<tdy) return true; const m=dn[k]; if(m&&m.v&&m.v!=="none") return true; const e=er[k]; return !!(e&&!(e.x===1||e.x===true)); };
   const okW=wk=> !!wk&&!wk.deload&&wk.phase!=="taper"&&wk.phase!=="race";
-  const free=(wk,d)=> !!d.run&&d.kind!=="before"&&d.kind!=="race"&&d.run.type!=="race"&&!d.run.ev&&!lk(wk.w,d);   // séance cochée avant : jamais changée
+  const free=(wk,d)=> !!d.run&&d.kind!=="before"&&d.kind!=="race"&&d.run.type!=="race"&&!d.run.ev&&!lk(wk.w,d)&&(!from||dateOf(wk,d)>=from);   // séance cochée avant : jamais changée
   const qDays=wk=> okW(wk)? wk.days.filter(d=>free(wk,d)&&d.run.type==="q"&&d.run.kind&&d.run.kind!=="allure").map(d=>({wk,d})) : [];
-  const put=(s,run)=>{ const i=s.wk.days.indexOf(s.d); if(i<0||!run) return false; s.wk.days[i]={...s.d,run,kind:run.type}; s.wk.evN=(s.wk.evN||0)+1; return true; };
-  const slots=[...qDays(w1),...qDays(weeks[1])];
-  const firstRun=w1.days.find(d=>d.run&&d.kind!=="before");
-  if(deb){ const d=w1.days.find(x=>free(w1,x)&&x.run.type==="easy"&&x.run.deb)||w1.days.find(x=>free(w1,x)&&x.run.deb); if(d) put({wk:w1,d},evDeb(d.run,vma)); return; }
-  if(prud){ for(const s of slots) if(put(s,evCont(sessionKm(s.d.run,vma),vma))) return;
-    const d=w1.days.find(x=>free(w1,x)&&evRefOk(x.run)); if(d) put({wk:w1,d},evCont(sessionKm(d.run,vma),vma)); return; }
-  // 1 test (3 séances par semaine, ou plan de 6 semaines ou moins), 2 tests à partir de 4 séances et 7 semaines, 3 à partir de 5 séances et 9 semaines
-  const nT=1+(p.seances>=4&&N>=7?1:0)+(p.seances>=5&&N>=9?1:0), noVma=!p.types.includes("vma")||((p.prefK||PREF0).no||[]).includes("vma");
-  const hard= noVma? ["end"] : nT>=2? ["vma6","end"] : ["vma6"], used=new Set();
-  for(const t of hard){ for(const s of slots){ if(used.has(s.wk.w)||s.wk.days[s.wk.days.indexOf(s.d)]!==s.d) continue;   // un test exigeant par semaine au plus
-      const km0=sessionKm(s.d.run,vma); if(put(s,t==="vma6"? evVma6(km0,vma) : evEnd(km0,vma))){ used.add(s.wk.w); break; } } }
-  if(nT>=3&&firstRun&&free(w1,firstRun)&&evRefOk(firstRun.run)) put({wk:w1,d:firstRun},evRef(firstRun.run));
+  const base=new Map(); for(const wk of [wA,wB]) if(wk) base.set(wk,{h:hardOf(wk),e:zoneMins(wk.days).easy,km:kmOf(wk)});
+  // intensité : séance de test ≤ max(2 × la séance remplacée, 12 min) de dur ; semaine ≤ plan sans tests + 6 min ; part de facile ≥ min(sans tests, 80 %)
+  const put=(s,run)=>{ if(!run) return false; const i=s.wk.days.indexOf(s.d); if(i<0) return false; const h0=s.d.run.type==="q"? s.d.run.hardMin||0 : 0;
+    if((run.hardMin||0)>Math.max(2*h0,12)+1e-9||sessionKm(run,vma)>sessionKm(s.d.run,vma)+1e-9) return false;
+    const old=s.wk.days[i]; s.wk.days[i]={...s.d,run,kind:run.type}; const b=base.get(s.wk);
+    if(b&&(hardOf(s.wk)>b.h+6+1e-9||zoneMins(s.wk.days).easy<Math.min(b.e,.8)-1e-9)){ s.wk.days[i]=old; return false; }
+    s.wk.evN=(s.wk.evN||0)+1; s.d=s.wk.days[i]; return true; };
+  // douleur notée : un test exigeant à venir devient le test en aisance (ou un footing facile) ; mêmes emplacements qu'avec le test, jamais de type d'intensité en plus ou en moins
+  const soften=s=>{ if(!pain||settled(s.wk,s.d)) return; const i=s.wk.days.indexOf(s.d), km0=sessionKm(s.d.run,vma); s.wk.days[i]={...s.d,run:evCont(km0,vma)||evEasyFb(km0,vma),kind:"easy"}; };
+  const slots=[...qDays(wA),...qDays(wB)];
+  if(deb){ const d=wA.days.find(x=>free(wA,x)&&x.run.type==="easy"&&x.run.deb)||wA.days.find(x=>free(wA,x)&&x.run.deb); if(d) put({wk:wA,d},evDeb(d.run,vma)); }
+  else if(prud){ let done=false; for(const s of slots) if(put(s,evCont(sessionKm(s.d.run,vma),vma))){ done=true; break; }
+    if(!done){ const d=wA.days.find(x=>free(wA,x)&&evRefOk(x.run)); if(d) put({wk:wA,d},evCont(sessionKm(d.run,vma),vma)); } }
+  else {
+    // 1 test (3 séances par semaine, ou 6 semaines ou moins), 2 tests à partir de 4 séances et 7 semaines, 3 à partir de 5 séances et 9 semaines (comptées depuis la semaine des tests)
+    const R=N-j0, nT=1+(p.seances>=4&&R>=7?1:0)+(p.seances>=5&&R>=9?1:0), noVma=!p.types.includes("vma")||((p.prefK||PREF0).no||[]).includes("vma");
+    const hard= noVma? ["end"] : nT>=2? ["vma6","end"] : ["vma6"], used=new Set(), taken=new Set();
+    for(const t of hard){ for(const s of slots){ if(used.has(s.wk.w)||taken.has(s.d)) continue;   // un test exigeant par semaine au plus
+        const km0=sessionKm(s.d.run,vma), d0=s.d, cands= t==="vma6"? [evVma6(km0,vma)] : [...evEnd(km0,vma),evCont(km0,vma)];   // endurance : durée raccourcie, sinon test en aisance
+        if(cands.some(r=>put(s,r))){ taken.add(d0); used.add(s.wk.w); if(s.d.run.type==="q") soften(s); break; } } }
+    const fr=wA.days.find(d=>d.run&&d.kind!=="before"&&(!from||dateOf(wA,d)>=from));
+    if(nT>=3&&fr&&free(wA,fr)&&evRefOk(fr.run)&&!(pain&&!settled(wA,fr))) put({wk:wA,d:fr},evRef(fr.run));   // douleur notée : pas de nouveau test à venir
+  }
+  // volume réellement placé : les km qu'un test a en moins reviennent sur un footing facile de la même semaine (jamais au-delà du plan sans tests),
+  // pour que la règle des +8 % tienne aussi entre la semaine des tests et la suivante
+  for(const [wk,b] of base){ const lack=b.km-kmOf(wk); if(!(lack>.05)) continue;
+    const js=wk.days.map((d,i)=>i).filter(i=>{ const d=wk.days[i]; return free(wk,d)&&evRefOk(d.run); }).sort((x,y)=>sessionKm(wk.days[x].run,vma)-sessionKm(wk.days[y].run,vma)); if(!js.length) continue;
+    const i=js[0], d=wk.days[i], r=d.run, k0=sessionKm(r,vma), n=r.blocks[1]&&r.blocks[1].iv? r.blocks[1].iv.n : 0;
+    for(let k=Math.floor((k0+lack)*10)/10;k>k0+.05;k=Math.round((k-.1)*10)/10){ const nr={...easyRun(k,vma,r.title,n),...(r.note?{note:r.note}:{})}; wk.days[i]={...d,run:nr};
+      if(kmOf(wk)<=b.km+1e-9) break; wk.days[i]=d; } }
+  // reste un écart sous la minute : les semaines suivantes gardent la règle des +8 % (1 km au moins) sur le volume placé avec les tests,
+  // comme le moteur (marge de 0,1 km) : le plus long footing facile perd une minute à la fois ; on s'arrête à la première semaine qui la respecte sans retouche
+  let prev=null;
+  for(let j=j0;j<N;j++){ const wk=weeks[j]; if(!okW(wk)){ if(wk&&(wk.phase==="taper"||wk.phase==="race")) break; continue; }
+    if(prev&&prev.w>1&&j>j0){ const runs=prev.days.filter(d=>d.run&&d.kind!=="before").length, cap=Math.max(kmOf(prev)*1.08,kmOf(prev)+(runs<Math.min(p.seances,3)?3.2:1))+.1;
+      let cut=false;
+      for(let g=0;g<40&&kmOf(wk)>cap+1e-9;g++){ const js=wk.days.map((d,i)=>i).filter(i=>{ const d=wk.days[i]; return free(wk,d)&&evRefOk(d.run)&&d.run.blocks[0].min>20; }).sort((x,y)=>wk.days[y].run.blocks[0].min-wk.days[x].run.blocks[0].min);
+        if(!js.length) break; const d=wk.days[js[0]], b0=d.run.blocks[0]; wk.days[js[0]]={...d,run:{...d.run,blocks:[{...b0,min:b0.min-1},...d.run.blocks.slice(1)]}}; cut=true; }
+      if(!cut&&j>j0+1) break; }   // semaine 1 (retouchée par firstWeekFix) : jamais repère, comme dans le moteur
+    prev=wk; }
 }
 // estimation d'après un résultat noté (rec) pour la séance de test ev ; cur : VMA utilisée aujourd'hui
 // vma6 : VMA ≈ distance en 6 min (m) ÷ 100 ; end : VMA ≈ vitesse moyenne ÷ 0,87 (30 min ou 5 km soutenus mais contrôlés, ≈ 87 % de la VMA : estimation prudente)
 // cont : VMA ≈ vitesse en aisance ÷ 0,75 (une allure confortable est sous 75 % de la VMA : estimation basse, donc prudente) ; deb : minutes de course continue
-const EV_VMA=[8,25];
+const EV_VMA=[8,25], EV_5K=[Math.ceil(5/(25*.87)*3600),Math.floor(5/(8*.87)*3600)];   // 5 km : de 13:48 à 43:06 pour une VMA de 8 à 25 km/h
 function evEst(ev,rec){ if(!ev||!rec) return null; const out={t:ev.t};
   let spd=null;
   if(ev.t==="vma6") out.vma=rec.v/100;
   else if(ev.t==="end"){ spd= rec.m==="5k"? 5/(rec.v/3600) : rec.v/((ev.T||30)/60); out.vma=spd/.87; }
-  else if(ev.t==="cont"){ spd=rec.v/((ev.T||30)/60); out.vma=spd/.75; if(rec.rpe>=7) out.err="Effort noté à "+rec.rpe+"/10 : ce n'était pas une allure confortable, l'estimation ne serait pas fiable. Refais ce test plus doucement un autre jour."; }
-  else if(ev.t==="deb"){ out.run=rec.v; out.start=evDebStart(rec.v); }
+  else if(ev.t==="cont"){ spd=rec.v/((ev.T||30)/60); out.vma=spd/.75; if(rec.rpe>=7){ out.err="Effort noté à "+rec.rpe+"/10 : ce n'était pas une allure confortable, l'estimation ne serait pas fiable. Reprends plus doucement : refais ce test à allure plus facile un autre jour."; out.errF="rpe"; } }
+  else if(ev.t==="deb"){ out.run=rec.v; out.start=evDebStart(rec.v);
+    if(rec.rpe>=7){ out.err="Effort noté à "+rec.rpe+"/10 : c'était trop dur pour une allure confortable. Reprends plus doucement : refais le test à allure plus facile, en marchant plus souvent."; out.errF="rpe"; } }
   else if(ev.t==="ref"){ if(rec.v2>0&&rec.v>0) out.pace=rec.v2/(rec.v/60); }
   if(out.vma!=null){ out.vma=Math.round(out.vma*10)/10; if(!(out.vma>=EV_VMA[0]&&out.vma<=EV_VMA[1])) out.err="Résultat peu plausible : il donnerait une VMA de "+fmt1(out.vma)+" km/h, hors de "+EV_VMA[0]+" à "+EV_VMA[1]+" km/h. Vérifie ta saisie (unité, distance, temps)."; }
   return out; }
@@ -2265,7 +2312,7 @@ function readForm(){
   RADIOS.forEach(k=>{ if(k==="longDay"&&$("#segLongDay").dataset.locked) return; const r=document.querySelector(`input[name="${k}"]:checked`); if(r)p[k]=r.value;});
   p.types=[...document.querySelectorAll('input[name="types"]:checked')].map(c=>c.value);
   const pf=$("#pref"); if(pf) p.pref=prefClean(pf.value);
-  const ec=$("#evalOn"); if(ec) p.evalOn=ec.checked?"1":"0";
+  const ec=$("#evalOn"); if(ec){ if(ec.checked&&String(state.profile.evalOn)!=="1") p.evalFrom=todayIso(); p.evalOn=ec.checked?"1":"0"; }   // case cochée maintenant : tests à partir d'aujourd'hui, jamais dans le passé
   if(p.niveau==="deb"&&+p.seances>4) p.seances="4";
   readSport14(p);
   return p;
@@ -2661,8 +2708,10 @@ function openMoveSheet(i,opener){
     onReady:sh=>{ const f=sh.querySelector('[data-to]:not([aria-disabled])'); if(f) f.setAttribute("data-first","");
       sh.querySelectorAll("[data-to]").forEach(b=>b.addEventListener("click",()=>{ if(b.getAttribute("aria-disabled")==="true") return; closeSheet(true); moveSession(w,i,+b.dataset.to); })); }});
 }
+let evTapAt=0;   // dernière mise à jour du plan avec un résultat de test (double appui)
 $("#days").addEventListener("click",e=>{
   const b=e.target.closest("button"); if(!b) return; const w=state.week;
+  if(Date.now()-evTapAt<800&&b.dataset.evap==null){ e.preventDefault(); return; }   // second appui d'un double appui : la carte vient d'être redessinée
   if(b.dataset.done!=null||b.dataset.skip!=null){ const i=+(b.dataset.done??b.dataset.skip), k=b.dataset.done!=null?"done":"skip"; setDone(w,i,k,`#days [data-${k}="${i}"]`); }
   else if(b.dataset.move!=null) openMoveSheet(+b.dataset.move,b);
   else if(b.dataset.vm!=null){ const a=b.closest("article"), open=a.classList.contains("cmp"); setTile(a,open); if(a.dataset.iso){ tiles.o[a.dataset.iso]=open; saveTiles(); } updFoldAll(); }
@@ -2673,7 +2722,7 @@ $("#days").addEventListener("click",e=>{
   else if(b.dataset.exo!=null) openExo(w,+b.dataset.exo,b);
   else if(b.dataset.feel!=null) openFeel(w,+b.dataset.feel,b);
   else if(b.dataset.evr!=null) openEval(w,+b.dataset.evr,b);
-  else if(b.dataset.evap!=null) evApplyRes(w,+b.dataset.evap);
+  else if(b.dataset.evap!=null){ if(Date.now()-evTapAt>=800){ evTapAt=Date.now(); evApplyRes(w,+b.dataset.evap); } }
 });
 
 /* schémas des mouvements : silhouette de profil (tournée vers la droite) dessinée par angles, départ puis arrivée.
@@ -3168,7 +3217,7 @@ function feelAlerts14(wk,tp){ const s=feelSafety14(); if(!s.msgs.length) return 
 // T : durée du test au moment de la saisie ; ap : date de la mise à jour du plan avec ce résultat (0 : pas appliqué)
 const EV_KEYS=["vma6","end","cont","ref","deb"], EV_V={vma6:[300,4000],end:[1,15],end5k:[600,3600],cont:[.5,12],ref:[5,180],deb:[0,60]};
 function cleanEvr(o){ if(!o||typeof o!=="object"||Array.isArray(o)) return {};
-  const out=[]; for(const [k,v] of Object.entries(o).slice(0,400)){ if(!okIso(k)||k<"2020-01-01"||k>"2100-01-01"||!v||typeof v!=="object"||Array.isArray(v)) continue;
+  const out=[]; for(const [k,v] of Object.entries(o)){ if(!okIso(k)||k<"2020-01-01"||k>"2100-01-01"||!v||typeof v!=="object"||Array.isArray(v)) continue;
     const at=atOf(v);
     if(v.x===1||v.x===true){ if(at) out.push([k,{x:1,at}]); continue; }
     const t=EV_KEYS.includes(v.t)? v.t : null; if(!t) continue; const m= t==="end"&&v.m==="5k"? "5k" : "";
@@ -3182,7 +3231,7 @@ function evRec(w,i){ const wk=plan[w-1], d=wk&&wk.days[i], mk=markKey(w,i); if(!
   const e=(state.evr||{})[mk.k]; return e&&!isGone(e)&&e.t===d.run.ev.t? e : null; }
 const evOf=(ev,e)=>({...ev,T:(e&&e.T)||ev.T||30});
 // mise à jour possible : estimation valide et différente de ce que le plan utilise déjà
-function evCanApply(r){ if(!r||r.err) return false; if(r.vma!=null) return Math.abs(r.vma-vmaOf(P).vma)>=.05; if(r.start!=null) return r.start>0&&r.start!==evDebStart(P.debRun); return false; }
+function evCanApply(r){ if(!r||r.err) return false; if(r.vma!=null) return Math.abs(r.vma-vmaOf(P).vma)>=.05; if(r.start!=null) return r.start>2&&r.start!==evDebStart(P.debRun); return false; }
 const evDate=d=>new Date(d).toLocaleDateString("fr-FR",{day:"numeric",month:"long"});
 function evResTxt(ev,e){ const rp=e.rpe? ", effort "+e.rpe+"/10" : "";
   if(ev.t==="vma6") return fmt0(e.v)+" m en 6 min"+rp;
@@ -3190,9 +3239,15 @@ function evResTxt(ev,e){ const rp=e.rpe? ", effort "+e.rpe+"/10" : "";
   if(ev.t==="cont") return kmTxt(e.v)+" km en "+ev.T+" min"+rp;
   if(ev.t==="ref") return "Footing de "+fmt0(e.v)+" min"+(e.v2? " ("+kmTxt(e.v2)+" km)" : "")+rp;
   return fmt0(e.v)+" min de course sans t'arrêter"+rp; }
+// écart de plus de 20 % avec la VMA utilisée : mise en garde (fatigue ou mauvaise mesure, ou référence actuelle trop basse)
+function evGap(r){ if(!r||r.vma==null) return ""; const c=vmaOf(P).vma, g=(r.vma-c)/c; if(Math.abs(g)<=.2) return "";
+  return "Écart de "+fmt0(Math.abs(g)*100)+" % avec ta VMA actuelle : "+(g<0? "une valeur bien plus basse peut venir de la fatigue, d'un parcours ou d'une mesure faussés." : "ta référence actuelle était peut-être trop basse, ou la mesure trop optimiste (GPS, parcours).")+" Vérifie ta mesure avant de mettre à jour ton plan."; }
+// référence chrono 5 ou 10 km du profil : elle sera remplacée par la VMA du test
+function evRepl(){ const v=vmaOf(P); return (P.ref==="5"||P.ref==="10")&&!v.estimated? "Ta référence actuelle ("+v.src.replace(/^ton /,"")+" : "+String(state.profile.refVal||"").trim()+") sera remplacée par cette VMA ; « Annuler » reste possible." : ""; }
+const EV_SURE="Si tu n'es pas sûr de ta mesure, refais le test un autre jour.";
 function evEstTxt(ev,e,r){ if(r.err) return "";
   if(r.vma!=null){ const c=vmaOf(P); return "VMA estimée : "+fmt1(r.vma)+" km/h (ton plan utilise "+fmt1(c.vma)+" km/h, d'après "+c.src+")."+(ev.t==="vma6"&&e.rpe&&e.rpe<8? " Effort noté sous 8/10 : si tu n'étais pas à fond, ta VMA est sans doute un peu plus haute." : ev.t==="end"&&e.rpe>=9? " Effort presque maximal : l'estimation peut être un peu haute, garde des allures prudentes." : ""); }
-  if(r.start!=null) return r.start? "Point de départ possible : des fractions de "+r.start+" min de course (la moitié de ta plus longue période, 8 min au plus)." : "Moins de 2 min de course continue : ton plan garde son point de départ prudent, des fractions de 1 min.";
+  if(r.start!=null) return r.start>2? "Point de départ possible : des fractions de "+r.start+" min de course (la moitié de ta plus longue période, 8 min au plus)." : "Ton plan part déjà de fractions de 1 à 2 min de course : il garde sa progression, rien à changer.";
   if(ev.t==="ref") return (e.rpe<=4? "Bonne allure facile : garde ce ressenti sur tes footings." : e.rpe<=6? "Un peu soutenu pour un footing facile : ralentis un peu la prochaine fois." : "Trop dur pour un footing facile : ralentis nettement, marche si besoin. Si ça se répète, note-le dans ton ressenti.")+(r.pace? " Allure moyenne : "+pace(r.pace)+"." : "");
   return ""; }
 const EV_WHY={vma6:"ton résultat estime ta VMA et peut recalibrer tes allures.",end:"ton résultat estime ta VMA et peut recalibrer tes allures.",cont:"un test prudent, sans effort maximal : il estime une VMA basse, donc des allures prudentes.",ref:"il te donne ton repère d'allure facile.",deb:"tes minutes de course continue peuvent fixer le point de départ de ta progression course / marche."};
@@ -3201,10 +3256,13 @@ function evBox(w,d,dIso){ const ev=d.run.ev, e=evRec(w,d.i), dl=DAYS[d.i].toLowe
   if(e){ const ev2=evOf(ev,e), r=evEst(ev2,e)||{}, t=evEstTxt(ev2,e,r);
     h+=`<p class="evr">Résultat : ${esc(evResTxt(ev2,e))}.${t?" "+esc(t):""}</p>`;
     if(r.err) h+=`<p class="evw" role="note">${esc(r.err)}</p>`;
-    else if(e.ap&&!evCanApply(r)) h+=`<p class="evok">Plan mis à jour avec ce résultat le ${esc(evDate(e.ap))}.</p>`;
-    else if(evCanApply(r)) h+=`<p class="evx">${r.vma!=null? "Tes allures seraient recalculées avec cette VMA ; ton volume de départ et ta progression ne changent pas." : "Tes séances course / marche partiraient de là ; ton volume ne change pas."} Rien ne change sans ton accord.</p><button class="btn sm evap" type="button" data-evap="${d.i}">Mettre à jour mon plan avec ce résultat</button>`;
+    else if(e.ap&&!evCanApply(r)) h+=`<p class="evok">Plan mis à jour avec ce résultat le ${esc(evDate(e.ap))}.</p><button class="btn sm evap" type="button" disabled aria-disabled="true">Plan mis à jour</button>`;
+    else if(evCanApply(r)){ const g=evGap(r), rp=r.vma!=null? evRepl() : "";
+      if(g) h+=`<p class="evw" role="note">${esc(g)}</p>`;
+      h+=`<p class="evx">${r.vma!=null? "Toutes tes allures seraient recalculées avec cette VMA, et la distance de certaines séances (footings et séances prévus en minutes) peut changer un peu ; la progression du plan reste la même." : "Tes séances course / marche partiraient de fractions plus longues ; la progression reste prudente et ton volume reste proche."}${rp?" "+esc(rp):""} ${esc(EV_SURE)} Rien ne change sans ton accord.</p><button class="btn sm evap" type="button" data-evap="${d.i}">Mettre à jour mon plan avec ce résultat</button>`; }
     else if(r.vma!=null||r.start!=null) h+=`<p class="evok">Ton plan utilise déjà cette valeur : rien à changer.</p>`;
     h+=`<button class="linkbtn" type="button" data-evr="${d.i}" aria-haspopup="dialog" aria-label="Modifier le résultat du test de ${esc(dl)}">Modifier le résultat</button>`; }
+  else if(markOf(w,d.i)==="skip") h+=`<p class="evn">Séance notée « pas faite » : pas de résultat à noter. Décoche « Pas faite » si tu as fait le test.</p>`;
   else if(can) h+=`<button class="cbtn ev" type="button" data-evr="${d.i}" aria-haspopup="dialog" aria-label="Noter le résultat du test de ${esc(dl)}">Noter mon résultat</button>`;
   else h+=`<p class="evn">Après la séance, note ton résultat ici.</p>`;
   return h+`</div>`; }
@@ -3215,14 +3273,15 @@ function openEval(w,i,opener){
   const needR= t!=="vma6"&&t!=="end", maxDeb=Math.max(1,Math.min(60,Math.round(sessionMin(d.run))));
   const rpeOpt=RPE_LAB.map((x,k)=> k? `<option value="${k}"${has&&has.rpe===k?" selected":""}>${esc(x)}</option>` : `<option value=""${has&&has.rpe?"":" selected"}>${needR?"Choisis…":"Non noté"}</option>`).join("");
   const val= has? (t==="end"&&has.m==="5k"? mmss(has.v) : String(has.v).replace(".",",")) : "";
-  const F={vma6:["Distance parcourue en 6 min (mètres)","numeric","ex. 1450","En mètres, entre 300 et 4 000 (une piste fait 400 m au tour)."],
-    end:["Distance parcourue en "+ev.T+" min (km)","decimal","ex. 6,2","En km, entre 1 et 15."],
+  const kmB=f=>[EV_VMA[0]*f*ev.T/60,EV_VMA[1]*f*ev.T/60].map(x=>fmt1(x).replace(/,0$/,""));   // distance qui donne une VMA de 8 à 25 km/h
+  const F={vma6:["Distance parcourue en 6 min (mètres)","numeric","ex. 1450","En mètres (une piste fait 400 m au tour) : de 800 à 2 500 m, soit une VMA de 8 à 25 km/h."],
+    end:["Distance parcourue en "+ev.T+" min (km)","decimal","ex. 6,2","En km : de "+kmB(.87).join(" à ")+" km en "+ev.T+" min, soit une VMA de 8 à 25 km/h."],
     cont:["Distance parcourue en "+ev.T+" min (km)","decimal","ex. 4,5","En km, entre 0,5 et 12."],
     ref:["Durée du footing (minutes)","numeric","ex. 35","En minutes, entre 5 et 180."],
     deb:["Minutes de course sans t'arrêter","numeric","ex. 6","Ta plus longue période de course sans marcher, de 0 à "+maxDeb+" min."]}[t];
   const rad=(v,tx,on)=>`<label><input type="radio" name="evMode" value="${v}"${on?" checked":""}><span>${esc(tx)}</span></label>`;
   openSheet({title:"Résultat : "+d.run.title,kind:"eval",opener,
-    html:`<p class="note">${esc(DAYS[i])} ${esc(dfmt(weekDate(w,i)))}. ${esc(d.run.note||"")}</p>
+    html:`<p class="note">${esc(DAYS[i])} ${esc(dfmt(weekDate(w,i)))} · ${esc(d.run.note||"")}</p>
     ${k5?`<div class="field"><span class="lbl" id="evModeL">Ce que tu as fait</span><div class="seg" role="radiogroup" aria-labelledby="evModeL">${rad("km",ev.T+" min",mode0==="km")}${rad("5k","5 km chrono",mode0==="5k")}</div></div>`:""}
     <div class="field"><label for="evV" id="evVL">${esc(F[0])}</label><input id="evV" type="text" inputmode="${F[1]}" maxlength="8" autocomplete="off" placeholder="${esc(F[2])}" aria-describedby="evVH" data-first><span class="hint" id="evVH">${esc(F[3])}</span></div>
     ${t==="ref"?`<div class="field"><label for="evV2">Distance (km) · facultatif</label><input id="evV2" type="text" inputmode="decimal" maxlength="6" autocomplete="off" placeholder="ex. 5,2" aria-describedby="evV2H"><span class="hint" id="evV2H">En km, entre 0,5 et 40.</span></div>`:""}
@@ -3234,7 +3293,7 @@ function openEval(w,i,opener){
       const iv=sh.querySelector("#evV"), msg=m=>{ sh.querySelector("#evMsg").innerHTML=m? `<div class="alert warn">${esc(m)}</div>` : ""; };
       iv.value=val; const v2=sh.querySelector("#evV2"); if(v2&&has&&has.v2) v2.value=String(has.v2).replace(".",",");
       const modeOf=()=> k5? (sh.querySelector('input[name="evMode"]:checked')||{value:"km"}).value : "km";
-      const syncMode=()=>{ if(!k5) return; const m=modeOf(); setT(sh.querySelector("#evVL"),m==="5k"? "Temps sur 5 km (mm:ss)" : F[0]); iv.placeholder= m==="5k"? "ex. 26:30" : F[2]; iv.inputMode= m==="5k"? "text" : "decimal"; setT(sh.querySelector("#evVH"),m==="5k"? "Minutes et secondes, entre 10:00 et 60:00." : F[3]); };
+      const syncMode=()=>{ if(!k5) return; const m=modeOf(); setT(sh.querySelector("#evVL"),m==="5k"? "Temps sur 5 km (mm:ss)" : F[0]); iv.placeholder= m==="5k"? "ex. 26:30" : F[2]; iv.inputMode= m==="5k"? "text" : "decimal"; setT(sh.querySelector("#evVH"),m==="5k"? "Minutes et secondes : de "+mmss(EV_5K[0])+" à "+mmss(EV_5K[1])+", soit une VMA de 8 à 25 km/h." : F[3]); };
       syncMode(); sh.querySelectorAll('input[name="evMode"]').forEach(r=>r.addEventListener("change",()=>{ syncMode(); iv.value=""; }));
       const back=sel=>{ const b=document.querySelector(`#days [data-${sel}="${i}"]`)||document.querySelector(`#days [data-evr="${i}"]`); if(b) b.focus({preventScroll:true}); };
       const del=sh.querySelector("#evDel");
@@ -3245,14 +3304,14 @@ function openEval(w,i,opener){
       sh.querySelector("#evSave").addEventListener("click",()=>{
         const m=modeOf(), raw=iv.value.trim(), rpe=+sh.querySelector("#evR").value||0; let v, x2=null;
         if(!raw) return bad(iv,"Écris ton résultat.");
-        if(t==="end"&&m==="5k"){ const mn=chronoMin(raw,5); if(!(mn>=10&&mn<=60)) return bad(iv,"Écris ton temps sur 5 km en mm:ss (ex. 26:30), entre 10:00 et 60:00."); v=Math.round(mn*60); }
+        if(t==="end"&&m==="5k"){ const mn=chronoMin(raw,5); if(!(mn*60>=EV_5K[0]&&mn*60<=EV_5K[1])) return bad(iv,"Écris ton temps sur 5 km en mm:ss (ex. 26:30), de "+mmss(EV_5K[0])+" à "+mmss(EV_5K[1])+"."); v=Math.round(mn*60); }
         else { v=num(raw); const b=EV_V[t];
           if(isNaN(v)||((t==="vma6"||t==="ref"||t==="deb")&&v!==Math.round(v))) return bad(iv,t==="vma6"? "Écris la distance en mètres, sans virgule (ex. 1450)." : t==="end"||t==="cont"? "Écris la distance en km (ex. 6,2)." : "Écris un nombre entier de minutes (ex. "+(t==="ref"?"35":"6")+").");
           const hi= t==="deb"? maxDeb : b[1]; if(v<b[0]||v>hi) return bad(iv,F[3].replace(/\.$/,"")+" : "+fmt1(v).replace(/,0$/,"")+" n'est pas plausible."); }
         if(t==="ref"&&v2&&v2.value.trim()){ x2=num(v2.value); if(isNaN(x2)||x2<.5||x2>40) return bad(v2,"Écris la distance en km, entre 0,5 et 40 (ex. 5,2)."); const sp=x2/(v/60); if(sp<3||sp>20) return bad(v2,"Distance et durée peu plausibles ensemble ("+fmt1(sp)+" km/h) : vérifie les deux."); }
         if(needR&&!(rpe>=1&&rpe<=10)) return bad(sh.querySelector("#evR"),"Choisis l'effort perçu (RPE) de 1 à 10.");
         const rec={t,v,...(t==="end"&&m==="5k"?{m:"5k"}:{}),...(x2!=null?{v2:x2}:{}),...(ev.T&&(t==="end"||t==="cont")?{T:ev.T}:{}),rpe,ap:0,sig:mk.sig,at:Date.now()};
-        const r=evEst(ev,rec); if(r&&r.err&&r.vma!=null) return bad(iv,r.err);   // résultat aberrant : refusé, rien n'est enregistré
+        const r=evEst(ev,rec); if(r&&r.err) return bad(r.errF==="rpe"? sh.querySelector("#evR") : iv,r.err);   // résultat aberrant ou effort trop dur : refusé, rien n'est enregistré
         bad(null);
         state.evr=cleanEvr({...state.evr,[mk.k]:rec}); state.isExample=false; persist(); recompute(); closeSheet(true);
         const ap=document.querySelector(`#days [data-evap="${i}"]`); if(ap) ap.focus({preventScroll:true}); else back("evr");
@@ -3264,8 +3323,9 @@ function evApplyRes(w,i){
   const wk=plan[w-1], d=wk&&wk.days[i], e=evRec(w,i), mk=markKey(w,i); if(!d||!e||!mk||!mk.k) return;
   const ev=evOf(d.run.ev,e), r=evEst(ev,e); if(!r||r.err){ toast(r&&r.err||"Résultat illisible : modifie-le."); return; } if(!evCanApply(r)) return;
   const before={profile:{...state.profile},rec:{...e}}, hadAi=!!aiOf(profileNums(state.profile)), cur=vmaOf(P).vma; let msg;
-  if(r.vma!=null){ state.profile={...state.profile,ref:"vma",refVal:fmt1(r.vma)}; msg="Plan mis à jour : VMA de "+fmt1(r.vma)+" km/h (avant "+fmt1(cur)+"). Toutes tes allures sont recalculées ; ton volume de départ et ta progression ne changent pas."; }
-  else { state.profile={...state.profile,debRun:String(r.run)}; msg="Plan mis à jour : tes séances course / marche partent de fractions de "+r.start+" min de course, puis la progression reprend. Ton volume ne change pas."; }
+  const rp=r.vma!=null? evRepl() : "", g=evGap(r);
+  if(r.vma!=null){ state.profile={...state.profile,ref:"vma",refVal:fmt1(r.vma)}; msg="Plan mis à jour : VMA de "+fmt1(r.vma)+" km/h (avant "+fmt1(cur)+"). Toutes tes allures sont recalculées et la distance de certaines séances peut changer un peu ; la progression reste la même."+(rp?" Ta référence chrono est remplacée.":"")+(g?" Écart de plus de 20 % : vérifie ta mesure.":"")+" "+EV_SURE; }
+  else { state.profile={...state.profile,debRun:String(r.run)}; msg="Plan mis à jour : tes séances course / marche partent de fractions de "+r.start+" min de course, puis la progression reprend, toujours prudente. "+EV_SURE; }
   if(hadAi) msg+=" L'ajustement de l'IA ne s'applique plus à ce plan : relance-le dans le Profil si tu veux.";
   state.evr=cleanEvr({...state.evr,[mk.k]:{...e,ap:Date.now(),at:Date.now()}}); state.isExample=false; fillForm(); persist(); recompute();
   const f=document.querySelector(`#days [data-evr="${i}"]`); if(f) f.focus({preventScroll:true});
@@ -3284,7 +3344,7 @@ function evNotif(){ if(!runSport()||!plan.length) return []; const tdy=todayIso(
 function evHint(){ const h=$("#evalHint"), cb=$("#evalOn"); if(!h||!cb) return; const why=evWhyNot({...P,evalOn:1},plan), n=plan.slice(0,2).reduce((a,wk)=>a+wk.days.filter(d=>d.run&&d.run.ev).length,0);
   const base="Une à trois séances en semaine 1 (et 2) pour jauger ton niveau, à la place de séances d'intensité. Tu notes ton résultat sur la carte, puis tu choisis de mettre à jour ton plan.";
   const ref=!vmaOf(P).estimated? " Tu as déjà une référence de vitesse : les tests sont facultatifs." : "";
-  const x= why==="court"? " Plan de 4 semaines ou moins : pas de test, la préparation passe avant." : why==="course"? " Ta première semaine est déjà l'affûtage ou la course : pas de test." : why==="sport"? "" :
+  const x= why==="tard"? " Il reste trop peu de semaines avant l'affûtage : pas de test, la préparation passe avant." : why==="court"? " Plan de 4 semaines ou moins : pas de test, la préparation passe avant." : why==="course"? " Ta première semaine est déjà l'affûtage ou la course : pas de test." : why==="sport"? "" :
     P.niveau==="deb"? " Débutant : un test prudent en course / marche, sans effort maximal." : evPrudent(P)? " Variante prudente, sans test maximal ("+(P.minor?"moins de 18 ans":P.age>=65?"65 ans et plus":evBmi(P)>=35?"IMC de 35 et plus":"douleur notée récemment")+")." : "";
   setT(h,base+ref+x+(cb.checked&&!why? " Ce plan en prévoit "+n+"." : "")); }
 function openFeel(w,i,opener){
@@ -3778,10 +3838,12 @@ function mergeInto(d,srcT){
   // profil le plus récent, puis les champs modifiés plus récemment de l'autre côté
   const mp= hasP&&!state.isExample&&!d.isExample? (prof? mergeProfile(d.profile,d.pAt,state.profile,state.pAt) : mergeProfile(state.profile,state.pAt,d.profile,d.pAt)) : prof? {profile:d.profile,pAt:cleanPAt(d.pAt)} : {profile:state.profile,pAt:cleanPAt(state.pAt)};
   const pch= JSON.stringify(mp.profile)!==JSON.stringify(state.profile);
-  const m={...x14Merge(d,state),profile:mp.profile,pAt:mp.pAt,isExample:prof?d.isExample:state.isExample,log:dropDeleted(cleanLog([...cleanLog(d.log),...cleanLog(state.log)]),del),week:prof?d.week:week,
+  const m={...x14Merge(d,state),profile:mp.profile,pAt:mp.pAt,isExample:prof?d.isExample:state.isExample,log:dropDeleted(cleanLog([...cleanLog(d.log),...cleanLog(state.log)]),del),week,
     appliedByDate:{...cleanApplied(d.appliedByDate),...cleanApplied(state.appliedByDate)},deleted:del,moves:mergeStamped(d.moves,state.moves,cleanMoves),done:mergeStamped(d.done,state.done,cleanDone),
     seen:Math.max(+state.seen||0,+d.seen||0),savedAtLocal:state.savedAtLocal,profileAt:Math.max(pl,hasP?pr:0)};
-  loadState(m); if(!prof) state.week=clampWeek(week);
+  // semaine affichée : jamais celle de l'autre onglet. Elle reste celle-ci, sauf si le début du plan a changé (plan recommencé) : loadState se recale
+  // alors sur la semaine en cours, et le profil changé fait réafficher (rerender)
+  const st0=effStart(state.profile); loadState(m); if(effStart(state.profile)===st0) state.week=clampWeek(week);
   return {changed:snap()!==before,prof:prof||pch};
 }
 function rerender(r){ try{ recompute(); if(r&&r.prof) fillForm(); }catch(e){} }
@@ -3869,6 +3931,7 @@ function cleanProfile(p){ const out={start:"",raceDate:""}; if(!p||typeof p!=="o
     else if(v!==undefined&&["cible","mg","volume","longest","fcmax","adj","hSem","debRun"].includes(k)) out[k]=""; }   // illisible : vide, pas la valeur de l'exemple
   const rv=own("refVal"); if(typeof rv==="string"&&rv.length<=24&&/^[0-9 .,:'’′″"hmins-]*$/i.test(rv)) out.refVal=rv; else if(typeof rv==="number"&&isFinite(rv)) out.refVal=rv;
   for(const k of ["start","raceDate"]){ const v=own(k); if(okIso(v)) out[k]=v; }
+  { const v=own("evalFrom"); if(okIso(v)) out.evalFrom=v; else if(v!==undefined) out.evalFrom=""; }
   const pr=own("pref"); if(typeof pr==="string") out.pref=prefClean(pr);
   const ty=own("types"); if(Array.isArray(ty)) out.types=[...new Set(ty.slice(0,20).filter(t=>typeof t==="string"&&EXAMPLE.types.includes(t)))].slice(0,EXAMPLE.types.length);
   return out; }
@@ -3990,7 +4053,7 @@ function wzProfile(){
   const p={...base,types:[...(base.types||EXAMPLE.types)],activite:wzr("wz_act")||base.activite,sexe:wzr("wz_sexe"),age:String(wzNum("#wzAge",15,90,true)),taille:String(wzNum("#wzTaille",130,220,true)),poids:wzv("#wzPoids"),cible:wzv("#wzCible"),
     niveau,objectif:$("#wzObjectif").value,raceDate,volume:wzv("#wzVolume"),longest:wzv("#wzLongest"),seances,renfo:wzr("wz_renfo"),lieu:wzr("wz_lieu"),equip:wzr("wz_equip"),longDay:wzr("wz_longDay"),deficit:wzr("wz_def"),sport:wzSport(),sObj:wzSObjVal(),hSem:wzSport()==="force"?"":wzv("#wzHSem")};
   if(p.sport==="force"&&+p.seances>5) p.seances="5";
-  p.evalOn= vmaOf(profileNums(p)).estimated? "1" : "0"; p.debRun="";   // nouveau plan : séances de test proposées, sauf si une référence de vitesse est déjà connue
+  p.evalOn= vmaOf(profileNums(p)).estimated? "1" : "0"; p.debRun=""; p.evalFrom="";   // nouveau plan : séances de test proposées, sauf si une référence de vitesse est déjà connue
   const lo=raceOn(p); p.start= lo? autoStart(lo) : todayIso();
   return p;
 }

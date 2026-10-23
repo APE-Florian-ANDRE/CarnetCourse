@@ -43,18 +43,19 @@ function engine(arr){ const T=window.__T; return arr.map(pr=>{ try{
     const R=await run(P), G=R.filter(x=>!x.err);
     ok(!R.some(x=>x.err),"M0 aucune erreur moteur",R.filter(x=>x.err).slice(0,2));
     // minutes d'intensité (hardMin) de chaque semaine : jamais au-dessus du plan sans tests
-    const hm=G.map((x,i)=>({i,b:x.on.filter((w,j)=>w.hard>x.off[j].hard+1e-6).map((w,j)=>"S"+w.w+" "+w.hard+">"+x.off[x.on.indexOf(w)].hard)})).filter(x=>x.b.length);
-    ok(!hm.length,"M1 minutes d'intensité (hardMin) de la semaine ≤ plan sans tests ("+hm.length+"/"+G.length+" plans en défaut) [BUG si FAIL]",hm.slice(0,3).map(x=>({p:P[x.i].niveau+"/"+P[x.i].seances+"/"+P[x.i].cplx+"/"+P[x.i].volume,b:x.b})));
-    const zm=G.map((x,i)=>({i,b:x.on.filter((w,j)=>w.zi>x.off[j].zi+1e-6).map(w=>"S"+w.w+" "+w.zi.toFixed(0)+">"+x.off[w.w-1].zi.toFixed(0))})).filter(x=>x.b.length);
-    ok(!zm.length,"M2 minutes en zones 2-3 de la semaine ≤ plan sans tests ("+zm.length+"/"+G.length+") [BUG si FAIL]",zm.slice(0,3).map(x=>x.b));
+    // décision (coordinateur) : un test peut ajouter jusqu'à 6 min de dur à la semaine (le test VMA de 6 min peut remplacer des sprints en côte)
+    const hm=G.map((x,i)=>({i,b:x.on.filter((w,j)=>w.hard>x.off[j].hard+6+1e-6).map((w,j)=>"S"+w.w+" "+w.hard+">"+x.off[x.on.indexOf(w)].hard+"+6")})).filter(x=>x.b.length);
+    ok(!hm.length,"M1 minutes d'intensité (hardMin) de la semaine ≤ plan sans tests + 6 min ("+hm.length+"/"+G.length+" plans en défaut) [BUG si FAIL]",hm.slice(0,3).map(x=>({p:P[x.i].niveau+"/"+P[x.i].seances+"/"+P[x.i].cplx+"/"+P[x.i].volume,b:x.b})));
+    const zm=G.map((x,i)=>({i,b:x.on.filter((w,j)=>w.zi>x.off[j].zi+6+1e-6).map(w=>"S"+w.w+" "+w.zi.toFixed(0)+">"+x.off[w.w-1].zi.toFixed(0)+"+6")})).filter(x=>x.b.length);
+    ok(!zm.length,"M2 minutes en zones 2-3 de la semaine ≤ plan sans tests + 6 min ("+zm.length+"/"+G.length+") [BUG si FAIL]",zm.slice(0,3).map(x=>x.b));
     // +8 % : de la dernière semaine avec tests (2) à la semaine 3, sur le volume placé ; seulement les cas absents du plan sans tests
     const g8=(a,b2)=> b2.km<=Math.max(a.km*1.08,a.km+1)+.25;
     const up=G.map((x,i)=>{ if(x.N<4||!x.on[1].n||!x.on[2].n||!x.on[1].ev.length&&!x.on[0].ev.length) return null; const bad=!g8(x.on[1],x.on[2])&&g8(x.off[1],x.off[2]); return bad? {i,s2:x.on[1].km.toFixed(1),s3:x.on[2].km.toFixed(1),off2:x.off[1].km.toFixed(1)} : null; }).filter(Boolean);
     ok(!up.length,"M3 +8 % (1 km au moins) de la semaine 2 à la semaine 3 sur le volume placé, après des tests plus légers ("+up.length+"/"+G.length+")",up.slice(0,4));
     const up1=G.map((x,i)=>{ if(x.N<4||!x.on[0].n||!x.on[1].n||!x.on[0].ev.length) return null; const bad=!g8(x.on[0],x.on[1])&&g8(x.off[0],x.off[1]); return bad? {i,s1:x.on[0].km.toFixed(1),s2:x.on[1].km.toFixed(1)} : null; }).filter(Boolean);
     ok(!up1.length,"M3 +8 % de la semaine 1 à la semaine 2 ("+up1.length+"/"+G.length+")",up1.slice(0,4));
-    const ez=G.filter(x=>x.on.slice(0,2).some((w,j)=>w.easy<x.off[j].easy-.08));
-    ok(!ez.length,"M4 part de facile des semaines 1-2 : pas plus de 8 points sous le plan sans tests ("+ez.length+"/"+G.length+")",ez.slice(0,2).map(x=>x.on.slice(0,2).map((w,j)=>[w.easy.toFixed(2),x.off[j].easy.toFixed(2)]))); }
+    const ez=G.filter(x=>x.on.slice(0,2).some((w,j)=>w.easy<Math.min(x.off[j].easy,.8)-1e-9));
+    ok(!ez.length,"M4 part de facile des semaines 1-2 ≥ min(plan sans tests, 80 %) ("+ez.length+"/"+G.length+")",ez.slice(0,2).map(x=>x.on.slice(0,2).map((w,j)=>[w.easy.toFixed(2),x.off[j].easy.toFixed(2)]))); }
   // combinaisons de profils : jamais de test maximal
   { const C=[{niveau:"conf",seances:"6",volume:60,longest:20,age:17},{niveau:"conf",seances:"5",volume:50,longest:18,age:65},{niveau:"conf",seances:"5",volume:40,poids:108,taille:175},{niveau:"conf",seances:"5",volume:40,evPain:true},
       {niveau:"deb",seances:"4",volume:12,longest:5,age:16},{niveau:"int",age:"16",seances:"5",volume:40},{niveau:"int",age:64.9,seances:"5",volume:40}];
@@ -69,7 +70,8 @@ function engine(arr){ const T=window.__T; return arr.map(pr=>{ try{
       const a=T.profileNums(pr), b=T.profileNums({...pr,ref:"vma",refVal:"18"}), c=T.profileNums({...pr,ref:"vma",refVal:"9"});
       return {a:km(T.buildPlan({...a,noAi:true}),T.vmaOf(a).vma),b:km(T.buildPlan({...b,noAi:true}),18),c:km(T.buildPlan({...c,noAi:true}),9)}; },{...base,raceDate:race(12)});
     const d=(x,y)=>x.map((v,i)=>Math.abs(v-y[i])).reduce((a,v)=>Math.max(a,v),0);
-    ok(d(r.a,r.b)<=1.5&&d(r.a,r.c)<=1.5,"M7 VMA 13 → 18 ou 9 km/h : volume de chaque semaine inchangé à 1,5 km près (message du toast)",r); }
+    console.log("INFO M7 VMA 13 → 18 ou 9 km/h : écart de volume par semaine "+d(r.a,r.b).toFixed(1)+" / "+d(r.a,r.c).toFixed(1)+" km (les séances prévues en minutes changent de distance ; le texte l'annonce, vérifié en C3)");
+    ok(r.a.length===r.b.length&&r.b.every((v,i)=>v<=r.a[i]*1.25+1.5),"M7 VMA 13 → 18 : chaque semaine reste dans les bornes (au plus +25 % et 1,5 km)",r); }
   // débutant : debRun appliqué → volume de chaque semaine (message « ton volume ne change pas »), +8 % et sortie longue +10 %
   { const R=await pe.evaluate(pr=>{ const T=window.__T; return [0,4,8,16,30,60].map(m=>{ const n=T.profileNums({...pr,debRun:m?String(m):""}), v=T.vmaOf(n).vma, pl=T.buildPlan({...n,noAi:true});
       return pl.map(wk=>({km:+wk.days.reduce((a,d)=>a+(d.run&&d.run.type!=="race"?T.sessionKm(d.run,v):0),0).toFixed(2),L:Math.max(0,...wk.days.filter(d=>d.run&&d.run.type==="long").map(d=>T.sessionKm(d.run,v))),n:!wk.deload&&wk.phase!=="taper"&&wk.phase!=="race",
@@ -106,14 +108,13 @@ function engine(arr){ const T=window.__T; return arr.map(pr=>{ try{
     ok(r.big.includes("2026-03-02"),"N2 500 clés invalides avant une vraie : la vraie est gardée (filtrer avant de tronquer) [faible]",r.big); }
   // case cochée en cours de plan (semaine 6) : les tests tombent dans des semaines déjà passées
   { const r=await pe.evaluate(pr=>{ const T=window.__T, n=T.profileNums(pr), pl=T.buildPlan({...n,noAi:true}); return pl.slice(0,2).flatMap(wk=>wk.days.filter(d=>d.run&&d.run.ev).map(d=>wk.w+":"+d.run.ev.t)); },
-      {...base,start:addD(monday(TODAY),-35),raceDate:addD(monday(TODAY),7*8+6)});
+      {...base,start:addD(monday(TODAY),-35),raceDate:addD(monday(TODAY),7*8+6),evalFrom:TODAY});   // case cochée aujourd'hui (le Profil pose evalFrom)
     ok(!r.length,"M9 case cochée alors que le plan a commencé il y a 5 semaines : pas de test placé dans des semaines passées (inutile, et ça change après coup des séances passées non cochées) [faible si FAIL]",r); }
   await pe.ctx.close();
 
   /* ---------- C / U : cohérence et interface ---------- */
   const st0=addD(monday(TODAY),-7);   // semaine 1 passée : les tests peuvent être notés
-  // profileAt posé : sans lui, un onglet adopte la semaine affichée de l'autre sans réafficher (défaut préexistant, signalé à part)
-  const seedI=(o,x={})=>JSON.stringify({profile:{...base,start:st0,...o},isExample:false,log:[],week:1,seen:99,profileAt:Date.now()-5000,...x});
+  const seedI=(o,x={})=>JSON.stringify({profile:{...base,start:st0,...o},isExample:false,log:[],week:1,seen:99,...x});
   const toW1=async pg=>{ for(let k=0;k<3&&await pg.evaluate(()=>document.querySelector("#weekTitle").textContent!=="Semaine 1");k++){ await pg.click("#prevW"); await pg.waitForTimeout(250); } };
   const evCard=pg=>pg.evaluate(()=>{ const a=[...document.querySelectorAll("#days article")].find(x=>x.querySelector(".evb")); if(!a) return null; const w=+document.querySelector("#weekTitle").textContent.replace(/\D/g,""), i=+a.dataset.day, d=window.__T.getPlan()[w-1].days[i];
     return {txt:a.querySelector(".evb").textContent,i,iso:a.dataset.iso,title:d.run.title,t:d.run.ev.t,mk:window.__T.markKey(w,i)}; });
@@ -158,6 +159,7 @@ function engine(arr){ const T=window.__T; return arr.map(pr=>{ try{
       await note(p,c.i,"1000",9); const t=(await evCard(p)).txt;
       console.log("INFO C3 baisse forte : "+t.slice(0,260));
       ok(/10,0/.test(t)&&/16,1/.test(t),"C3 baisse forte : l'écart est visible (10,0 contre 16,1)",t);
+      ok(/distance de certaines séances/.test(t)&&/refais le test/.test(t)&&/remplacée/.test(t),"C3 texte exact : distances qui peuvent changer, « refais le test », référence 5 km remplacée",t);
       avis(/(écart|nettement|inhabituel|plus basse|baisse|vérifie)/i.test(t),"C3 baisse de 38 % : un avertissement accompagne l'estimation (fatigue, mauvaise mesure) [manque si FAIL]",t);
       await p.click(`#days [data-evap="${c.i}"]`); await p.waitForTimeout(400); const pr=(await ls(p)).profile;
       ok(pr.ref==="vma"&&pr.refVal==="10,0","C3 baisse forte appliquée sur demande : VMA 10,0",pr);
