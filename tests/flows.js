@@ -140,6 +140,45 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
    ok(!db.rows.has("u-3"),"accord sans la case CGU (ancien format) : refusé"); await p.ctx.close(); }
  { const db=L.makeDb(); db.rows.set("u-3c",{user_id:"u-3c",doc:{profile:prof,isExample:false,log:[],week:1,savedAt:5,profileAt:5,seen:13},consent:{cgu:"2020-01-01",privacy:"2020-01-01",terms:true,health:true,age15:true,at:"2020-01-01T00:00:00.000Z"}});
    const p=await mk(S,db,{session:L.SESSION("u-3c"),seed:data()}); await p.waitForTimeout(800); ok(await p.evaluate(()=>!!document.querySelector('[data-acc="consent-ok"]')),"textes modifiés depuis l'accord : nouvel accord demandé"); ok(db.rows.get("u-3c").doc.profile.age===35||db.rows.get("u-3c").doc.profile.age==="35"||true,"   rien écrit avant le nouvel accord"); await p.ctx.close(); }
+ // NT : notifications passives (nouveautés et alertes de la semaine dans un panneau, sans aucun signal)
+ for(const width of [375,1280]){ const db=L.makeDb(); const fut=new Date(Date.now()+20*864e5).toISOString().slice(0,10);
+   const p=await mk(S,db,{seed:JSON.stringify({profile:{...prof,start:fut},isExample:false,log:[],week:1,seen:13}),width}); await p.waitForTimeout(1300);
+   const W=" ("+width+" px)";
+   ok(await p.evaluate(()=>!document.querySelector(".banner")),"NT aucune bannière Nouveautés"+W);
+   const btn=await p.evaluate(()=>{ const b=document.querySelector("#notifBtn"), r=b.getBoundingClientRect(), av=[...document.querySelectorAll(".js-av")].find(x=>x.getClientRects().length).getBoundingClientRect();
+     const ps=["::before","::after"].map(x=>getComputedStyle(b,x).content);
+     return {vis:r.width>0&&r.height>0, name:b.textContent.trim(), kids:b.querySelectorAll("*:not(svg):not(svg *):not(.nb-l)").length, ps, near:Math.abs(r.top-av.top)<20&&av.left-r.right<40&&av.left>r.right-1, anim:getComputedStyle(b).animationName}; });
+   ok(btn.vis&&btn.name==="Notifications"&&btn.kids===0&&btn.ps.every(c=>c==="none"||c==="normal")&&btn.anim==="none","NT bouton Notifications sans pastille, point ni compteur"+W,btn);
+   ok(btn.near,"NT bouton placé juste à côté du bouton Compte"+W,btn);
+   ok(await p.evaluate(()=>!/Ton plan commence le|Conseil de l'IA|Objectif trop loin|Énergie disponible/.test(document.querySelector("#weekAlerts").textContent)),"NT alertes absentes du haut de l'onglet Semaine"+W);
+   await p.click("#notifBtn"); await p.waitForTimeout(250);
+   const st=await p.evaluate(()=>{ const sh=document.querySelector('.sheet[data-kind="notif"]'); return sh&&{role:sh.getAttribute("role"),modal:sh.getAttribute("aria-modal"),title:sh.querySelector("#shT").textContent,txt:sh.textContent,focusIn:sh.contains(document.activeElement),secs:[...sh.querySelectorAll(".nt-s>h4")].map(h=>h.textContent)}; });
+   ok(st&&st.role==="dialog"&&st.modal==="true"&&st.title==="Notifications"&&st.focusIn,"NT panneau : dialog modal, focus à l'intérieur"+W,st);
+   ok(st&&/Ton plan commence le/.test(st.txt)&&st.secs.includes("Semaine 1"),"NT alerte de date de début dans le panneau, section Semaine"+W,st&&st.secs);
+   ok(st&&st.secs.includes("Nouveautés")&&/Version 15/.test(st.txt),"NT nouveautés de la version dans le panneau"+W,st&&st.secs);
+   for(let i=0;i<8;i++) await p.keyboard.press("Tab");
+   ok(await p.evaluate(()=>document.querySelector('.sheet[data-kind="notif"]').contains(document.activeElement)),"NT Tab reste dans le panneau"+W);
+   await p.keyboard.press("Escape"); await p.waitForTimeout(150);
+   ok(await p.evaluate(()=>!document.querySelector(".sheet")&&document.activeElement.id==="notifBtn"),"NT Échap ferme et rend le focus au bouton"+W);
+   ok(await p.evaluate(()=>+JSON.parse(localStorage.getItem("carnet-course.v1")).seen===15),"NT ouvrir le panneau note la version comme vue"+W);
+   await p.click("#notifBtn"); await p.waitForTimeout(200); await p.mouse.click(5,5); await p.waitForTimeout(150);
+   ok(await p.evaluate(()=>!document.querySelector(".sheet")),"NT clic hors du panneau : fermé"+W);
+   // semaine suivante : le panneau suit la semaine affichée
+   await p.click("#nextW"); await p.waitForTimeout(200); await p.click("#notifBtn"); await p.waitForTimeout(200);
+   ok(await p.evaluate(()=>{ const h=[...document.querySelectorAll('.sheet[data-kind="notif"] .nt-s>h4')].map(x=>x.textContent); return !h.includes("Semaine 1"); }),"NT le panneau suit la semaine affichée"+W);
+   await p.keyboard.press("Escape");
+   if(width===375){ await p.reload(); await p.waitForTimeout(1000); await p.click("#notifBtn"); await p.waitForTimeout(200);
+     const t=await p.evaluate(()=>{ const sh=document.querySelector('.sheet[data-kind="notif"]'); return {secs:[...sh.querySelectorAll(".nt-s>h4")].map(h=>h.textContent),empty:!!sh.querySelector(".nt-empty")}; });
+     ok(!t.secs.includes("Nouveautés")&&(t.secs.length?!t.empty:t.empty),"NT après lecture : plus de Nouveautés ; état vide sobre s'il n'y a rien",t);
+     await p.click(".sheet [data-nt-news]"); await p.waitForTimeout(200);
+     ok(await p.evaluate(()=>/Quoi de neuf/.test(document.querySelector("#shT").textContent)),"NT lien vers toutes les versions"); await p.keyboard.press("Escape"); }
+   await csp(p); await p.ctx.close(); }
+ // NT vide : aucune alerte ni nouveauté => message sobre
+ { const db=L.makeDb(); const tdy=new Date().toISOString().slice(0,10);
+   const p=await mk(S,db,{seed:JSON.stringify({profile:{...prof,start:tdy,deficit:0,bonus:0},isExample:false,log:[],week:1,seen:15})}); await p.waitForTimeout(400);
+   await p.click("#notifBtn"); await p.waitForTimeout(200);
+   const t=await p.evaluate(()=>{ const sh=document.querySelector('.sheet[data-kind="notif"]'); return {secs:[...sh.querySelectorAll(".nt-s")].map(x=>x.textContent.slice(0,120)),empty:(sh.querySelector(".nt-empty")||{}).textContent||""}; });
+   ok(!t.secs.length&&t.empty==="Rien de nouveau pour l'instant.","NT état vide : « Rien de nouveau pour l'instant. »",t); await p.ctx.close(); }
  // F10 : stockage local : aucun cookie
  { const db=L.makeDb(); const p=await mk(S,db,{session:L.SESSION(),seed:data(),pend:PEND}); await p.waitForTimeout(1200); ok((await p.ctx.cookies()).length===0,"F10 aucun cookie"); await p.ctx.close(); }
  ok(CSPV.length===0,"CSP : aucune violation (securitypolicyviolation)",CSPV);

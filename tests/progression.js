@@ -10,9 +10,12 @@ const arg=(k,d)=>{ const a=process.argv.find(x=>x.startsWith("--"+k+"=")); retur
 const NP=+arg("n",1200), SEED=+arg("seed",7), DETAIL=process.argv.includes("--detail");
 const SRC=process.env.APP||path.join(L.ROOT,"app.js");
 // référence : MAIN=<chemin d'un app.js>, MAIN=git (public/app.js de la branche main), MAIN=ref:<commit> ; par défaut ref:a45501c (avant la mission A) ; MAIN=none : sans comparaison
-let MAIN=process.env.MAIN||"ref:a45501c"; if(MAIN==="none") MAIN="";
+let MAIN=process.env.MAIN||"ref:a45501c", MAIN_HTML=null; if(MAIN==="none") MAIN="";
 if(MAIN==="git"||MAIN.startsWith("ref:")){ const os=require("os"), rev=MAIN==="git"?"main":MAIN.slice(4); if(!/^[\w.\/-]{1,80}$/.test(rev)) throw new Error("référence invalide : "+rev);
-  MAIN=path.join(os.tmpdir(),"pacebook-ref-"+rev.replace(/\W/g,"_")+"-app.js"); fs.writeFileSync(MAIN,require("child_process").execFileSync("git",["show",rev+":public/app.js"],{cwd:__dirname,maxBuffer:64<<20})); }
+  const show=f=>require("child_process").execFileSync("git",["show",rev+":public/"+f],{cwd:__dirname,maxBuffer:64<<20});
+  MAIN=path.join(os.tmpdir(),"pacebook-ref-"+rev.replace(/\W/g,"_")+"-app.js"); fs.writeFileSync(MAIN,show("app.js"));
+  // page de la même version (un app.js ancien sur la page actuelle peut ne pas démarrer)
+  MAIN_HTML=show("index.html").toString(); }
 const inject=src=>fs.readFileSync(src,"utf8").replace(/initAccount\(\);\n\}\)\(\);\s*$/,"initAccount();\nwindow.__T={buildPlan,profileNums,sessionKm,vmaOf,planSig,zoneMins,qOpts,qPool:typeof qPool===\"function\"?qPool:null,setAip(v){state.aip=v;}};\n})();\n");
 function rnd(seed){ let x=seed>>>0; return ()=>{ x=(x*1664525+1013904223)>>>0; return x/4294967296; }; }
 const iso=d=>d.toISOString().slice(0,10), addD=(s,n)=>{ const d=new Date(s+"T12:00:00Z"); d.setUTCDate(d.getUTCDate()+n); return iso(d); };
@@ -60,8 +63,8 @@ function collect(arr){ const T=window.__T; const res=[];
     }catch(e){ o.err=String(e&&e.stack||e).slice(0,400); }
     res.push(o); }
   return res; }
-async function runApp(src,profs){
-  const S=await L.serve({"/config.js":L.cfgJs(),"/app.js":()=>inject(src)}); const b=await chromium.launch(); const ctx=await b.newContext({locale:"fr-FR"}); const p=await ctx.newPage(); const errs=[];
+async function runApp(src,profs,html){
+  const S=await L.serve({"/config.js":L.cfgJs(),"/app.js":()=>inject(src),...(html?{"/index.html":()=>html}:{})}); const b=await chromium.launch(); const ctx=await b.newContext({locale:"fr-FR"}); const p=await ctx.newPage(); const errs=[];
   p.on("pageerror",e=>errs.push(e.message));
   await p.addInitScript(sd=>{ localStorage.setItem("carnet-course.v1",sd); localStorage.setItem("carnet.hv","1"); localStorage.setItem("carnet.vu","15"); },JSON.stringify({profile:{...profs[0]},isExample:false,log:[],week:1,seen:15}));
   await p.goto(S.url+"/"); await p.waitForFunction(()=>window.__T,null,{timeout:15000});
@@ -84,13 +87,13 @@ function linStats(r){ const nw=r.wk.filter(w=>isNorm(w)&&w.w>1&&!w.cross); if(nw
   if(arg("dump","")){ console.log(JSON.stringify(profs[+arg("dump")])); process.exit(0); }   // profil n° i (dates relatives au jour du test)
   const A=await runApp(SRC,profs); const R=A.out; console.log("plans construits : "+R.length+" en "+((Date.now()-t0)/1000).toFixed(1)+" s");
   const CASES=arg("case","").split(",").filter(Boolean).map(Number);
-  if(CASES.length){ const MM=MAIN? (await runApp(MAIN,profs)).out : null;
+  if(CASES.length){ const MM=MAIN? (await runApp(MAIN,profs,MAIN_HTML)).out : null;
     for(const i of CASES) for(const [nm,X] of [["branche",R],["main",MM]]){ if(!X) continue; const r=X[i]; console.log("#"+i+" "+nm+" "+JSON.stringify(r.n)+(r.unreal?" → "+r.unreal:"")+" "+JSON.stringify({start:profs[i].start,raceDate:profs[i].raceDate}));
       (r.wk||[]).forEach((w,j)=>console.log("  S"+w.w+" "+w.ph+(w.dl?" allégée":"")+" V "+(+w.V||0).toFixed(1)+" km "+w.km.toFixed(1)+(r.std?" (std "+(r.std.wk[j]?r.std.wk[j].km.toFixed(1):"-")+")":"")+" runs "+w.runs+" L "+w.L.toFixed(1)+" q "+w.q.join(",")+" hard "+w.hard+(w.pool?" pool "+w.pool.join(","):""))); }
     process.exit(0); }
   let fails=0; const ok=(c,m)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")+m); };
   const F=checkAll(R,profs);
-  let M=null, FM=null; if(MAIN){ M=await runApp(MAIN,profs); FM=checkAll(M.out,profs); }
+  let M=null, FM=null; if(MAIN){ M=await runApp(MAIN,profs,MAIN_HTML); FM=checkAll(M.out,profs); }
   // un cas est « nouveau » s'il n'existe pas sur main pour le même profil et la même semaine (préexistant sinon)
   const key=x=>x.i+":"+x.msg.split(" ")[0], isNew=(c,x)=>!FM||!(FM[c]||[]).some(y=>key(y)===key(x));
   // exemptions ciblées (arbitrage de la mission A) : un cas nouveau n'échoue pas si sa situation est l'une de celles-ci, chacune avec sa raison.

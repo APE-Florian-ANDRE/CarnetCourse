@@ -83,10 +83,10 @@ Le fichier `api/coach.js` est **généré**. Si tu modifies l'un de ces fichiers
 
 Même chaîne de sécurité que le Coach, avec les mêmes variables d'environnement (rien de plus à configurer) :
 - connexion Supabase, adultes seulement ;
-- filet de sécurité sur la demande écrite, avant l'IA ;
+- filet de sécurité sur la demande écrite et sur les préférences de séances du profil (`preferences`, 300 caractères au plus), avant l'IA ;
 - 6 demandes par heure et par personne.
 
-Le navigateur envoie la structure du plan déjà construit par le site. Gemini répond en JSON imposé par un schéma : type de chaque séance d'intensité choisi parmi ses remplaçants permis, semaine allégée ou non, un but et un conseil par semaine. Le serveur puis le navigateur revérifient chaque champ. L'IA ne peut jamais changer les volumes, les jours, la sortie longue, l'affûtage ni la semaine de course.
+Le navigateur envoie la structure du plan déjà construit par le site. Gemini répond en JSON imposé par un schéma : type de chaque séance d'intensité choisi parmi ses remplaçants permis, semaine allégée ou non, un but et un conseil par semaine. Les préférences de séances écrites dans le Profil (« j'aime les côtes », « pas de fractionné le lundi »…) sont transmises comme donnée, jamais comme instruction : l'IA s'en sert pour choisir parmi les options et pour ses conseils. Changer ces préférences rend l'ajustement obsolète (il est à relancer). Le serveur puis le navigateur revérifient chaque champ. L'IA ne peut jamais changer les volumes, les jours, la sortie longue, l'affûtage ni la semaine de course.
 
 - **Activer** : `PLAN_AI_URL: "https://ton-site/api/plan"` dans `public/config.js` (vide : le bloc du Profil est caché).
 - **Modèle** : `PLAN_MODEL` (facultatif), sinon `COACH_MODEL`, sinon `gemini-flash-lite-latest`.
