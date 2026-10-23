@@ -553,6 +553,10 @@ function qualityKinds(p,w,phase,ctx,need){
   const fresh=seen? pool.filter(c=>!seen.has(c)) : [];
   let k1=fresh[0]||pool[i], k2=null;
   if(pool.length>1) k2= fresh[1] || (pool[i]!==k1? pool[i] : pool[(i+1)%pool.length]);
+  // deux séances, seuil ou VMA déjà là : chaque semaine garde une séance « longue » (seuil / VMA) et une plus courte qui tourne,
+  // pour que le volume ne fasse pas le yoyo d'une semaine à l'autre (fartlek + côtes seuls font une semaine plus courte)
+  const heavy=pool.filter(c=>c==="seuil"||c==="vma"), light=pool.filter(c=>c==="fartlek"||c==="cotes"), W0=W-1;
+  if(!fresh.length&&(need||2)>1&&pool.length>2&&heavy.length){ k1=heavy[W0%heavy.length]; k2= light.length? light[Math.floor(W0/heavy.length)%light.length] : heavy[(W0+1)%heavy.length]; if(k2===k1) k2=null; }
   const ord=c=>Q_ORDER.indexOf(c); if((need||2)>1&&k2&&ord(k2)<ord(k1)) [k1,k2]=[k2,k1];
   return [k1,k2,pool];
 }
