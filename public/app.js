@@ -885,6 +885,7 @@ function planCore(p,lin){
     if(L){ let r=Math.round(L*2)/2; if(r>lim+1e-9) r=Math.floor(lim*10)/10; if(deload&&prevL) r=Math.max(Math.min(r,prevL-.5),Math.min(3,lim)); L=r; }
     const ctxW={wt:tplWeek(w,isRace,N),N,lim,ref,debLong,debBout,debS10Min,debS10LongMin,lastRuns,lastQ,lastKm,vol:Math.max(vol,deb?8:0),seen};
     let wk=buildWeek(p,w,phase,deload,V,L,vma,ctxW);
+    // INVARIANT : le volume placé ne dépasse jamais +8 % et ne redescend pas sous la semaine normale d'avant
     // volume réellement placé (arrondis, minimums, séances retirées) : la semaine est reconstruite avec un autre volume prévu si elle
     // dépasse la règle des +8 %, si une semaine allégée n'est pas plus légère, ou si une semaine normale redescend sous la précédente
     if(!deb&&lastKm>0&&phase!=="taper"&&phase!=="race"){ const kmW=x=>x.days.reduce((a,d)=>a+(d.run&&d.run.type!=="race"?sessionKm(d.run,vma):0),0);
