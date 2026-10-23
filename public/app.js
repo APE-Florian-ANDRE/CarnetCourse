@@ -480,7 +480,8 @@ function runWalk(w,total,maxBout){
 }
 // o.short : échauffement 10 min et retour au calme 5 min ; o.fewer : répétitions en moins (volume limité, part de facile)
 // séance de qualité : le type et les options de construction sont gardés (l'ajustement par l'IA reconstruit la séance avec les mêmes limites)
-function quality(kind,w,p,vma,phase,o){ const s=quality0(kind,w,p,vma,phase,o); if(s){ s.kind=kind; s.qo={short:!!(o&&o.short),fewer:(o&&o.fewer)||0}; } return s; }
+// o.w : semaine qui choisit la variante (séance reprise d'une semaine précédente) ; gardée dans qo pour les reconstructions (IA, plan simple)
+function quality(kind,w,p,vma,phase,o){ const wv=o&&o.w||w, s=quality0(kind,wv,p,vma,phase,o); if(s){ s.kind=kind; s.qo={short:!!(o&&o.short),fewer:(o&&o.fewer)||0,...(o&&o.w?{w:o.w}:{})}; } return s; }
 function quality0(kind,w,p,vma,phase,o){
   o=o||{}; const fw=o.fewer||0;
   const lvl=p.niveau, conf=lvl==="conf"||(lvl==="int"&&p.cplx==="avance"), taper=phase==="taper"||phase==="race";
@@ -529,7 +530,7 @@ function qPool(p,w,N,need,seen){
   const r=Math.max(nb>1?(w-1)/(nb-1):1, p.vmax?.45:0), th=p.cplx==="simple"?[0,.2,.45,9]:conf?[0,0,.28,.45]:[0,0,.3,.55];
   let pool=allowed.filter(c=>r>=th[Q_ORDER.indexOf(c)]-1e-9);
   // un type arrivé mais pas encore placé (semaine sans séance d'intensité, séance retirée faute de volume) n'est pas doublé par un type plus tardif
-  if(seen){ const k=pool.findIndex(c=>!seen.has(c)); if(k>=0) pool=pool.filter((c,j)=>j<=k||seen.has(c)); }
+  if(seen){ const k=pool.findIndex(c=>!seen.has(c)); if(k>=0) pool=pool.filter((c,j)=>j<=k||seen.has(c)||(c==="seuil"&&r>=th[2]+.2)); }   // plan court : le seuil, largement dû, arrive avec le fartlek ou les côtes
   // le fartlek sert d'introduction : il laisse sa place une fois la VMA arrivée (côtes, seuil et VMA tournent ensuite)
   if(pool.includes("vma")&&pool.length>Math.max(need,2)) pool=pool.filter(c=>c!=="fartlek");
   // types cochés trop peu nombreux au début : on prend les suivants (le nombre de séances d'intensité ne baisse pas)
@@ -552,7 +553,7 @@ function qualityKinds(p,w,phase,ctx,need){
   const i= p.cplx==="simple"||p.seances===3? Math.floor((W-1)/2)%pool.length : (W-1)%pool.length;
   const fresh=seen? pool.filter(c=>!seen.has(c)) : [];
   let k1=fresh[0]||pool[i], k2=null;
-  if(pool.length>1) k2= fresh[1] || (pool[i]!==k1? pool[i] : pool[(i+1)%pool.length]);
+  if(pool.length>1) k2= fresh.find((c,j)=>j>0&&c==="seuil") || fresh[1] || (pool[i]!==k1? pool[i] : pool[(i+1)%pool.length]);
   // deux séances, seuil ou VMA déjà là : chaque semaine garde une séance « longue » (seuil / VMA) et une plus courte qui tourne,
   // pour que le volume ne fasse pas le yoyo d'une semaine à l'autre (fartlek + côtes seuls font une semaine plus courte)
   const heavy=pool.filter(c=>c==="seuil"||c==="vma"), light=pool.filter(c=>c==="fartlek"||c==="cotes"), W0=W-1;
@@ -667,7 +668,10 @@ function capSimple(weeks,p){
     const km=W=>W.days.reduce((a,d)=>a+(d.run&&d.run.type!=="race"?sessionKm(d.run,vma):0),0), normal=!wk.deload&&wk.phase!=="taper"&&wk.phase!=="race";
     const runsOf=W=>W.days.filter(d=>d.run&&d.kind!=="before").length;
     const cap2=Math.min(km(sw)+.05, isN(wk)? suf[i] : Infinity, normal&&lastN? Math.max(lastN*1.08,lastN+(lastR<Math.min(p.seances,3)?3.2:1))+.2 : wk.deload&&lastN? lastN-.3 : Infinity);
-    trimWeek(wk,p,vma,cap2,normal||wk.deload? 3 : 2.5,true,Math.max(3,longKm(sw)));   // affûtage et course : footings de 2,5 km au plus bas, comme le standard
+    // footings : 3 km au plus bas (2,5 en affûtage et semaine de course), ou la plus courte séance (footing ou intensité) du standard si elle descend plus bas
+    const eStd=sw.days.filter(d=>d.run&&(d.run.type==="easy"||d.run.type==="q")&&!d.run.deb).map(d=>Math.floor(sessionKm(d.run,vma)*2)/2), minE0=normal||wk.deload? 3 : 2.5;
+    // semaine allégée : la sortie longue peut descendre à 3 km et un footing peut sauter (sans passer sous les sorties du standard)
+    trimWeek(wk,p,vma,cap2,Math.max(2.5,Math.min(minE0,...eStd)),true,wk.deload? 3 : Math.max(3,longKm(sw)),wk.deload&&wk.w>1? sw.days.filter(d=>d.run&&d.kind!=="before").length : null);
     if(normal&&wk.w>1){ lastN=km(wk); lastR=runsOf(wk); } });
 }
 // plan simple, plus longue sortie déclarée : règle des +10 % revérifiée après le plafond du simple (qui peut raccourcir la séance qui servait de repère) :
@@ -681,10 +685,10 @@ function capLong(weeks,p){
 }
 // ramène le volume placé d'une semaine sous cap : le plus long footing raccourcit (minE km au plus bas), la séance d'intensité raccourcit,
 // devient un footing plus court, puis (drop) est retirée
-function trimWeek(wk,p,vma,cap,minE,drop,longMin){
+function trimWeek(wk,p,vma,cap,minE,drop,longMin,minRuns){
   const km=()=>wk.days.reduce((a,d)=>a+(d.run&&d.run.type!=="race"&&d.run.blocks?sessionKm(d.run,vma):0),0);
   const plain=r=>r&&r.type==="easy"&&!r.deb&&r.blocks[0].l==="Footing facile"&&r.blocks.length<=2&&(!r.blocks[1]||r.blocks[1].iv);
-  const minKm=sessionKm(easyRun(minE,vma),vma), stuck=new Set();
+  const minKm=sessionKm(easyRun(minE,vma),vma), stuck=new Set(), k00=wk.days.map(d=>d.run&&plain(d.run)? sessionKm(d.run,vma) : null);
   for(let g=0;g<80&&km()>cap;g++){
     const js=wk.days.map((d,j)=>j).filter(j=>!stuck.has(j)&&wk.days[j].kind!=="before"&&plain(wk.days[j].run)&&sessionKm(wk.days[j].run,vma)>minKm+.01).sort((a,b)=>sessionKm(wk.days[b].run,vma)-sessionKm(wk.days[a].run,vma));
     if(!js.length) break; const j=js[0], d=wk.days[j], r=d.run, k0=sessionKm(r,vma);
@@ -696,6 +700,15 @@ function trimWeek(wk,p,vma,cap,minE,drop,longMin){
   for(const j of qDays()){ if(km()<=cap) break; let o={...wk.days[j].run.qo};
     for(let t=0;t<4&&km()>cap;t++){ o= o.short? {...o,fewer:(o.fewer||0)+1} : {...o,short:true}; const c=quality(wk.days[j].run.kind,wk.w,p,vma,wk.phase,o);
       if(c&&sessionKm(c,vma)<sessionKm(wk.days[j].run,vma)-1e-9&&(c.hardMin||0)<=(wk.days[j].run.hardMin||0)+1e-9) wk.days[j]={...wk.days[j],run:c}; } }
+  // minRuns donné (semaine allégée du simple, sortie ajoutée qui ferait dépasser les +8 %) : le plus court footing saute, sans descendre sous
+  // minRuns sorties ; les autres footings reprennent ensuite leur longueur d'avant tant que la semaine reste sous cap
+  const runs=()=>wk.days.filter(d=>d.run&&d.kind!=="before").length;
+  let cut=false;
+  for(let g=0;minRuns!=null&&g<7&&km()>cap&&runs()>minRuns;g++){ const js=wk.days.map((d,j)=>j).filter(j=>wk.days[j].kind!=="before"&&plain(wk.days[j].run)).sort((a,b)=>sessionKm(wk.days[a].run,vma)-sessionKm(wk.days[b].run,vma));
+    if(!js.length) break; wk.days[js[0]]={...wk.days[js[0]],run:null,kind:"rest"}; cut=true; }
+  for(let g=0;cut&&g<40;g++){ const js=wk.days.map((d,j)=>j).filter(j=>plain(wk.days[j].run)&&k00[j]!=null&&sessionKm(wk.days[j].run,vma)<k00[j]-.25).sort((a,b)=>sessionKm(wk.days[a].run,vma)-sessionKm(wk.days[b].run,vma));
+    if(!js.length) break; const d=wk.days[js[0]], r=d.run, k=Math.min(k00[js[0]],Math.floor(sessionKm(r,vma)*2)/2+.5), nr={...easyRun(k,vma,r.title,r.blocks[1]?r.blocks[1].iv.n:0),...(r.note?{note:r.note}:{})};
+    if(km()-sessionKm(r,vma)+sessionKm(nr,vma)>cap) break; wk.days[js[0]]={...d,run:nr}; }
   if(!drop) return;
   for(const j of qDays()){ if(km()<=cap) break; const d=wk.days[j], k0=sessionKm(d.run,vma), er=easyRun(Math.max(minE,Math.floor((k0-(km()-cap))*2)/2),vma,null,0);
     if(sessionKm(er,vma)<k0-1e-9) wk.days[j]={...d,run:er,kind:"easy"}; }
@@ -754,7 +767,7 @@ function planCore(p,lin){
   const V0= deb? Math.max(vol,8) : vol>0? vol : Math.min(10, Math.max(8, p.longest>0? Math.min(p.longest,cap)*1.6 : 0));   // sans volume déclaré : départ prudent (10 km au plus)
   // maxLong : plus longue séance faite (déclarée, puis la plus longue de chaque semaine normale)
   let maxLong=!isNaN(p.longest)&&p.longest>0?p.longest:Math.max(3,Math.min(V0*.3,cap));
-  let lastVn=0, lastReal=0, lastRuns=0, lastQ=0, lastKm=0, prevL=null, peak=0, debLong=!isNaN(p.longest)&&p.longest>0?p.longest:0, debBout=0, topLong=0, debS10Min=0, debS10LongMin=0, bigLast=false, bigN=0;
+  let lastQK=null, lastQW=0, lastPh=null, lastVn=0, lastReal=0, lastRuns=0, lastQ=0, lastKm=0, prevL=null, peak=0, debLong=!isNaN(p.longest)&&p.longest>0?p.longest:0, debBout=0, topLong=0, debS10Min=0, debS10LongMin=0, bigLast=false, bigN=0;
   const need=LONG_NEED[o]||0, longFrac= o==="21"||o==="42"? .5 : .45;
   const weeks=[];
   for(let w=1;w<=N;w++){
@@ -800,11 +813,15 @@ function planCore(p,lin){
       let Vt=V; for(let t=0;t<5;t++){ const k=kmW(wk); if(k<=hi+.1&&k>=lo) break;
         Vt= k>hi+.1? Vt-(k-hi)-.1 : Math.min(Vt+(lo-k)+.2,hi); if(!(Vt>0)) break;
         const w2=buildWeek(p,w,phase,deload,Vt,L,vma,k>hi+.1? ctxW : {...ctxW,easyFrac:.85}), k2=kmW(w2);   // trop bas : footings jusqu'à 85 % de la sortie longue
-        if(k>hi+.1? k2<k-1e-9 : (k2>k+1e-9&&k2<=hi+.1)) wk=w2; else break; }
+        if(k>hi+.1? k2<k-1e-9&&k2>=lo : (k2>k+1e-9&&k2<=hi+.1)) wk=w2; else break; }   // trop haut : jamais sous la semaine d'avant (sinon la semaine est raccourcie plus bas)
       // la sortie longue peut rester au niveau de la semaine normale d'avant
-      if(kmW(wk)>hi+.1) trimWeek(wk,p,vma,hi+.1,3,false,deload?3:prevL||0);
+      if(kmW(wk)>hi+.1) trimWeek(wk,p,vma,hi+.1,3,false,deload?3:prevL||0,deload||!lastRuns? null : lastRuns);
       // montée régulière : une semaine bloquée sous son volume prévu (footings au plafond) prend des footings un peu plus longs
-      if(lin&&!deload&&kmW(wk)<Math.min(V,hi)-.5){ const w2=buildWeek(p,w,phase,deload,V,L,vma,{...ctxW,easyFrac:.85}), k2=kmW(w2); if(k2>kmW(wk)+1e-9&&k2<=hi+.1) wk=w2; } }
+      if(lin&&!deload&&kmW(wk)<Math.min(V,hi)-.5){ const w2=buildWeek(p,w,phase,deload,V,L,vma,{...ctxW,easyFrac:.85}), k2=kmW(w2); if(k2>kmW(wk)+1e-9&&k2<=hi+.1) wk=w2; }
+      // toujours sous la semaine normale d'avant (volume plafonné) : mêmes séances d'intensité qu'elle, même variante
+      if(!deload&&kmW(wk)<lo-1e-9&&lastQK&&(phase===lastPh||phase!=="spe"&&lastPh!=="spe")){ const w3=buildWeek(p,w,phase,deload,Math.min(Math.max(V,lastKm),hi),L,vma,{...ctxW,easyFrac:.85,forceK:lastQK,qW:lastQW}), k3=kmW(w3); if(k3>kmW(wk)+1e-9&&k3<=hi+.1) wk=w3; }
+      // en dernier recours : volume prévu ramené autour de celui de la semaine d'avant (la semaine se construit comme elle)
+      for(const Vc of [lastKm,lastKm+.5,lastKm+1]){ if(deload||kmW(wk)>=lo-1e-9) break; const w4=buildWeek(p,w,phase,deload,Vc,L,vma,ctxW), k4=kmW(w4); if(k4>kmW(wk)+1e-9&&k4<=hi+.1) wk=w4; } }
     if(phase==="race"&&p.raceIdx!=null){ wk.raceAt=true; const li=wk.days.findIndex(d=>d.kind==="race"), ri=p.raceIdx;
       if(li>=0&&li!==ri){ const D=wk.days, race=D[li].run; D[li]={...D[li],run:null,kind:"rest",renfo:null};
         D[ri]={...D[ri],run:race,kind:"race",renfo:null};
@@ -826,7 +843,8 @@ function planCore(p,lin){
     if(w<=N-2){ peak=Math.max(peak,km); if(lr) topLong=Math.max(topLong,deb?sessionKm(lr.run,vma):wk.L||0); }
     // sortie longue de la semaine 1 retirée (avant le début, ou première séance) : la progression repart de la plus longue sortie déclarée
     const hasL= !fixed || wk.days.some(d=>d.run&&d.run.type==="long");
-    if(normal){ lastVn=V; lastReal=kmPl; maxLong=Math.max(maxLong,mx); if(L&&hasL&&!shortAlt)prevL=L; lastRuns=runsPl; lastQ=qPl; if(!shortAlt) lastKm=kmPl; bigLast= !shortAlt&&!!L&&L>=need-.05; if(bigLast) bigN++; }
+    if(normal){ const qs=wk.days.filter(d=>d.run&&d.run.type==="q"&&d.run.kind&&d.kind!=="before"); lastQK= qs.length? [qs[0].run.kind,qs[1]?qs[1].run.kind:null] : null; lastQW= qs.length&&qs[0].run.qo&&qs[0].run.qo.w || w; lastPh=phase;
+      lastVn=V; lastReal=kmPl; maxLong=Math.max(maxLong,mx); if(L&&hasL&&!shortAlt)prevL=L; lastRuns=runsPl; lastQ=qPl; if(!shortAlt) lastKm=kmPl; bigLast= !shortAlt&&!!L&&L>=need-.05; if(bigLast) bigN++; }
     else if(deload) bigLast=false;
     if(deb){ if(lr&&normal) debLong=Math.max(debLong,sessionKm(lr.run,vma)); if(w===N-2&&lr){ debBout=lr.run.deb.bouts; debS10LongMin=sessionMin(lr.run); debS10Min=wk.days.reduce((a,d)=>a+(d.run?sessionMin(d.run):0),0); } }
     weeks.push(wk);
@@ -947,6 +965,8 @@ function buildWeek(p,w,phase,deload,V,L,vma,ctx){
   // débutant : jamais de qualité dans les 8 premières semaines réelles, même sur un plan court (semaine du modèle étirée)
   const nQ= deload||p.cplx==="simple"||p.seances===3? 1 : 2;
   let [k1,k2,qPool_]=qualityKinds(p,deb?Math.min(w,wt):wt,phase,{w,N:ctx.N,seen:ctx.seen},nQ);
+  // reprise des séances de la semaine normale d'avant (même paire, même variante) : volume plafonné qui ne doit pas redescendre
+  if(ctx.forceK&&ctx.forceK.every(k=>!k||(qPool_||[]).includes(k))){ [k1,k2]=ctx.forceK; if(nQ<2) k2=null; }
   if(deload && k2) k2=null; // semaine allégée : une seule séance de qualité
   // plan simple : une seule séance d'intensité par semaine, et du fartlek plutôt que de la VMA
   if(p.cplx==="simple"){ k2=null; if(k1==="vma") k1="fartlek"; }
@@ -984,7 +1004,7 @@ function buildWeek(p,w,phase,deload,V,L,vma,ctx){
   const opts={short:deb&&taperish,fewer:0};
   // débutant : aucune séance plus longue (en minutes) que la « sortie un peu plus longue »
   const tooLong=s=> kmOf(s)>sessCap+.01 || (deb&&longMin>0&&sessionMin(s)>longMin);
-  const buildQ=x=>{ let o={short:opts.short&&!x.noShort,fewer:opts.fewer+x.fewer}, s=quality(x.k,w,p,vma,phase,o);
+  const buildQ=x=>{ let o={short:opts.short&&!x.noShort,fewer:opts.fewer+x.fewer,...(ctx.qW?{w:ctx.qW}:{})}, s=quality(x.k,w,p,vma,phase,o);
     while(tooLong(s) && o.fewer<4){ if(!o.short)o.short=true; else o.fewer++; s=quality(x.k,w,p,vma,phase,o); }
     // séance impossible à faire tenir sous la plus longue sortie faite : footing court avec lignes droites
     if(tooLong(s)) s= deb? S("easy","Course / marche + lignes droites",runWalk(wt,Math.max(20,Math.min(30,longMin||30)),maxBout).blocks.concat([{l:"4 lignes droites de 15 s, relâchées",min:0,z:"z3",noPace:true}]),{deb:runWalk(wt,Math.max(20,Math.min(30,longMin||30)),maxBout)})

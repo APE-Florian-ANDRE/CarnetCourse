@@ -9,7 +9,10 @@ const {chromium}=require("playwright"); const L=require("./lib"); const fs=requi
 const arg=(k,d)=>{ const a=process.argv.find(x=>x.startsWith("--"+k+"=")); return a? a.slice(k.length+3) : d; };
 const NP=+arg("n",1200), SEED=+arg("seed",7), DETAIL=process.argv.includes("--detail");
 const SRC=process.env.APP||path.join(L.ROOT,"app.js");
-let MAIN=process.env.MAIN||""; if(MAIN==="git"){ const os=require("os"); MAIN=path.join(os.tmpdir(),"pacebook-main-app.js"); fs.writeFileSync(MAIN,require("child_process").execSync("git show main:public/app.js",{cwd:__dirname,maxBuffer:64<<20})); }
+// référence : MAIN=<chemin d'un app.js>, MAIN=git (public/app.js de la branche main), MAIN=ref:<commit> ; par défaut ref:a45501c (avant la mission A) ; MAIN=none : sans comparaison
+let MAIN=process.env.MAIN||"ref:a45501c"; if(MAIN==="none") MAIN="";
+if(MAIN==="git"||MAIN.startsWith("ref:")){ const os=require("os"), rev=MAIN==="git"?"main":MAIN.slice(4); if(!/^[\w.\/-]{1,80}$/.test(rev)) throw new Error("référence invalide : "+rev);
+  MAIN=path.join(os.tmpdir(),"pacebook-ref-"+rev.replace(/\W/g,"_")+"-app.js"); fs.writeFileSync(MAIN,require("child_process").execFileSync("git",["show",rev+":public/app.js"],{cwd:__dirname,maxBuffer:64<<20})); }
 const inject=src=>fs.readFileSync(src,"utf8").replace(/initAccount\(\);\n\}\)\(\);\s*$/,"initAccount();\nwindow.__T={buildPlan,profileNums,sessionKm,vmaOf,planSig,zoneMins,qOpts,qPool:typeof qPool===\"function\"?qPool:null,setAip(v){state.aip=v;}};\n})();\n");
 function rnd(seed){ let x=seed>>>0; return ()=>{ x=(x*1664525+1013904223)>>>0; return x/4294967296; }; }
 const iso=d=>d.toISOString().slice(0,10), addD=(s,n)=>{ const d=new Date(s+"T12:00:00Z"); d.setUTCDate(d.getUTCDate()+n); return iso(d); };
@@ -44,7 +47,7 @@ function collect(arr){ const T=window.__T; const res=[];
       runs:runs.length,L: lr&&v? T.sessionKm(lr.run,v) : 0, mx: v? Math.max(0,...wk.days.filter(d=>d.run&&d.run.type!=="race"&&d.run.blocks).map(d=>T.sessionKm(d.run,v))) : 0,
       q:q.map(d=>d.run.kind), ai:q.filter(d=>d.run.ai).map(d=>d.run.kind), hard:wk.days.reduce((a,d)=>a+(d.run&&d.run.type==="q"?d.run.hardMin||0:0),0),
       pool:wk.qPool||null, race:wk.days.some(d=>d.kind==="race"), first:(()=>{ const d=runs[0]; return d? d.run.type : null; })(), firstEasy:!!wk.firstEasy, nan,
-      cross:wk.cross!=null, opts:q.map(d=>T.qOpts(d.run.kind,n,wk.qPool)), easy:T.zoneMins(wk.days).easy}; });
+      cross:wk.cross!=null, lim:!!wk.limited, opts:q.map(d=>T.qOpts(d.run.kind,n,wk.qPool)), easy:T.zoneMins(wk.days).easy}; });
   for(const pr of arr){ const o={};
     try{ const n=T.profileNums(pr), run=n.sport==="course"||n.sport==="trail", v=run? T.vmaOf(n).vma : 0;
       const t0=performance.now(); const pl=T.buildPlan({...n,noAi:true}); o.ms=performance.now()-t0;
@@ -90,6 +93,26 @@ function linStats(r){ const nw=r.wk.filter(w=>isNorm(w)&&w.w>1&&!w.cross); if(nw
   let M=null, FM=null; if(MAIN){ M=await runApp(MAIN,profs); FM=checkAll(M.out,profs); }
   // un cas est « nouveau » s'il n'existe pas sur main pour le même profil et la même semaine (préexistant sinon)
   const key=x=>x.i+":"+x.msg.split(" ")[0], isNew=(c,x)=>!FM||!(FM[c]||[]).some(y=>key(y)===key(x));
+  // exemptions ciblées (arbitrage de la mission A) : un cas nouveau n'échoue pas si sa situation est l'une de celles-ci, chacune avec sa raison.
+  // Jamais de liste de profils ni de seuil global relâché : la condition est vérifiée sur le plan lui-même (et sur la référence).
+  const wkOf=(r,msg)=>{ const m=/^S(\d+)/.exec(msg); return m? r.wk.findIndex(w=>w.w===+m[1]) : -1; };
+  const normW=r=>r.wk.filter(w=>isNorm(w)&&w.w>1&&!w.cross);
+  const EXEMPT={
+    // le simple a une seule séance d'intensité : à 3 sorties ou moins, le standard en a une de moins (sa 2e séance d'intensité prend la place
+    // d'un footing) ; le simple ne peut descendre à son volume qu'en supprimant une sortie
+    simpleKm:(x,r)=>{ const j=wkOf(r,x.msg), w=r.wk[j], s=r.std&&r.std.wk[j]; return w&&s&&w.runs<=3&&s.runs<w.runs? "3 sorties ou moins, le standard a une sortie de moins" : null; },
+    // le pic de la référence passe par une hausse de plus de 8 % : la règle des +8 %, contrôlée sur le volume placé, l'interdit
+    picBaisse:(x,r,m)=>{ const n=normW(m); for(let i=1;i<n.length;i++){ const y=n[i-1].km, lim=Math.max(y*1.08,y+(n[i-1].runs<Math.min(r.n.seances,3)?3.2:1)); if(n[i].km>lim+.3) return "pic de la référence obtenu par une hausse de plus de 8 %"; } return null; },
+    // la référence n'avait aucune séance d'intensité en développement (types cochés remplacés par rien) : ici les types cochés y sont, une séance d'intensité prend une sortie
+    seancesBaisse:(x,r,m)=>{ const d=m.wk.filter(w=>w.ph==="dev"); return d.length&&d.every(w=>!w.q.length)? "référence sans intensité en développement" : null; },
+    // sortie longue de 4 km au plus : aucune séance des types qui arrivent en premier (fartlek, côtes, seuil) n'y tient (remplacée par un footing) ;
+    // la référence ne plaçait que de la VMA (la séance la plus courte), qui arrive en dernier dans la progression
+    plusIntensite:(x,r,m)=>Math.max(0,...r.wk.map(w=>w.L))<=4.05&&m.wk.every(w=>w.q.every(k=>k==="vma"||k==="allure"))? "sortie longue de 4 km au plus : seule la VMA y tenait dans la référence" : null,
+    // plan plafonné (footings au maximum, ou volume placé sous le volume prévu) : le volume oscille de 1 km au plus selon la séance d'intensité de la semaine
+    baisse:(x,r)=>{ const n=normW(r), capd=w=>w.lim||(+w.V||0)>w.km+.5; let okAll=true, any=false; for(let i=1;i<n.length;i++) if(n[i].km<n[i-1].km-.5){ any=true; if(!(n[i-1].km-n[i].km<=1.05&&(capd(n[i])||capd(n[i-1])))) okAll=false; }
+      return any&&okAll? "plan plafonné, oscillation de 1 km au plus" : null; }
+  };
+  const exempt=(c,x)=>EXEMPT[c]&&M? EXEMPT[c](x,R[x.i],M.out[x.i]) : null, nEx={};
   // temps de calcul (deux passes) : desktop ; un mobile milieu de gamme est 4 à 6 fois plus lent
   const msq=X=>{ const ms=X.filter(r=>r.ms!=null).map(r=>r.ms).sort((a,b)=>a-b); return f=>ms[Math.min(ms.length-1,Math.floor(ms.length*f))]; }, q=msq(R);
   console.log("buildPlan : médiane "+q(.5).toFixed(1)+" ms, p95 "+q(.95).toFixed(1)+" ms, max "+q(1).toFixed(1)+" ms"+(M?" (main : médiane "+msq(M.out)(.5).toFixed(1)+", max "+msq(M.out)(1).toFixed(1)+")":""));
@@ -109,8 +132,8 @@ function linStats(r){ const nw=r.wk.filter(w=>isNorm(w)&&w.w>1&&!w.cross); if(nw
   if(M){ const same=R.filter((r,i)=>r.sig&&r.sig===M.out[i].sig).length; console.log("INFO planSig identique à main pour "+same+"/"+R.filter(r=>r.sig).length+" profils : un ajustement IA enregistré avant la mise à jour reste appliqué (choix revalidés par qOpts, textes focus/conseil écrits pour l'ancien plan)"); }
   // rapport : avec MAIN, seuls les cas absents de main font échouer (les autres sont préexistants, comptés à part)
   const CRIT=["exception","nan","course","firstWeek","debQ","nonCoche","simpleVma","simpleKm","simpleHard","plus8","long10","deload","taper","poolShrink","ordre","horsPool","formeVma","qOpts","aiTropTot","aiSimpleVma","aiNonCoche","aiKm","aiHard","baisse","picBaisse","longBaisse","seancesBaisse","plusIntensite","aiPrepVma"];
-  for(const c of [...CRIT,...Object.keys(F).filter(k=>!CRIT.includes(k))]){ const all=F[c]||[], L_=all.filter(x=>isNew(c,x)); const info=["info","nonCocheDeb","ecartDroite","picTot"].includes(c);
-    const pre=all.length-L_.length, tail=(FM?" ; préexistants (aussi sur main) : "+pre+" ; main : "+(FM[c]||[]).length:"");
+  for(const c of [...CRIT,...Object.keys(F).filter(k=>!CRIT.includes(k))]){ const all=F[c]||[], L_=all.filter(x=>isNew(c,x)&&!(exempt(c,x)&&(nEx[c]=(nEx[c]||0)+1))); const info=["info","nonCocheDeb","ecartDroite","picTot"].includes(c);
+    const pre=all.length-L_.length-(nEx[c]||0), tail=(FM?" ; préexistants (aussi sur la référence) : "+pre+(nEx[c]?" ; exemptés (situation documentée) : "+nEx[c]:"")+" ; référence : "+(FM[c]||[]).length:"");
     if(info){ if(all.length) console.log("INFO "+c+" : "+L_.length+" nouveaux"+tail); }
     else ok(!L_.length,c+(L_.length?" : "+L_.length+" cas nouveaux":"")+tail);
     if(L_.length&&(DETAIL||!info)) L_.slice(0,arg("all","")===c?1e9:DETAIL?12:3).forEach(x=>console.log("      #"+x.i+" "+x.msg+" | "+JSON.stringify(R[x.i].n||{})+(DETAIL?" "+JSON.stringify({start:profs[x.i].start,raceDate:profs[x.i].raceDate}):""))); }
