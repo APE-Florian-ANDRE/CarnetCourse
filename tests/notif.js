@@ -88,8 +88,8 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
  // N6 interactions : double clic, lien vers les versions, rechargement, clavier
  { const p=await mk(S,{seed:seedOf("busy")}); await p.dblclick("#notifBtn"); await p.waitForTimeout(250);
    const dbl=await p.evaluate(()=>({n:document.querySelectorAll(".sheet-bg").length,open:!!document.querySelector('.sheet[data-kind="notif"]')}));
-   await p.click(".js-av >> visible=true",{clickCount:2}); await p.waitForTimeout(250); const dblAv=await p.evaluate(()=>!!document.querySelector(".sheet")); if(dblAv){ await p.keyboard.press("Escape"); await p.waitForTimeout(150); }
-   ok(dbl.n<=1&&dbl.open===dblAv,"N6 double clic : jamais deux panneaux, même comportement que le bouton Compte",{dbl,compteOuvert:dblAv});
+   await p.click(".js-av >> visible=true",{clickCount:2}); await p.waitForTimeout(250); const dblAv=await p.evaluate(()=>!document.getElementById("me").hidden&&document.querySelectorAll(".sheet-bg").length===0); if(dblAv){ await p.click('#me [data-me="back"]'); await p.waitForTimeout(200); }
+   ok(dbl.n<=1&&dblAv,"N6 double clic : jamais deux panneaux ; l avatar ouvre la page Mon profil, sans panneau par-dessus",{dbl,pageOuverte:dblAv});
    if(!dbl.open) await openP(p);
    await p.click(".sheet [data-nt-news]"); await p.waitForTimeout(200);
    ok(await p.evaluate(()=>document.querySelectorAll(".sheet-bg").length===1&&/Nouveautés|Quoi de neuf/.test(document.querySelector("#shT").textContent)),"N6 « Toutes les versions » remplace le panneau par la feuille des versions");
@@ -100,7 +100,7 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
    // clavier : Accueil -> Notifications -> Compte ; Entrée ouvre ; Maj+Tab reste dans le panneau
    await p.evaluate(()=>document.querySelector('.apptop [data-act="home"]').focus()); await p.keyboard.press("Tab");
    const f1=await p.evaluate(()=>document.activeElement.id); await p.keyboard.press("Tab"); const f2=await p.evaluate(()=>document.activeElement.getAttribute("aria-label"));
-   ok(f1==="notifBtn"&&/^Compte/.test(f2||""),"N6 ordre au clavier : Accueil, Notifications, Compte",[f1,f2]);
+   ok(f1==="notifBtn"&&/^Mon profil/.test(f2||""),"N6 ordre au clavier : Accueil, Notifications, Mon profil",[f1,f2]);
    await p.keyboard.press("Shift+Tab"); await p.keyboard.press("Enter"); await p.waitForTimeout(200);
    ok(!!(await panel(p)),"N6 Entrée ouvre le panneau");
    for(let i=0;i<12;i++) await p.keyboard.press("Shift+Tab");

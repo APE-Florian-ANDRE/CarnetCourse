@@ -3,7 +3,7 @@
 // Les scripts qui dépendent de fichiers hors dépôt (cmp, wiz-regression) ou qui ne sont pas des tests (lib, fx14) ne sont pas lancés.
 const {spawn}=require("child_process"), path=require("path");
 const SUITE=["static-checks","smoke","flows","profil15","validation","consent","vercel-coach","vercel-plan","n8n","email","coach","planai","import-pure","vendor",
-  "notif","pref","aiba","progression","plan-progression","evaltest","evaltest2","pages","audit-plan","sheets","v14"];
+  "notif","pref","aiba","progression","plan-progression","evaltest","evaltest2","pages","audit-plan","sheets","v14","profile-page"];
 const args=process.argv.slice(2), jobs=+((args.find(a=>a.startsWith("--jobs="))||"--jobs=3").slice(7))||3;
 const names=args.filter(a=>!a.startsWith("--")); const list=names.length? names : SUITE;
 const res=[]; let next=0;

@@ -11,14 +11,15 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
     if(!sessionStorage.__seed){ sessionStorage.__seed=1; if(seed){ localStorage.setItem("carnet-course.v1",seed); localStorage.setItem("carnet.hv","1"); } if(pend) localStorage.setItem("carnet.consent",pend); } },{seed,pend});
   await p.goto(S.url+url); await p.waitForTimeout(900); p.ctx=ctx; return p; };
  const csp=async p=>{ const v=await p.evaluate(()=>window.__csp||[]); if(v.length) CSPV.push(...v); };
- const acct=async p=>{ await p.click(".js-av >> visible=true"); await p.waitForTimeout(350); };
+ // page Mon profil (plein écran) : l avatar l ouvre ; déjà ouverte, rien à cliquer
+ const acct=async p=>{ if(await p.evaluate(()=>document.getElementById("me").hidden)) await p.click(".js-av >> visible=true"); await p.waitForTimeout(350); };
  const lsKeys=p=>p.evaluate(()=>Object.keys(localStorage).sort());
  const S=await L.serve({"/config.js":L.cfgJs()});
 
  // F0 : non configuré => invité, aucune connexion proposée
  { const S0=await L.serve(); const db=L.makeDb(); const p=await mk(S0,db,{seed:data()}); await acct(p);
    ok(await p.evaluate(()=>!document.querySelector("[data-prov]")&&!document.querySelector('[data-acc="login"]')&&document.querySelector(".js-login").hidden),"F0 sans configuration : aucun bouton de connexion");
-   ok((await p.textContent(".sheet .acc-st")).includes("n'est pas activée"),"F0 message honnête");
+   ok((await p.textContent("#me .acc-st")).includes("n'est pas activée"),"F0 message honnête");
    await csp(p); await p.ctx.close(); S0.close(); }
  // F9 : clé service_role / URL http refusées
  for(const [n,extra] of [["service_role",{SUPABASE_ANON_KEY:L.SERVICE_KEY}],["url http",{SUPABASE_URL:"http://abcdefghij.supabase.co"}],["url chemin",{SUPABASE_URL:"https://x.supabase.co/rest"}]]){
@@ -27,7 +28,7 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
    await p.ctx.close(); Sx.close(); }
  // F1 : invité configuré => fournisseurs tout de suite (l'accord est demandé une fois, au retour)
  { const db=L.makeDb(); const p=await mk(S,db,{seed:data()}); await acct(p);
-   ok(await p.evaluate(()=>!document.querySelector(".js-login").hidden),"F1 bouton « Se connecter »"); await p.click('.sheet [data-acc="login"]'); await p.waitForTimeout(300);
+   ok(await p.evaluate(()=>!document.querySelector(".js-login").hidden),"F1 bouton « Se connecter »"); await p.click('#me [data-acc="login"]'); await p.waitForTimeout(300);
    ok(await p.evaluate(()=>!document.getElementById("auth").hidden&&document.activeElement.id==="auT"),"F1 écran de connexion ouvert, titre focalisé");
    const labels=await p.$$eval("[data-prov]",e=>e.map(x=>x.textContent)); ok(labels.join("|")==="Continuer avec Google|Continuer avec Microsoft|Continuer avec GitHub","F1 boutons fournisseurs",labels);
    ok(await p.evaluate(()=>document.querySelector("#auCons").hidden&&!document.querySelector("#auTos").hidden),"F1 connexion directe : pas de cases avant, CGU rappelées sous les boutons");
@@ -43,7 +44,7 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
    const keys=await lsKeys(p); const lsAll=await p.evaluate(()=>Object.entries(localStorage).filter(([k])=>k!=="sb-carnet-auth").map(e=>e.join("=")).join("\n")); ok(!lsAll.includes("Zoé")&&!lsAll.includes("zoe@example.org"),"F2 ni nom ni e-mail dans le stockage local (hors session)",keys);
    ok(!keys.includes("carnet.consent"),"F2 accord en attente supprimé");
    ok((await p.textContent("#homeSt").catch(()=>"")+await p.textContent("#store")).includes("compte"),"F2 état connecté");
-   await acct(p); ok((await p.textContent(".sheet")).includes("Zoé Martin")&&(await p.textContent(".sheet")).includes("Connecté à ton compte"),"F2 nom affiché (mémoire seulement)");
+   await acct(p); ok((await p.textContent("#me")).includes("Zoé Martin")&&(await p.textContent("#me")).includes("Connecté à ton compte"),"F2 nom affiché (mémoire seulement)");
    ok(await p.evaluate(()=>[...document.querySelectorAll("[data-acc]")].map(x=>x.dataset.acc).join())==="export,import,home,news,erase,signout,withdraw,delacct".split(",").join(",")||true,"F2 actions compte");
    await csp(p); await p.ctx.close(); }
  // F3 : session sans accord => rien n'est écrit tant que non accepté

@@ -1793,6 +1793,7 @@ function recompute(){
   syncSportUI14(); renderPsec(); renderRegen(); renderAip(); renderSummary(); psecSum(); renderWeek(); renderNext(); renderPlan(); renderLog(); renderReg(); renderZones(); renderRaceHint(); syncLongDay();
   try{ renderFeel(); renderImp(); }catch(e){ console.warn("v14",e); }
   evHint();
+  { const m=document.getElementById("me"); if(m&&!m.hidden) try{ meRefresh(); }catch(e){ console.warn("me",e); } }   // page Mon profil ouverte : stats et infos suivent les données
   $("#exampleBanner").hidden=!state.isExample&&!P.incomplete;
   $("#exampleTxt").textContent= P.incomplete&&!state.isExample? "Ton profil est incomplet (âge, taille ou poids manquant) : des valeurs d'exemple sont utilisées à la place. Complète ton profil pour que le plan et les calories soient justes." : "Ce sont des données d'exemple. Remplis l'onglet « Profil » avec les tiennes pour que le plan et les calories soient justes.";
   const rv=$("#refVal"); rv.disabled=P.ref==="none"||!P.ref; { const PH={vma:"ex. 14,5",5:"ex. 25:30",10:"ex. 52:10"}; rv.placeholder= Object.hasOwn(PH,P.ref)? PH[P.ref] : "choisis d'abord le type"; }
@@ -2238,8 +2239,8 @@ function weekDoneVol(w){ const wk=plan[w-1], f=dayFuel(P,E,wk), tdy=todayIso(), 
     const v= run? (d.run?d.km:0) : (d.run?sessionDur(d.run):0)+(d.renfo?parseInt(d.renfo.m)||0:0);
     pv+=v; n++; if(markOf(w,d.i)==="done"){ dn+=v; nd++; } }
   return {pv,dn,n,nd}; }
-function barSvg(rows,unit,lab){
-  const ch=$("#progCharts"), Wd=Math.max(260,Math.round((ch.clientWidth||600)/(ch.clientWidth>620?2:1))-12), H=150,pl=34,pr=8,pt=12,pb=24;
+function barSvg(rows,unit,lab,wd){
+  const ch=$("#progCharts"), Wd=wd||Math.max(260,Math.round((ch.clientWidth||600)/(ch.clientWidth>620?2:1))-12), H=150,pl=34,pr=8,pt=12,pb=24;
   const max=Math.max(1,...rows.map(r=>Math.max(r.pv,r.dn))), step=(Wd-pl-pr)/rows.length, bw=Math.max(6,Math.min(26,step*.6)), y=v=>pt+(1-v/max)*(H-pt-pb);
   const tick=[0,max/2,max].map(v=>`<line x1="${pl}" x2="${Wd-pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pl-5}" y="${y(v)+4}" text-anchor="end">${fmt0(v)}</text>`).join("");
   const bars=rows.map((r,k)=>{ const x=pl+step*k+(step-bw)/2; return `<rect x="${x}" y="${y(r.pv)}" width="${bw}" height="${H-pb-y(r.pv)}" rx="4" fill="none" stroke="var(--muted)" stroke-dasharray="3 3"/><rect x="${x}" y="${y(r.dn)}" width="${bw}" height="${Math.max(0,H-pb-y(r.dn))}" rx="4" fill="var(--accent)"/>${rows.length<=12||k%2===0?`<text x="${x+bw/2}" y="${H-8}" text-anchor="middle">S${r.w}</text>`:""}`; }).join("");
@@ -2694,7 +2695,8 @@ function openSheet({title,html,foot,closeLabel,firstClose,kind,opener,onReady,on
 }
 let sheetOnClose=null, ownerPending=null;
 function closeSheet(silent){ if(!sheetEl) return; sheetEl.remove(); sheetEl=null; const oc=sheetOnClose; sheetOnClose=null; if(oc) oc(); if(!timerEl) document.documentElement.style.overflow="";
-  const o=sheetOpener; sheetOpener=null; if(!silent&&o&&document.contains(o)) o.focus({preventScroll:true}); }
+  const o=sheetOpener; sheetOpener=null; if(!silent&&o&&document.contains(o)) o.focus({preventScroll:true});
+  else if(silent){ const m=document.getElementById("me"), ae=document.activeElement; if(m&&!m.hidden&&(!ae||ae===document.body||!document.contains(ae))){ const t=document.getElementById("meT"); if(t) t.focus({preventScroll:true}); } } }
 
 /* notifications : toasts empilés en bas (même style que « Annuler »), annonce aux lecteurs d'écran */
 function toast(msg,o){ o=o||{}; const box=$("#toasts");
@@ -4002,19 +4004,24 @@ const nameOf=me=>{ try{ if(!me) return ""; if(typeof me==="string") return me.tr
   return typeof n==="string"&&n.trim()? n.trim().slice(0,60) : (typeof me.email==="string"? me.email.trim().slice(0,80) : ""); }catch(e){ return ""; } };
 const homeEl=$("#home"), wrapEl=$(".wrap"), wizEl=$("#wiz"), authEl=$("#auth");
 const hasData=()=> !state.isExample||localSaved;
-function showHome(){ closeSheet(true); wrapEl.hidden=true; homeEl.hidden=false; renderHome(); window.scrollTo(0,0); try{ $("#homeT").focus({preventScroll:true}); }catch(e){} }
-function showApp(){ if(!seenV()) markSeen(false); homeEl.hidden=true; wrapEl.hidden=false; hvMark(); try{ renderChart(sortedLog()); }catch(e){} }
+// mode discret lu directement (fonction hoistée : utilisable dès le démarrage, avant le bloc de la page)
+function discreet(){ try{ return localStorage.getItem("carnet.discret")==="1"; }catch(e){ return false; } }
+function meInert(on){ const m=document.getElementById("me"); if(m) m.inert=on; }
+// la page Mon profil est masquée par toute autre vue (accueil, application)
+function meAway(){ const m=document.getElementById("me"); if(m&&!m.hidden) meHide(); }
+function showHome(){ closeSheet(true); meAway(); wrapEl.hidden=true; homeEl.hidden=false; renderHome(); window.scrollTo(0,0); try{ $("#homeT").focus({preventScroll:true}); }catch(e){} }
+function showApp(){ if(!seenV()) markSeen(false); meAway(); homeEl.hidden=true; wrapEl.hidden=false; hvMark(); try{ renderChart(sortedLog()); }catch(e){} }
 const acctText=()=> acct.st==="connected"? "Connecté à ton compte" : acct.st==="consent"? "Connecté, sauvegarde en attente de ton accord" : acct.st==="owner"? "Connecté, mais cet appareil contient les données d'un autre compte" : acct.st==="guest"? "Mode invité : tes données restent sur cet appareil" : "Connexion en cours…";
 function renderHome(){
-  const st=$("#homeSt"); setT(st, acct.st==="connected"? "Connecté à ton compte"+(acct.name?" · "+acct.name:"") : acct.st==="consent"? "Connecté, sauvegarde en attente de ton accord." : acct.st==="owner"? "Connecté, en attente de ton choix pour les données de cet appareil." : acct.st==="guest"? "Mode invité : tes données restent sur cet appareil." : "Connexion à ton compte en cours…"); st.dataset.st=acct.st;
+  const st=$("#homeSt"); setT(st, acct.st==="connected"? "Connecté à ton compte"+(acct.name&&!discreet()?" · "+acct.name:"") : acct.st==="consent"? "Connecté, sauvegarde en attente de ton accord." : acct.st==="owner"? "Connecté, en attente de ton choix pour les données de cet appareil." : acct.st==="guest"? "Mode invité : tes données restent sur cet appareil." : "Connexion à ton compte en cours…"); st.dataset.st=acct.st;
   const has=hasData()? "1":"0"; if(homeEl.dataset.has===has) return; homeEl.dataset.has=has;
   // un seul bouton principal ; l'action secondaire n'est qu'un lien discret ; le bas de page rappelle le même bouton
   const b= has==="1"? `<button class="btn" type="button" data-act="open">Ouvrir Pacebook</button>` : `<button class="btn" type="button" data-act="wizard">Créer mon plan gratuit</button>`;
   $("#homeCta").innerHTML=b+(has==="1"? `<button class="linkbtn" type="button" data-act="wizard">Refaire mon profil</button>` : `<button class="linkbtn" type="button" data-act="example">Voir un exemple</button>`); $("#homeCta2").innerHTML=b;
 }
 function renderAcct(){ try{ if(P) renderAip(); }catch(e){}
-  document.querySelectorAll(".js-av").forEach(b=>{ b.dataset.st=acct.st; b.setAttribute("aria-label","Compte : "+acctText().toLowerCase()); const i=b.querySelector(".av-i"); if(i) i.textContent=acct.name? acct.name.charAt(0).toUpperCase():""; });
-  renderHome(); const sh=sheetEl&&sheetEl.querySelector('.sheet[data-kind="acct"]'); if(sh) fillAcct(sh);
+  document.querySelectorAll(".js-av").forEach(b=>{ b.dataset.st=acct.st; b.setAttribute("aria-label","Mon profil : "+acctText().toLowerCase()); const i=b.querySelector(".av-i"); if(i) i.textContent=acct.name&&!discreet()? acct.name.charAt(0).toUpperCase():""; });
+  renderHome(); { const m=document.getElementById("me"); if(m&&!m.hidden){ renderMeId(); renderMeAcct(); } }
   const can=!!(window.CarnetAuth&&window.CarnetAuth.canLogin); document.querySelectorAll(".js-login").forEach(b=>{ b.hidden=!(can&&acct.st==="guest"); });
   if(!authEl.hidden&&acct.st!=="pending"&&((authEl.dataset.mode==="consent")!==(acct.st==="consent"))) closeAuth();
 }
@@ -4025,7 +4032,7 @@ document.addEventListener("click",e=>{ const b=e.target.closest&&e.target.closes
   else if(a==="example"){ showApp(); setT($("#srLive"),"Exemple ouvert : rien n'est enregistré tant que tu ne modifies rien."); const t=$("#weekTitle"); if(t) t.focus({preventScroll:true}); }
   else if(a==="wizard") openWizard(b);
   else if(a==="home") showHome();
-  else if(a==="acct") openAccount(b);
+  else if(a==="acct") openMe(b);
   else if(a==="login") openAuth("login",b);
 });
 
@@ -4155,9 +4162,9 @@ function wzTryClose(){ if(!wzDirty()){ wzDraftClear(); closeWiz(); return; } wzD
 function openWizard(opener){
   closeSheet(true); wzOpener=opener||document.activeElement; wzPrefill(); wzMinorLive(); wzSnap=JSON.stringify(wzCollect());
   const restored=wzDraftLoad(); if(restored){ wzMinorLive(); $("#wzObjectif").dispatchEvent(new Event("change")); }
-  wizEl.hidden=false; wrapEl.inert=true; homeEl.inert=true; document.documentElement.style.overflow="hidden"; wzShow(restored? wzI : 1); if(restored) toast("Brouillon retrouvé : tu reprends où tu en étais.");
+  wizEl.hidden=false; wrapEl.inert=true; homeEl.inert=true; meInert(true); document.documentElement.style.overflow="hidden"; wzShow(restored? wzI : 1); if(restored) toast("Brouillon retrouvé : tu reprends où tu en étais.");
 }
-function closeWiz(){ if(wizEl.hidden) return; wizEl.hidden=true; wrapEl.inert=false; homeEl.inert=false; if(!sheetEl&&!timerEl) document.documentElement.style.overflow="";
+function closeWiz(){ if(wizEl.hidden) return; wizEl.hidden=true; wrapEl.inert=false; homeEl.inert=false; meInert(false); if(!sheetEl&&!timerEl) document.documentElement.style.overflow="";
   const o=wzOpener; wzOpener=null; if(o&&document.contains(o)&&o.getClientRects().length) o.focus({preventScroll:true}); }
 function wzNext(){
   if(wizEl.hidden) return;   // double clic sur « Créer mon plan » : l'assistant est déjà fermé, rien n'est recréé
@@ -4190,48 +4197,200 @@ function loginCta(cs){ return `<div class="acc-login"><p><b>${cs?"Ton accord est
 // un compte différent de celui qui a créé les données de cet appareil : rien n'est fusionné ni écrit avant ton choix
 function ownerBlock(){ return `<div class="acc-login"><p><b>Que faire des données de cet appareil ?</b></p><p>Elles ont été enregistrées avec un autre compte. Pour protéger les deux comptes, rien n'est mélangé ni envoyé.</p><div class="prov"><button class="btn" type="button" data-acc="own-out" data-first>Me déconnecter et garder cet appareil</button><button class="btn ghost" type="button" data-acc="own-use">Utiliser les données de ce compte (celles de cet appareil seront remplacées)</button><button class="btn ghost" type="button" data-acc="own-zero">Repartir de zéro (efface cet appareil et les données de ce compte)</button></div></div>`; }
 const consentRecord=()=>({cgu:window.CarnetAuth.CONSENT_V,privacy:window.CarnetAuth.CONSENT_V,terms:true,health:true,age15:true,at:new Date().toISOString()});
-function fillAcct(sh){
-  const b=sh.querySelector(".sh-b"), conn=acct.st==="connected", g=acct.st==="guest";
+/* page « Mon profil » (plein écran, ouverte par l'avatar) : identité, stats, infos personnelles modifiables, compte et données.
+   Remplace l'ancienne feuille Compte : mêmes actions (data-acc), mêmes confirmations en deux temps, ouvertes par-dessus la page.
+   Rien de nouveau n'est enregistré ni envoyé : le nom vient de la session (mémoire seulement), les stats sont calculées sur cet appareil. */
+const ME_PRIV="carnet.discret";   // mode discret (valeurs masquées à l'écran) : réglage de cet appareil seulement
+let meFrom="app", meOpener=null, meEdit=false, mePushed=false, meSkipPop=false, meTitle="";
+const meEl=()=>document.getElementById("me");
+const meOpen=()=>{ const m=meEl(); return !!m&&!m.hidden; };
+const mePriv=()=>lsGet(ME_PRIV)==="1";
+// valeur personnelle affichée : masquée en mode discret (le texte est remplacé, pas seulement flouté : rien à lire pour un lecteur d'écran ni dans une capture)
+const pv=t=> mePriv()? `<span class="pvh" aria-hidden="true">•••</span><span class="sr-only">masqué</span>` : esc(t);
+function openMe(opener){
+  const m=meEl(); if(!m) return;
+  if(m.hidden){ meOpener=opener||document.activeElement; meFrom=homeEl.hidden? "app" : "home"; closeSheet(true); meEdit=false;
+    wrapEl.hidden=true; homeEl.hidden=true; m.hidden=false; meTitle=document.title; document.title="Mon profil · Pacebook";
+    // une entrée d'historique : le bouton retour du téléphone ou du navigateur ferme la page au lieu de quitter le site (aucune donnée dans l'URL)
+    try{ history.pushState({pbMe:1},""); mePushed=true; }catch(e){ mePushed=false; }
+    // données d'un autre compte : le focus va sur le choix sans risque ; sinon sur le titre
+    renderMe(); window.scrollTo(0,0); const t= acct.st==="owner"&&$("#meAcct [data-first]") || $("#meT"); if(t) t.focus({preventScroll:true}); return; }
+  renderMe();
+}
+// masque la page sans choisir la vue suivante (showHome / showApp s'en chargent)
+function meHide(fromPop){ const m=meEl(); if(!m||m.hidden) return; m.hidden=true; meEdit=false; if(meTitle){ document.title=meTitle; meTitle=""; }
+  if(mePushed&&!fromPop){ try{ if(history.state&&history.state.pbMe){ meSkipPop=true; history.back(); } }catch(e){ meSkipPop=false; } } mePushed=false; }
+function closeMe(fromPop){ if(!meOpen()) return; const to=meFrom, o=meOpener; meOpener=null; closeSheet(true); meHide(fromPop);
+  if(to==="home") showHome(); else showApp();
+  const b= o&&document.contains(o)&&o.getClientRects().length? o : avBtn(); if(b) b.focus({preventScroll:true}); }
+// le popstate provoqué par notre propre history.back() est ignoré : une page rouverte entre-temps reste ouverte
+window.addEventListener("popstate",()=>{ if(meSkipPop){ meSkipPop=false; if(meOpen()&&!(history.state&&history.state.pbMe)){ try{ history.pushState({pbMe:1},""); mePushed=true; }catch(e){} } return; } if(meOpen()){ mePushed=false; closeMe(true); } });
+
+// stats calculées depuis le plan et les coches (jusqu'à aujourd'hui), le suivi et les activités importées
+function meStats(){
+  const tdy=todayIso(), run=runSport(), wk=[]; let n=0,nd=0,vol=0,lng=0,lngD="";
+  for(const w of plan){ const a=isoOf(w.w,0); if(!a||a>tdy) break; const f=dayFuel(P,E,w); let wn=0,wd=0,pv0=0,dv=0;
+    for(const d of f.days){ if(!hasSession(d)) continue; const dt=isoOf(w.w,d.i); if(!dt||dt>tdy) continue; const dn=markOf(w.w,d.i)==="done"; if(dt===tdy&&!dn) continue;
+      const v= run? (d.run?d.km:0) : (d.run?sessionDur(d.run):0)+(d.renfo?parseInt(d.renfo.m)||0:0); wn++; pv0+=v;
+      if(!dn) continue; wd++; dv+=v; if(run&&d.run&&d.km>lng){ lng=d.km; lngD=dt; } }
+    n+=wn; nd+=wd; vol+=dv; wk.push({w:w.w,n:wn,nd:wd,pv:pv0,dn:dv}); }
+  // série : semaines d'affilée avec au moins une séance faite ; la semaine en cours et les semaines sans séance au plan ne la cassent pas
+  const tw=(todayPos()||{}).w; let streak=0; for(let k=wk.length-1;k>=0;k--){ if(wk[k].nd>0) streak++; else if(wk[k].w===tw||wk[k].n===0) continue; else break; }
+  const acts=actLive(), aKm=acts.reduce((s,a)=>s+(+a.km||0),0), aMin=acts.reduce((s,a)=>s+(+a.min||0),0);
+  return {run,n,nd,vol,lng,lngD,streak,weeks:wk,nLog:state.log.length,nActs:acts.length,aKm,aMin};
+}
+const meDate=d=>new Date(d+"T12:00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"});
+function renderMeId(){ const box=$("#meId"); if(!box) return; const hadT=document.activeElement&&document.activeElement.id==="meT"; const ex=state.isExample&&!localSaved, p=state.profile;
+  const ini=acct.name&&!mePriv()? esc(acct.name.charAt(0).toUpperCase()) : `<svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c1-4 4-6 7.5-6s6.5 2 7.5 6"/></svg>`;
+  const tags=[]; if(!ex){ tags.push(SPORT_CAT[P.sport]||"Course à pied"); try{ tags.push(wzObjLabel(p,P)); }catch(e){} tags.push({deb:"Débutant",int:"Intermédiaire",conf:"Confirmé"}[P.niveau]||""); }
+  const tp=todayPos(), st=effStart(p), N=plan.length, r=raceOn(p);
+  let prog=""; if(!ex&&N){ const end=st&&addDays(st,N*7-1);
+    const fr= tp? tp.w/N : st&&st>todayIso()? 0 : 1, lab= tp? "Semaine "+tp.w+" sur "+N : st&&st>todayIso()? "Ton plan commence le "+meDate(realStart()||st) : "Plan terminé"+(end?" le "+meDate(end):"");
+    const dj= r? Math.round((new Date(p.raceDate+"T12:00:00")-new Date(todayIso()+"T12:00:00"))/864e5) : null;
+    prog=`<div class="me-prog"><span class="ring">${ringSvg(fr,44)}</span><div><b>${esc(lab)}</b>${dj!=null?`<span>${dj===0?"C'est le jour J !":dj===1?"Demain : jour J":"J−"+dj+" avant le "+esc(meDate(p.raceDate))}</span>`:""}</div></div>`; }
+  const tg=tags.filter(Boolean);
+  box.innerHTML=`<div class="me-av" aria-hidden="true">${ini}</div><div class="me-idt"><h1 id="meT" tabindex="-1">Mon profil</h1>${acct.name?`<p class="me-nm">${pv(acct.name)}</p>`:""}
+    <p class="me-st" data-st="${esc(acct.st)}"><span class="acc-dot" aria-hidden="true"></span>${esc(acctText())}</p>${tg.length?`<ul class="me-tags" aria-label="Ton plan">${tg.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`:""}</div>${prog}`;
+  if(hadT){ const t=$("#meT"); if(t) t.focus({preventScroll:true}); }
+}
+function renderMeStats(){ const box=$("#meStats"); if(!box) return;
+  if(state.isExample&&!localSaved){ box.innerHTML=`<div class="me-empty"><p>Tes séances faites, tes kilomètres et ta régularité s'afficheront ici dès que tu auras créé ton plan.</p><button class="btn" type="button" data-me="wizard">Créer mon plan</button></div>`; return; }
+  const s=meStats(), reg= s.n? Math.round(s.nd/s.n*100) : null, u= s.run? "km" : "min";
+  const tile=(k,v,un,d)=>`<div class="stat"><div class="k">${esc(k)}</div><div class="v">${v}${un?` <small>${esc(un)}</small>`:""}</div><div class="d">${d}</div></div>`;
+  const t=[ tile("Séances faites",fmt0(s.nd),"",s.n? "sur "+fmt0(s.n)+" prévues à ce jour" : "aucune séance passée pour l'instant"),
+    tile("Régularité",reg==null?"–":fmt0(reg),reg==null?"":"%",reg==null? "dès ta première séance" : reg>=80? "bravo, c'est la clé" : reg>=50? "continue, chaque séance compte" : "une séance après l'autre"),
+    s.run? tile("Distance",esc(kmTxt(s.vol)),"km","prévue sur les séances cochées « Faite »") : tile("Temps d'entraînement",esc(hmTxt(s.vol)),"","séances cochées « Faite »"),
+    tile("Série",fmt0(s.streak),"sem.",s.streak>1? "semaines actives d'affilée" : "semaine active d'affilée (au moins une séance)"),
+    s.run? tile("Plus longue séance",s.lng? esc(kmTxt(s.lng)) : "–",s.lng?"km":"",s.lngD? "le "+esc(dfmt(new Date(s.lngD+"T12:00:00"))) : "pas encore de séance faite") : "",
+    tile("Suivi",fmt0(s.nLog),s.nLog>1?"semaines":"semaine",s.nLog? "notées dans l'onglet Suivi" : "note ton ressenti chaque semaine dans Suivi"),
+    s.nActs? tile("Activités importées",fmt0(s.nActs),"",esc(hmTxt(s.aMin))+(s.aKm>0?" · "+fmt0(s.aKm)+" km":"")) : "" ].join("");
+  // volume des 8 dernières semaines commencées : fait (plein) et prévu (pointillés), même graphique que l'onglet Suivi
+  const rows=s.weeks.slice(-8).filter(r=>r.n), wd=Math.max(260,Math.min(720,(box.clientWidth||600)-32));
+  box.innerHTML=`<div class="summary me-tiles">${t}</div>`+(rows.some(r=>r.nd)? `<div class="card me-chart"><h3>${s.run?"Kilomètres":"Minutes"} par semaine</h3>${barSvg(rows,u,"Volume fait et prévu sur les dernières semaines",wd)}<ul class="sr-only">${rows.map(r=>`<li>Semaine ${r.w} : ${esc(s.run? kmTxt(r.dn)+" km faits sur "+kmTxt(r.pv)+" prévus" : fmt0(r.dn)+" min faites sur "+fmt0(r.pv)+" prévues")}</li>`).join("")}</ul></div>` : "");
+}
+// champs modifiables ici : [clé, libellé, unité, min, max, entier, optionnel] ; mêmes bornes que BOUNDS (l'âge reste un entier, comme dans l'assistant)
+const ME_F=[["age","Âge","ans",15,90,true],["taille","Taille","cm",130,220,true],["poids","Poids","kg",35,250,false],["fcmax","FC max","bpm",140,220,true,1],["mg","Masse grasse","%",5,55,false,1]];
+function renderMeInfo(){ const box=$("#meInfo"), eb=$("#meEditB"); if(!box) return; const ex=state.isExample&&!localSaved, p=state.profile;
+  if(eb) eb.hidden=ex||meEdit;
+  if(ex){ box.innerHTML=`<p class="note">Ce sont des données d'exemple. Crée ton plan pour enregistrer tes propres infos.</p>`; return; }
+  if(meEdit){ renderMeForm(box,p); return; }
+  const val=(k,u)=>{ const v=numOf(p[k]); return isNaN(v)? "" : numTxt(v)+" "+u; };
+  const row=(k,v,d)=>`<div><dt>${esc(k)}</dt><dd>${v}${d?`<small>${d}</small>`:""}</dd></div>`;
+  box.innerHTML=`<dl class="me-dl">${[
+    row("Sexe",pv(p.sexe==="F"?"Femme":"Homme")),
+    row("Âge",val("age","ans")? pv(val("age","ans")) : "–",P.minor&&!mePriv()? "moins de 18 ans : plan prudent, sans déficit" : ""),
+    row("Taille",val("taille","cm")? pv(val("taille","cm")) : "–"),
+    row("Poids",val("poids","kg")? pv(val("poids","kg")) : "–","celui du profil, qui sert aux calories"),
+    row("FC max",val("fcmax","bpm")? pv(val("fcmax","bpm")) : "non renseignée","sert aux zones de fréquence cardiaque"),
+    row("Masse grasse",val("mg","%")? pv(val("mg","%")) : "estimée","sert au repère de sécurité des calories"),
+    row("Activité hors sport",esc({"1.25":"Assis la plupart du temps","1.4":"Un peu actif","1.55":"Métier physique ou très actif"}[String(p.activite)]||"Assis la plupart du temps"))].join("")}</dl>
+    <p class="note me-more">Ton objectif, tes séances et ta nutrition se règlent dans l'onglet Profil. <button class="linkbtn" type="button" data-me="settings">Ouvrir mes réglages</button></p>`;
+}
+function renderMeForm(box,p){
+  const inp=([k,l,u,lo,hi,int,opt])=>`<div class="field"><label for="me_${k}">${esc(l)} (${esc(u)})${opt?" · optionnel":""}</label><input id="me_${k}" type="text" inputmode="${int?"numeric":"decimal"}" maxlength="8" autocomplete="off" value="${esc(String(p[k]??"").slice(0,8))}" aria-describedby="me_${k}H"><span class="hint" id="me_${k}H">Entre ${lo} et ${hi}${opt?" ; vide si tu ne sais pas":""}.</span></div>`;
+  box.innerHTML=`<form class="form me-form" id="meForm" novalidate><div class="field"><span class="lbl" id="me_sexeL">Sexe</span><div class="seg" role="radiogroup" aria-labelledby="me_sexeL"><label><input type="radio" name="me_sexe" value="H"${p.sexe!=="F"?" checked":""}><span>Homme</span></label><label><input type="radio" name="me_sexe" value="F"${p.sexe==="F"?" checked":""}><span>Femme</span></label></div></div>
+    <div class="row2">${inp(ME_F[0])}${inp(ME_F[1])}</div>${inp(ME_F[2])}<div class="row2">${inp(ME_F[3])}${inp(ME_F[4])}</div>
+    ${mePriv()?`<p class="note" id="mePrivN">Mode discret : tes valeurs sont visibles pendant la modification.</p>`:""}<p class="alert warn" id="meMinor" hidden>Avant 18 ans, l'outil ne met aucun déficit et pas de semi-marathon ni de marathon : ton plan sera adapté.</p>
+    <div class="alerts" id="meErr" role="alert"></div>
+    <div class="me-fa"><button class="btn" type="submit" id="meSave">Enregistrer</button><button class="btn ghost" type="button" data-me="cancel">Annuler</button></div></form>`;
+  const f=box.querySelector("#meForm"); f.dataset.init=JSON.stringify(Object.fromEntries(["sexe",...ME_F.map(x=>x[0])].map(k=>[k,String(p[k]??"")])));
+  const minor=()=>{ const a=numOf(f.querySelector("#me_age").value); f.querySelector("#meMinor").hidden=!(a>=15&&a<18); };
+  f.querySelector("#me_age").addEventListener("input",minor); minor();
+  f.addEventListener("input",e=>{ if(e.target&&e.target.getAttribute("aria-invalid")) fieldErr(e.target,""); if(!f.querySelector("[aria-invalid]")) f.querySelector("#meErr").innerHTML=""; });
+  f.addEventListener("submit",e=>{ e.preventDefault(); meSave(f); });
+  f.addEventListener("keydown",e=>{ if(e.key==="Escape"&&!sheetEl){ e.preventDefault(); e.stopPropagation(); meEdit=false; renderMeInfo(); const eb=$("#meEditB"); if(eb) eb.focus({preventScroll:true}); } });
+}
+// contrôle de chaque champ : nombre lisible, bornes du profil, entier quand il le faut ; rien n'est enregistré tant qu'une erreur reste
+function meCheck(f){ const out={}, errs=[];
+  const sx=f.querySelector('input[name="me_sexe"]:checked'); out.sexe= sx&&sx.value==="F"? "F" : "H";
+  for(const [k,l,u,lo,hi,int,opt] of ME_F){ const el=f.querySelector("#me_"+k), raw=String(el.value||"").trim(); let msg="";
+    if(!raw){ if(!opt) msg=l+" : ce champ est nécessaire au calcul."; else out[k]=""; }
+    else{ const v=numOf(raw); if(!/^\d{1,3}([.,]\d{1,2})?$/.test(raw)||isNaN(v)) msg=l+" : écris un nombre"+(int?" entier":"")+" (ex. "+(int?lo+10:numTxt(lo+40.5))+").";
+      else if(int&&!Number.isInteger(v)) msg=l+" : écris un nombre entier.";
+      else if(v<lo||v>hi) msg= k==="age"&&v<lo? "Pacebook est réservé aux personnes de 15 ans et plus." : l+" : entre "+lo+" et "+hi+" "+u+".";
+      else out[k]= int? String(v) : raw.replace(",","."); }
+    fieldErr(el,msg); if(msg) errs.push(el); }
+  return {out,errs};
+}
+function meSave(f){ const b=f.querySelector("#meSave"); if(b.disabled) return; const {out,errs}=meCheck(f), eb=f.querySelector("#meErr");
+  if(errs.length){ eb.innerHTML=`<div class="alert warn"><b>${errs.length>1? errs.length+" champs à corriger" : "Un champ à corriger"}</b> : rien n'a été enregistré.</div>`; errs[0].focus(); return; }
+  // seuls les champs modifiés dans ce formulaire sont écrits : un changement arrivé entre-temps (autre appareil, import) n'est pas écrasé
+  let init={}; try{ init=JSON.parse(f.dataset.init||"{}"); }catch(e){} for(const k of Object.keys(out)) if(Object.hasOwn(init,k)&&String(out[k])===init[k]) delete out[k];
+  const wasMinor=numOf(state.profile.age)<18, adult=out.age!=null&&numOf(out.age)>=18;
+  if(wasMinor&&adult&&f.dataset.adult!=="1"){ f.dataset.adult="1"; eb.innerHTML=`<div class="alert warn"><b>Tu indiques 18 ans ou plus.</b> Ton plan va changer : un déficit calorique, le semi-marathon et le marathon deviennent possibles. Vérifie ton âge, puis appuie de nouveau sur « Enregistrer » pour confirmer.</div>`; b.focus(); return; }
+  eb.innerHTML=""; b.disabled=true;
+  // même chemin que le formulaire de l'onglet Profil : profil horodaté champ par champ, enregistré sur l'appareil puis dans le compte, plan recalculé
+  const p={...state.profile,...out}; if(!valid(p)){ b.disabled=false; eb.innerHTML=`<div class="alert warn">Profil incomplet : rien n'a été enregistré.</div>`; return; }
+  const chg=Object.keys(out).some(k=>String(state.profile[k]??"")!==String(out[k]));
+  meEdit=false; if(chg){ state.profile=p; state.isExample=false; fillForm(); persist(); recompute(); }
+  renderMe(); toast(chg? "Tes infos sont enregistrées : ton plan et tes calories sont recalculés." : "Rien n'a changé.");
+  const eb2=$("#meEditB"); if(eb2) eb2.focus({preventScroll:true});
+}
+// compte : état, connexion, enregistrements, puis les actions (export, import, effacement, session) ; mêmes data-acc que l'ancienne feuille
+function renderMeAcct(){ const b=$("#meAcct"); if(!b) return; const conn=acct.st==="connected", g=acct.st==="guest";
   const A=window.CarnetAuth, can=!!(A&&A.canLogin), cs=acct.st==="consent";
   const ex= conn? "Tes données sont aussi enregistrées dans ton compte : tu les retrouves sur tous tes appareils." : cs? "Ton compte est connecté, mais rien n'est enregistré dans ton compte tant que tu n'as pas donné ton accord ci-dessous." : g? (can? (acct.failed? "Impossible de joindre le service de connexion pour l'instant. Tes données restent sur cet appareil." : "Connecte-toi pour retrouver tes données sur tous tes appareils. Sans connexion, tout fonctionne : tes données restent sur cet appareil.") : "La connexion n'est pas activée sur ce site : tes données restent sur cet appareil. Tu peux les exporter à tout moment.") : acct.st==="owner"? "Les données de cet appareil appartiennent à un autre compte. Rien n'a été mélangé ni envoyé : choisis ce que tu veux en faire." : "Vérification de ton compte…";
   const loc= localSaved&&state.savedAtLocal? fmtDT(state.savedAtLocal) : "Rien d'enregistré encore", acc= conn? (acct.lastAt? fmtDT(acct.lastAt) : "Pas encore") : "Pas de compte connecté";
   const row=(k,t,s,cls)=>`<button class="opt${cls?" "+cls:""}" type="button" data-acc="${k}"><span>${esc(t)}<small>${esc(s)}</small></span><span aria-hidden="true">›</span></button>`;
-  b.innerHTML=`<div class="acc-st" data-st="${esc(acct.st)}"><span class="acc-dot" aria-hidden="true"></span><div><b id="accSt" tabindex="-1">${esc(acctText())}</b>${acct.name?`<div class="acc-nm">${esc(acct.name)}</div>`:""}<p>${esc(ex)}</p>${g&&can&&acct.failed?`<button class="btn ghost sm" type="button" data-acc="retry" data-first>Réessayer</button>`:""}</div></div>
+  const ae=document.activeElement, hadF= ae&&b.contains(ae)? ae.dataset.acc||"" : "";
+  b.innerHTML=`<div class="acc-st" data-st="${esc(acct.st)}"><span class="acc-dot" aria-hidden="true"></span><div><b id="accSt" tabindex="-1">${esc(acctText())}</b>${acct.name?`<div class="acc-nm">${pv(acct.name)}</div>`:""}<p>${esc(ex)}</p>${g&&can&&acct.failed?`<button class="btn ghost sm" type="button" data-acc="retry" data-first>Réessayer</button>`:""}</div></div>
     ${(g&&can)||cs? loginCta(cs) : acct.st==="owner"? ownerBlock() : ""}
     <dl class="acc-dl"><div><dt>Dernier enregistrement sur cet appareil</dt><dd>${esc(loc)}</dd></div><div><dt>Dernier enregistrement dans le compte</dt><dd>${esc(acc)}</dd></div></dl>
-    <div class="grp">${row("export","Exporter mes données","Un fichier JSON : pacebook-donnees.json")}${row("import","Importer mes données","Depuis un fichier JSON exporté ici")}${row("home","Revoir l'accueil","La présentation de Pacebook")}${row("news","Quoi de neuf","Les nouveautés de la version "+APP_V)}${row("erase","Effacer mes données","Profil, suivi, coches, déplacements, préférences (appareil et compte)","danger")}${conn||cs? row("signout","Me déconnecter","Ce navigateur seulement")+(conn?row("withdraw","Retirer mon consentement","Supprime tes données du compte, garde le compte"):"")+row("delacct","Supprimer mon compte","Compte et données supprimés définitivement","danger") : ""}</div>
-    <div class="alerts msg" id="accMsg" role="status" aria-live="polite"></div>
-    <p class="note legal">Pacebook ne donne pas d'avis médical : en cas de doute, de douleur ou de trouble alimentaire, demande l'avis d'un médecin. Tes données restent sur cet appareil et, si tu te connectes, dans ton compte. Pacebook ne garde jamais ton nom ni ton e-mail ; en revanche, la session de connexion (gérée par la bibliothèque d'authentification) contient l'e-mail et le nom donnés par ton fournisseur, dans ce navigateur, jusqu'à la déconnexion. <span class="nw">Version ${APP_V}.</span></p>${LEGAL_NAV}`;
-  if(acct.st==="owner"){ const f=b.querySelector("[data-first]"), ae=document.activeElement; if(f&&(!ae||ae===document.body||ae.classList.contains("sh-x")||ae.id==="accSt")) f.focus(); }
+    <h3 class="me-gh">Mes données</h3><div class="grp">${row("export","Exporter mes données","Un fichier JSON : pacebook-donnees.json")}${row("import","Importer mes données","Depuis un fichier JSON exporté ici")}${row("erase","Effacer mes données","Profil, suivi, coches, déplacements, préférences (appareil et compte)","danger")}</div>
+    ${conn||cs? `<h3 class="me-gh">Session et compte</h3><div class="grp">${row("signout","Me déconnecter","Ce navigateur seulement")+(conn?row("withdraw","Retirer mon consentement","Supprime tes données du compte, garde le compte"):"")+row("delacct","Supprimer mon compte","Compte et données supprimés définitivement","danger")}</div>` : ""}
+    <h3 class="me-gh">Pacebook</h3><div class="grp">${row("home","Revoir l'accueil","La présentation de Pacebook")}${row("news","Quoi de neuf","Les nouveautés de la version "+APP_V)}</div>
+    <div class="alerts msg" id="meMsg" role="status" aria-live="polite"></div>
+    <details class="more why"><summary>Infos et confidentialité</summary><p class="note legal">Pacebook ne donne pas d'avis médical : en cas de doute, de douleur ou de trouble alimentaire, demande l'avis d'un médecin. Tes données restent sur cet appareil et, si tu te connectes, dans ton compte. Pacebook ne garde jamais ton nom ni ton e-mail ; en revanche, la session de connexion (gérée par la bibliothèque d'authentification) contient l'e-mail et le nom donnés par ton fournisseur, dans ce navigateur, jusqu'à la déconnexion. Le mode discret masque ton nom et tes mensurations sur cette page et sur l'avatar, sur cet appareil seulement. <span class="nw">Version ${APP_V}.</span></p></details>${LEGAL_NAV}`;
+  // focus gardé sur l'action en cours quand la section est redessinée (changement d'état du compte)
+  if(hadF&&/^[a-z-]{2,12}$/.test(hadF)){ const x=b.querySelector(`[data-acc="${hadF}"]`); if(x) x.focus({preventScroll:true}); }
+  if(acct.st==="owner"){ const f=b.querySelector("[data-first]"), a2=document.activeElement; if(f&&(!a2||a2===document.body||a2.id==="meT"||a2.id==="accSt")) f.focus(); }
 }
-function openAccount(opener){
-  openSheet({title:"Compte",kind:"acct",opener,html:"",onReady:sh=>{
-    fillAcct(sh);
-    const inp=document.createElement("input"); inp.type="file"; inp.accept=".json,application/json"; inp.hidden=true; inp.setAttribute("aria-label","Fichier de données à importer"); sh.appendChild(inp);
-    const msg=t=>{ const m=sh.querySelector("#accMsg"); if(m) m.innerHTML=t; };
-    inp.addEventListener("change",async()=>{ const f=inp.files&&inp.files[0]; inp.value=""; if(!f) return;
-      if(f.size>2*1024*1024){ msg(`<div class="alert warn">Ce fichier est trop gros (2 Mo au plus).</div>`); return; }
-      let txt; try{ txt=await f.text(); }catch(e){ msg(`<div class="alert warn">Impossible de lire ce fichier.</div>`); return; }
-      const r=importClean(txt); if(r.err){ msg(`<div class="alert warn">${esc(r.err)}</div>`); return; }
-      openImportConfirm(r.data,opener); });
-    sh.querySelector(".sh-b").addEventListener("click",async e=>{ const b=e.target.closest("[data-acc]"); if(!b) return; const k=b.dataset.acc;
-      if(k==="retry"){ acct.st="pending"; renderAcct(); await initAccount(); const s=sh.querySelector("#accSt"); if(s) s.focus({preventScroll:true}); }
-      else if(k==="export") exportData(msg);
-      else if(k==="import") inp.click();
-      else if(k==="home"){ closeSheet(true); showHome(); }
-      else if(k==="news"){ closeSheet(true); openNews(avBtn()); }
-      else if(k==="erase") openErase(1,opener);
-      else if(k==="login") openAuth(acct.st==="consent"?"consent":"login",opener);
-      else if(k==="own-use"){ b.disabled=true; resetLocal(); acct.st="pending"; renderAcct(); await initAccount(); closeSheet(true); toast("Tu utilises maintenant les données de ce compte."); }
-      else if(k==="own-zero"&&!b.dataset.arm){ b.dataset.arm="1"; b.textContent="Oui, effacer définitivement cet appareil et les données de ce compte"; b.classList.remove("ghost"); b.classList.add("danger"); msg(`<div class="alert bad" role="alert"><b>Dernière confirmation.</b> Les données de cet appareil et celles de ce compte seront effacées définitivement. Il n'y aura pas d'annulation possible. Pour renoncer, choisis une autre option.</div>`); }
-      else if(k==="own-zero"){ b.disabled=true; const o=ownerPending; try{ if(o&&o.ref){ try{ await o.ref.set({erased:true,eid:newEid(),savedAt:Date.now()}); }catch(e){ if(!(e&&e.code==="NOROW")) throw e; } } resetLocal(); acct.st="pending"; renderAcct(); await initAccount(); closeSheet(true); toast("Tu repars de zéro avec ce compte."); }catch(e){ b.disabled=false; msg(`<div class="alert warn" role="alert">Impossible pour l'instant : rien n'a été effacé. Réessaie dans un instant.</div>`); } }
-      else if(k==="own-out"){ b.disabled=true; await signOutNow(false); closeSheet(true); }
-      else if(k==="consent-no"){ b.disabled=true; await signOutNow(false); closeSheet(true); }
-      else if(k==="signout") openSignOut(opener);
-      else if(k==="withdraw") openWithdraw(opener);
-      else if(k==="delacct") openDelAcct(1,opener); });
-  }});
+function renderMe(){ if(!meOpen()) return; const pr=mePriv(), pb=$("#mePriv");
+  if(pb){ pb.setAttribute("aria-pressed",pr?"true":"false");  }
+  const ae=document.activeElement, keepT=ae&&ae.id==="meT";
+  renderMeId(); renderMeStats(); if(!meEdit) renderMeInfo(); renderMeAcct();
+  if(keepT){ const t=$("#meT"); if(t) t.focus({preventScroll:true}); }
 }
+// données changées ailleurs (autre onglet, compte, import) : la page se redessine, sauf le formulaire en cours de saisie
+function meRefresh(){ if(!meOpen()) return; const ae=document.activeElement, keepT=ae&&ae.id==="meT"; renderMeId(); renderMeStats(); if(!meEdit) renderMeInfo(); if(keepT){ const t=$("#meT"); if(t) t.focus({preventScroll:true}); } }
+// actions de la page : un seul écouteur, posé une fois
+(function meWire(){ const m=meEl(); if(!m) return;
+  // rechargement sur une entrée « page ouverte » : la page démarre fermée, l'entrée est neutralisée (le retour ne la rouvre pas en double)
+  try{ if(history.state&&history.state.pbMe) history.replaceState(null,""); }catch(e){}
+  const inp=document.createElement("input"); inp.type="file"; inp.accept=".json,application/json"; inp.hidden=true; inp.id="meFile"; inp.setAttribute("aria-label","Fichier de données à importer"); m.appendChild(inp);
+  const msg=t=>{ const x=$("#meMsg"); if(x) x.innerHTML=t; };
+  inp.addEventListener("change",async()=>{ const f=inp.files&&inp.files[0]; inp.value=""; if(!f) return;
+    if(f.size>2*1024*1024){ msg(`<div class="alert warn">Ce fichier est trop gros (2 Mo au plus).</div>`); return; }
+    let txt; try{ txt=await f.text(); }catch(e){ msg(`<div class="alert warn">Impossible de lire ce fichier.</div>`); return; }
+    const r=importClean(txt); if(r.err){ msg(`<div class="alert warn">${esc(r.err)}</div>`); return; }
+    openImportConfirm(r.data,$("#meAcct [data-acc=import]")); });
+  m.addEventListener("keydown",e=>{ if(e.key==="Escape"&&!sheetEl&&authEl.hidden&&wizEl.hidden&&!meEdit){ e.preventDefault(); closeMe(); } });
+  m.addEventListener("click",async e=>{
+    const me=e.target.closest("[data-me]");
+    if(me){ const k=me.dataset.me;
+      if(k==="back") closeMe();
+      else if(k==="wizard") openWizard(me);
+      else if(k==="cancel"){ meEdit=false; renderMeInfo(); const eb=$("#meEditB"); if(eb) eb.focus({preventScroll:true}); }
+      else if(k==="settings"){ meFrom="app"; meOpener=null; closeMe(); selectTab("profil"); const t=$("#tab-profil"); if(t) t.focus({preventScroll:true}); }
+      return; }
+    if(e.target.closest("#meEditB")){ if(state.isExample&&!localSaved) return; meEdit=true; renderMeInfo(); const a=$("#me_age"); if(a) a.focus(); return; }
+    if(e.target.closest("#mePriv")){ lsSet(ME_PRIV,mePriv()?"0":"1"); renderAcct(); renderMe(); const pb=$("#mePriv"); if(pb) pb.focus({preventScroll:true}); setT($("#srLive"),mePriv()?"Mode discret activé : tes valeurs sont masquées.":"Mode discret désactivé."); return; }
+    const b=e.target.closest("[data-acc]"); if(!b||!m.contains(b)||b.disabled) return; const k=b.dataset.acc, opener=b;
+    if(k==="retry"){ acct.st="pending"; renderAcct(); await initAccount(); const s=$("#accSt"); if(s) s.focus({preventScroll:true}); }
+    else if(k==="export") exportData(msg);
+    else if(k==="import") inp.click();
+    else if(k==="home"){ meFrom="home"; meOpener=null; closeMe(); }
+    else if(k==="news") openNews(opener);
+    else if(k==="erase") openErase(1,opener);
+    else if(k==="login") openAuth(acct.st==="consent"?"consent":"login",opener);
+    else if(k==="own-use"){ b.disabled=true; resetLocal(); acct.st="pending"; renderAcct(); await initAccount(); toast("Tu utilises maintenant les données de ce compte."); }
+    else if(k==="own-zero"&&!b.dataset.arm){ b.dataset.arm="1"; b.textContent="Oui, effacer définitivement cet appareil et les données de ce compte"; b.classList.remove("ghost"); b.classList.add("danger"); msg(`<div class="alert bad" role="alert"><b>Dernière confirmation.</b> Les données de cet appareil et celles de ce compte seront effacées définitivement. Il n'y aura pas d'annulation possible. Pour renoncer, choisis une autre option.</div>`); }
+    else if(k==="own-zero"){ b.disabled=true; const o=ownerPending; try{ if(o&&o.ref){ try{ await o.ref.set({erased:true,eid:newEid(),savedAt:Date.now()}); }catch(x){ if(!(x&&x.code==="NOROW")) throw x; } } resetLocal(); acct.st="pending"; renderAcct(); await initAccount(); toast("Tu repars de zéro avec ce compte."); }catch(x){ b.disabled=false; msg(`<div class="alert warn" role="alert">Impossible pour l'instant : rien n'a été effacé. Réessaie dans un instant.</div>`); } }
+    else if(k==="own-out"||k==="consent-no"){ b.disabled=true; await signOutNow(false); }
+    else if(k==="signout") openSignOut(opener);
+    else if(k==="withdraw") openWithdraw(opener);
+    else if(k==="delacct") openDelAcct(1,opener); });
+})();
 // données exportées : uniquement les champs connus, déjà nettoyés
 function dataOut(){ return {app:"carnet-de-course",format:1,version:APP_V,exportedAt:new Date().toISOString(),profile:cleanProfile(state.profile),isExample:!!state.isExample,log:cleanLog(state.log),week:state.week,appliedByDate:cleanApplied(state.appliedByDate),deleted:cleanDeleted(state.deleted),moves:cleanMoves(state.moves),done:cleanDone(state.done),...liveX14()}; }
 async function exportData(msg){
@@ -4346,11 +4505,11 @@ let auOpener=null, auBusy=false;
 const auReady=()=>AU_BOX.every(q=>$(q).checked);
 function auSync(){ const r=auReady(), cs=authEl.dataset.mode==="consent"; authEl.dataset.ready=r?"1":"0"; $("#auHint").hidden=r||!cs; if(r) $("#accMsg").innerHTML=""; AU_BOX.forEach(q=>{ if($(q).checked) $(q).removeAttribute("aria-invalid"); }); }
 function openAuth(mode,opener){
-  const A=window.CarnetAuth, cs=mode==="consent"; if(!cs&&!(A&&A.canLogin)){ openAccount(opener); return; }
+  const A=window.CarnetAuth, cs=mode==="consent"; if(!cs&&!(A&&A.canLogin)){ openMe(opener); return; }
   closeSheet(true); auOpener=opener||document.activeElement; authEl.dataset.mode=cs?"consent":"login";
   setT($("#auK"),cs?"Dernière étape":"Gratuit · sans publicité");
   setT($("#auT"),cs?"Active la sauvegarde":"Retrouve tes données partout");
-  setT($("#auSub"),cs? (acct.name?"Tu es connecté en tant que "+acct.name+". ":"Tu es connecté. ")+"Donne ton accord pour enregistrer tes données dans ton compte : rien n'y est écrit avant."
+  setT($("#auSub"),cs? (acct.name&&!discreet()?"Tu es connecté en tant que "+acct.name+". ":"Tu es connecté. ")+"Donne ton accord pour enregistrer tes données dans ton compte : rien n'y est écrit avant."
     : "Connecte-toi ou crée ton compte : ton plan et ton suivi te suivent sur tous tes appareils.");
   $("#auProvs").innerHTML= cs? `<button class="au-prov" type="button" data-acc="consent-ok"><span>Accepter et activer la sauvegarde</span></button><button class="au-prov" type="button" data-acc="consent-no"><span>Refuser et me déconnecter</span></button>`
     : A.providers.map(p=>`<button class="au-prov" type="button" data-acc="prov" data-prov="${esc(p.id)}">${PROV_ICON[p.id]||""}<span>Continuer avec ${esc(p.label)}</span></button>`).join("");
@@ -4358,10 +4517,10 @@ function openAuth(mode,opener){
   $("#auCons").hidden=!cs; $("#auTos").hidden=cs;   // connexion : boutons seulement ; les trois cases sont demandées une fois, à la première connexion
   { const m=$("#auMail"), on=!cs&&!!A.emailLogin; m.hidden=!on; $("#auOr").hidden=!A.providers.length; if(on){ $("#auEmail").value=""; $("#auPw").value=""; auMode("signup"); auEye(false); } }
   AU_BOX.forEach(q=>{ $(q).checked=false; $(q).removeAttribute("aria-invalid"); }); $("#accMsg").innerHTML=""; auBusy=false; auSync();
-  authEl.hidden=false; wrapEl.inert=true; homeEl.inert=true; wizEl.inert=true; document.documentElement.style.overflow="hidden"; authEl.scrollTop=0;
+  authEl.hidden=false; wrapEl.inert=true; homeEl.inert=true; meInert(true); wizEl.inert=true; document.documentElement.style.overflow="hidden"; authEl.scrollTop=0;
   try{ $("#auT").focus({preventScroll:true}); }catch(e){}
 }
-function closeAuth(){ if(authEl.hidden) return; authEl.hidden=true; wrapEl.inert=false; homeEl.inert=false; wizEl.inert=false;
+function closeAuth(){ if(authEl.hidden) return; authEl.hidden=true; if(wizEl.hidden){ wrapEl.inert=false; homeEl.inert=false; meInert(false); } wizEl.inert=false;
   if(!sheetEl&&!timerEl&&wizEl.hidden) document.documentElement.style.overflow="";
   const o=auOpener; auOpener=null; if(o&&document.contains(o)&&o.getClientRects().length) o.focus({preventScroll:true}); }
 authEl.addEventListener("change",e=>{ if(e.target&&e.target.type==="checkbox") auSync(); });
@@ -4498,7 +4657,7 @@ async function initAccount(){
     const del=mergeDeleted(local&&local.deleted, remoteOk&&d.deleted);
     const localT=(local&&+local.savedAtLocal)||0, remoteT=remoteOk?(+d.savedAt||0):0;
     // données d'un AUTRE compte sur cet appareil : on ne fusionne ni n'écrit rien avant le choix de la personne
-    const ow=lsGet(OWNER_KEY); if(local&&!local.isExample&&ow&&ow!==String(uid)){ dbRef=null; noAccount=true; ownerPending={ref,uid:String(uid)}; acct.st="owner"; setStore(localStatus()); renderAcct(); if(!sheetEl) openAccount(avBtn()); return; }
+    const ow=lsGet(OWNER_KEY); if(local&&!local.isExample&&ow&&ow!==String(uid)){ dbRef=null; noAccount=true; ownerPending={ref,uid:String(uid)}; acct.st="owner"; setStore(localStatus()); renderAcct(); if(!sheetEl&&authEl.hidden&&wizEl.hidden) openMe(avBtn()); return; }
     ownerPending=null;
     // époque du compte : si cet appareil était déjà synchronisé dans une autre époque, ses données datent d'avant un effacement
     const ep=epochOf(d), leid=local&&local.eid; let wiped=false;
