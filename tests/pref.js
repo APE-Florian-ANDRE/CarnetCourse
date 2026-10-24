@@ -9,7 +9,8 @@ const appB=()=>expose(fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8"),",prefP
 // référence : dernier commit avant le refactor applyAi/swapQ (son app.js ET son index.html, pour comparer à l'identique)
 // mission A (progression linéaire, variété croissante) : le moteur de plan a changé ; la référence est le moteur de la mission A avant la fusion
 // des préférences (f504dad), pour vérifier que préférences et refactor swapQ ne changent rien sans préférences. PREF_REF=<commit> pour une autre référence.
-const REF=process.env.PREF_REF||"f504dad"; let mainSrc=null, mainHtml=null; try{ mainSrc=execSync("git show "+REF+":public/app.js",{cwd:L.ROOT,encoding:"utf8",maxBuffer:1<<26}); mainHtml=execSync("git show "+REF+":public/index.html",{cwd:L.ROOT,encoding:"utf8",maxBuffer:1<<26}); }catch(e){}
+// référence recalée sur 88424ac (correctifs de l'audit du 24/10 : sortie longue en durée, mineurs, semaines allégées) : à recaler après tout changement VOULU du moteur
+const REF=process.env.PREF_REF||"88424ac"; let mainSrc=null, mainHtml=null; try{ mainSrc=execSync("git show "+REF+":public/app.js",{cwd:L.ROOT,encoding:"utf8",maxBuffer:1<<26}); mainHtml=execSync("git show "+REF+":public/index.html",{cwd:L.ROOT,encoding:"utf8",maxBuffer:1<<26}); }catch(e){}
 const appM=()=>expose(mainSrc,"");
 const prof={sexe:"H",age:35,taille:178,poids:80,cible:"75",niveau:"int",objectif:"10",volume:25,longest:10,seances:"5",renfo:"2",longDay:"6",start:"2026-09-28",deficit:300,bonus:100,adj:0,lieu:"dehors",equip:"salle",types:["seuil","vma","cotes","fartlek","ld"],cross:"non",raceDate:""};
 const seed=o=>JSON.stringify({profile:{...prof,...o},isExample:false,log:[],week:2,seen:15});
