@@ -6,8 +6,8 @@ const system=rd("system-prompt.txt").trim();
 const coachSrc=fs.readFileSync(path.join(D,"../../public/coach.js"),"utf8");
 const m=/const norm=[\s\S]*?const RULES=\[[\s\S]*?\n\];\n/.exec(coachSrc), g=/function guard\(text\)\{[^\n]*\n/.exec(coachSrc);
 if(!m||!g) throw new Error("règles de sécurité introuvables dans public/coach.js");
-const SAFETY=m[0]+g[0], MSGS=rd("nodes/safe-msgs.js");
-const code=f=>rd("nodes/"+f).replace("__SYSTEM_PROMPT__",()=>JSON.stringify(system).slice(1,-1)).replace("/*__SAFETY__*/",()=>SAFETY).replace("/*__MSGS__*/",()=>MSGS);
+const SAFETY=m[0]+g[0], MSGS=rd("nodes/safe-msgs.js"), OUTF=rd("nodes/out-filter.js");
+const code=f=>rd("nodes/"+f).replace("__SYSTEM_PROMPT__",()=>JSON.stringify(system).slice(1,-1)).replace("/*__SAFETY__*/",()=>SAFETY).replace("/*__OUTF__*/",()=>OUTF).replace("/*__MSGS__*/",()=>MSGS);
 const N=(name,type,tv,pos,parameters,extra={})=>({parameters,id:require("crypto").createHash("md5").update(name).digest("hex").replace(/^(.{8})(.{4})(.{4})(.{4})(.{12}).*$/,"$1-$2-$3-$4-$5"),name,type,typeVersion:tv,position:pos,...extra});
 const respond=(name,pos)=>N(name,"n8n-nodes-base.respondToWebhook",1.1,pos,{respondWith:"json",responseBody:"={{ { reply: $json.reply } }}",options:{responseCode:"={{ $json.status }}"}});
 const nodes=[

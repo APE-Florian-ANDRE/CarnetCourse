@@ -20,7 +20,7 @@ function unload(){ const s=document.querySelector("script[data-ck-va]"); if(s){ 
   try{ delete window.va; delete window.vaq; }catch(e){} }
 function apply(c){ if(c&&c.analytics) load(); else unload(); }
 
-function cookiesHref(){ const a=document.querySelector('a[href$="cookies.html"]'); return a? a.getAttribute("href") : "cookies.html"; }
+function cookiesHref(){ const a=document.querySelector('a[href$="cookies"],a[href$="cookies.html"]'); return a? a.getAttribute("href") : "cookies"; }
 function build(){
   bar=document.createElement("section"); bar.id="ckBar"; bar.className="ck"; bar.hidden=true;
   bar.setAttribute("role","region"); bar.setAttribute("aria-label","Mesure d'audience et cookies");

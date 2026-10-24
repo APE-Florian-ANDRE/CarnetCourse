@@ -36,3 +36,16 @@ code{background:var(--code);border-radius:4px;padding:1px 5px;font-size:.88em;ov
 h1,h2{font-family:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;letter-spacing:.005em;line-height:1.05}
 h1{font-size:2.8rem}h2{font-size:1.7rem}
 .brand{font-family:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;font-size:1.35rem}
+
+/* FAQ : questions repliables, boutons d'action */
+.qa{background:var(--surface);border-radius:12px;margin:10px 0;padding:0 16px}
+.qa summary{cursor:pointer;font-weight:600;padding:14px 28px 14px 0;min-height:44px;list-style:none;position:relative}
+.qa summary::-webkit-details-marker{display:none}
+.qa summary::after{content:"+";position:absolute;right:2px;top:10px;font-size:1.3rem;color:var(--link)}
+.qa[open] summary::after{content:"−"}
+.qa summary:focus-visible{outline:3px solid var(--link);outline-offset:2px;border-radius:4px}
+.qa p{margin:0 0 14px;color:var(--fg2)}
+.cta-row{display:flex;flex-wrap:wrap;gap:12px;margin:28px 0 8px}
+.btn.ghost{background:transparent;color:var(--link);border:1px solid var(--line)}
+h3{font-size:1.05rem;margin:20px 0 6px}
+.note{color:var(--fg2);font-size:.92rem}

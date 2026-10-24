@@ -67,6 +67,7 @@
       ]
     }
   ],
+  "regions": ["fra1"],
   "buildCommand": "node tests/static-checks.js",
   "outputDirectory": "public",
   "functions": {

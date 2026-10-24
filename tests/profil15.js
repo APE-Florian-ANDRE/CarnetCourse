@@ -30,7 +30,7 @@ const IDS=["sexe","age","taille","poids","cible","mg","activite","sport","sObj",
    await p.evaluate(()=>localStorage.setItem("carnet.psec",'{"ps-me":"x","__proto__":1,"zz":1,"ps-trn":1}')); await p.reload(); await p.waitForTimeout(700); await p.click("#tab-profil"); ok(await p.evaluate(()=>document.querySelector("#ps-trn").open&&!!document.querySelector("#ps-me")),"P5 stockage piégé : ignoré proprement");
    // « Remplir mon profil » (exemple) ouvre la section qui contient le focus
    await p.evaluate(()=>{ localStorage.setItem("carnet.psec",'{"ps-me":0}'); }); await p.reload(); await p.waitForTimeout(700); await p.evaluate(()=>{ document.querySelector("#exampleBanner").hidden=false; }); await p.click("#goProfile"); await p.waitForTimeout(200);
-   ok(await p.evaluate(()=>document.querySelector("#ps-me").open&&document.activeElement.id==="age"),"P6 « Remplir mon profil » ouvre « Mes données » et place le focus sur l'âge");
+   ok(await p.evaluate(()=>!document.querySelector("#wiz").hidden&&document.activeElement&&!!document.activeElement.closest("#wiz")),"P6 « Remplir mon profil » ouvre l'assistant (audit UX-03 : jamais les valeurs de l'exemple gardées sans les voir)");
    await p.ctx.close(); }
  // exemple : aucune perte, bannière ; assistant et « Refaire mon profil »
  { const p=await mk(390,"light",JSON.stringify({profile:prof,isExample:true,log:[],week:1,seen:15})); await p.evaluate(()=>document.querySelector("[data-act=home]")&&document.querySelector("[data-act=home]").click()); await p.waitForTimeout(300);

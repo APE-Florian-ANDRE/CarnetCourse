@@ -15,7 +15,7 @@
   --rest:#9AA1AD; --rest-soft:rgba(255,255,255,.07); --renfo:#C9A7FF; --renfo-soft:rgba(201,167,255,.14); --mP:#7FE3C4; --mC:#D4FF3A; --mF:#FFB27A;
   --warn-bg:#2A1E14; --warn-fg:#F6D9C2; --bad-bg:#2E1715; --bad-fg:#FFB3A8; --ok-bg:rgba(127,227,196,.12); --ok-fg:#7FE3C4;
   --shadow:none; --danger:#FF8A7A;
-  --seg-active:#F4F5F7; --tab-off:#8A919C; --field-line:#3A3F49; --sel-line:#F4F5F7; --toast-bg:#20232A; --toast-fg:#F4F5F7; --toast-act:#D4FF3A;
+  --seg-active:#F4F5F7; --tab-off:#8A919C; --field-line:#6E7480; --sel-line:#F4F5F7; --toast-bg:#20232A; --toast-fg:#F4F5F7; --toast-act:#D4FF3A;
   --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --f-body:"DM Sans",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   --f-round:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
@@ -71,8 +71,8 @@ input,select{font:inherit;font-size:1rem;color:var(--fg);background:var(--fill2)
 select{background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:30px}
 input[type="date"]{min-height:42px}
 .seg{display:flex;flex-wrap:wrap;gap:2px;background:var(--fill);border-radius:10px;padding:2px}
-.seg label{display:flex;flex:1 1 0;min-width:0}
-.seg input{position:absolute;opacity:0;width:1px;height:1px}
+.seg label{display:flex;flex:1 1 0;min-width:0;position:relative}
+.seg input{position:absolute;left:0;top:0;opacity:0;width:1px;height:1px;pointer-events:none}
 .seg span{flex:1;min-width:0;text-align:center;border-radius:8px;padding:9px 4px;cursor:pointer;font-size:.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .seg input:checked+span{background:var(--seg-active);box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:600}
 .seg input:disabled+span{opacity:.35;cursor:default}
@@ -1042,11 +1042,6 @@ details.psec>.pbody{padding:2px 18px 18px}
 .band .cta{margin:0;align-items:flex-end}
 .band .btn{background:var(--ink);color:var(--accent);min-height:58px}
 .band .btn:focus-visible{outline-color:var(--ink)}
-.hfoot{margin:0 -24px;border-top:1px solid #1E2127;padding:28px 24px 40px;display:flex;flex-wrap:wrap;align-items:center;gap:12px 24px;text-align:left}
-.fbrand{font:800 1.3rem var(--f-display);margin-right:auto}
-.hfoot .legalnav{margin:0;justify-content:flex-start;gap:6px 20px}
-.hfoot .legalnav a{color:var(--muted);text-decoration:none}
-.hfoot .legalnav a:hover{color:var(--fg);text-decoration:underline}
 @media (max-width:1000px){
   .hero{grid-template-columns:minmax(0,1fr);gap:24px;padding-top:32px}
   .hero-vis{height:420px;max-width:520px;width:100%;justify-self:center}
@@ -1234,3 +1229,38 @@ html.ck-on .cfab:not([aria-expanded="true"]){z-index:33}   /* sous la bannière 
 .evb .evok,.evb .evn,.evb .evx{color:var(--muted)}
 .evb .btn.evap{white-space:normal;text-align:left;max-width:100%;min-height:44px}
 .evb .cbtn.ev,.evb .linkbtn{min-height:44px}
+
+/* pied de page de l'accueil : marque + contact, trois colonnes de liens, ligne de bas de page */
+.hfoot{margin:0 -24px;border-top:1px solid var(--line);padding:40px 24px 28px;text-align:left;max-width:none;font-size:1rem}
+.fmain{display:grid;grid-template-columns:minmax(220px,1.6fr) repeat(3,minmax(140px,1fr));gap:32px;max-width:1100px;margin:0 auto}
+.fbrand{font:800 1.5rem var(--f-display)}
+.ftag{color:var(--muted);font-size:.92rem;margin:8px 0 16px;max-width:34ch;line-height:1.5}
+.fcontact{display:inline-flex;align-items:center;gap:8px;text-decoration:none}
+.fh{font:600 .78rem var(--f-body);text-transform:uppercase;letter-spacing:.06em;color:var(--fg2);margin:4px 0 12px}
+.hfoot ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.hfoot .legalnav{display:block;margin:0;font-size:inherit}
+.hfoot .fcol a,.hfoot .fcol button{color:var(--muted);text-decoration:none;font:inherit;font-size:.92rem;background:none;border:0;padding:6px 0;min-height:32px;display:inline-flex;align-items:center;cursor:pointer;text-align:left}
+.hfoot .fcol a:hover,.hfoot .fcol button:hover{color:var(--fg);text-decoration:underline;text-underline-offset:3px}
+.hfoot .fcol a:focus-visible,.hfoot .fcol button:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:4px}
+.hfoot .legalnav [data-consent-open]{color:var(--muted);text-decoration:none;padding:6px 0;min-height:32px}
+.fbot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 24px;max-width:1100px;margin:32px auto 0;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:.82rem}
+@media (max-width:860px){.fmain{grid-template-columns:1fr 1fr;gap:28px 20px}.fabout{grid-column:1/-1}}
+@media (max-width:720px){.hfoot{margin-inline:-16px;padding-inline:16px}}
+@media (max-width:360px){.fmain{grid-template-columns:1fr}}
+
+/* audit A11Y-03 : lien d'évitement vers le contenu de l'appli */
+.skip{position:absolute;left:12px;top:-60px;z-index:100;background:var(--accent);color:var(--accent-fg);padding:10px 14px;border-radius:10px;font-weight:600;text-decoration:none}
+.skip:focus{top:12px}
+#appMain:focus{outline:none}
+/* audit UX-18 : le texte du sélecteur de semaine ne touche plus la flèche */
+#weekSel{padding-right:34px}
+/* audit UX-08 : la bulle du coach ne masque plus le bas de page (« Gérer les cookies », « Voir plus ») */
+html.cfab-on .wrap{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+@media (max-width:720px){html.cfab-on .wrap{padding-bottom:calc(154px + env(safe-area-inset-bottom,0px))}}
+/* audit A11Y-01 : mode contraste forcé (Windows) : focus, sélection et contours restent visibles */
+@media (forced-colors:active){
+  :focus-visible{outline:2px solid CanvasText!important;outline-offset:2px}
+  input,select,textarea{border:1px solid CanvasText}
+  .seg input:checked+span,.checks input:checked+span,[role=tab][aria-selected=true]{outline:2px solid Highlight;outline-offset:-2px}
+  .btn,.chip,.alert{border:1px solid CanvasText}
+}

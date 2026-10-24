@@ -1,10 +1,11 @@
 // Onglet Notifications passif : tests adversariaux (passivité, contenu, actions, interactions, mise en page).
 const {chromium}=require("playwright"); const L=require("./lib");
-const D=n=>new Date(Date.now()+n*864e5).toISOString().slice(0,10);
+// horloge figée (audit CODE-03 : le résultat ne dépend plus du jour où le test est lancé) : mercredi 7 octobre 2026
+const FIX="2026-10-07T10:00:00", D=n=>new Date(Date.parse(FIX+"Z")+n*864e5).toISOString().slice(0,10);
 const base={sexe:"H",age:35,taille:178,poids:80,cible:"75",niveau:"int",objectif:"10",volume:25,longest:10,seances:"4",renfo:"2",longDay:"6",start:D(0),deficit:300,bonus:100,adj:0,lieu:"dehors",equip:"salle",types:["seuil","vma"],cross:"non",raceDate:""};
 // scénarios : beaucoup de contenu (objectif irréaliste + début passé + énergie basse + nouveautés) / rien du tout
 const SC={
-  busy:{profile:{...base,start:D(-40),volume:10,longest:5},seen:13},
+  busy:{profile:{...base,start:D(-40),volume:10,longest:5,deficit:250,bonus:50},seen:13},   // énergie disponible entre 30 et 35 : repère « apports un peu justes » (panneau)
   empty:{profile:{...base,deficit:0,bonus:0},seen:15},
   future:{profile:{...base,start:D(20)},seen:15},
   ended:{profile:{...base,start:D(-200)},seen:15},
@@ -12,7 +13,8 @@ const SC={
 };
 const seedOf=k=>JSON.stringify({...SC[k],isExample:false,log:[],week:1});
 let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")+m+(x!==undefined&&!c?" -> "+JSON.stringify(x):"")); };
-(async()=>{ const b=await chromium.launch(); const E=[];
+(async()=>{ const b0=await chromium.launch(); const E=[];
+ const b={newContext:async o=>{ const c=await b0.newContext(o); await c.clock.install({time:new Date(FIX)}); return c; },close:()=>b0.close()};
  const mk=async(S,{seed,width=390,height=844,session,db,ctx:ctx0}={})=>{ const ctx=ctx0||await b.newContext({viewport:{width,height},locale:"fr-FR"}); const p=await ctx.newPage();
    p.on("pageerror",e=>E.push("PE "+e.message)); p.on("console",m=>{ if(m.type()==="error") E.push("console "+m.text().slice(0,160)); });
    if(db) await L.fake(p,db,{session});
@@ -54,7 +56,7 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
    ok(r.sw<=r.vw&&!r.overlap&&r.inV,"N3 320 px : bouton et Compte visibles, sans chevauchement ni débordement",r); await p.ctx.close(); }
 
  // N4 contenu : chaque alerte déplacée est dans le panneau et nulle part ailleurs
- for(const [k,re,sec] of [["future",/Ton plan commence le/,"Semaine 1"],["busy",/Objectif trop loin/,"Ton plan"],["busy",/Énergie disponible/,"Semaine 7"],["ended",/Ce plan est terminé/,"Semaine 1"]]){
+ for(const [k,re,sec] of [["future",/Ton plan commence le/,"Semaine 1"],["busy",/Objectif trop loin/,"Ton plan"],["busy",/apports sont un peu justes/,"Semaine 7"],["ended",/Ce plan est terminé/,"Semaine 1"]]){
    const p=await mk(S,{seed:seedOf(k)});
    const out=await p.evaluate(re=>{ const r=new RegExp(re); return {week:r.test(document.querySelector("#weekAlerts").textContent),wrap:[...document.querySelectorAll(".wrap .alert")].filter(a=>a.getClientRects().length&&r.test(a.textContent)).length}; },re.source);
    const pt=await openP(p); const inSec=await p.evaluate(([re,sec])=>{ const s=[...document.querySelectorAll('.sheet .nt-s')].find(x=>x.querySelector("h4").textContent===sec); return !!s&&new RegExp(re).test(s.textContent); },[re.source,sec]);

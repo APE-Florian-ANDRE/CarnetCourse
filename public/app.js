@@ -509,7 +509,7 @@ function quality0(kind,w,p,vma,phase,o){
     let [lab,r,dist,tmin]=opts[(w-1)%4]; let work;
     if(taper){r=Math.ceil(r/2);} if(fw){r=Math.max(2,r-2*fw);} lab=lab.replace(/^\d+/,r);
     const sp=vma*.97; work= dist? r*dist/sp*60 : r*tmin;
-    return S("q","Fractionné VMA",[wu,{l:lab+", récup. trot de durée égale à l'effort",min:Math.round(work*2),z:"z3",lo:.95,hi:1.0,work,iv:{n:r,on:Math.round(work*60/r),off:Math.round(work*60/r),onL:dist?Math.round(dist*1000)+" m vite":"Vite",offL:"Trot",offLast:true}},cd],{hardMin:work,note:"Quelques mots seulement à la fin de chaque répétition. Si la vitesse chute nettement, arrête une répétition plus tôt."});
+    return S("q","Fractionné VMA",[wu,{l:lab+", récup. trot de durée égale à l'effort",min:Math.round(work*2),z:"z3",lo:.95,hi:1.0,work,iv:{n:r,on:Math.round(work*60/r),off:Math.round(work*60/r),onL:dist?Math.round(dist*1000)+" m vite":"Vite",offL:"Trot",offLast:true}},cd],{hardMin:work,note:"Quelques mots seulement à la fin de chaque répétition. Si la vitesse chute nettement, arrête une répétition plus tôt. Arrête immédiatement et appelle le 15 en cas de douleur dans la poitrine, de malaise, de palpitations ou d'essoufflement anormal."});
   }
   if(kind==="allure"){
     const rp=OBJ[p.objectif].racePct;
@@ -639,6 +639,7 @@ const VMAX={forme:45,5:50,10:60,21:75,42:100};
 // plus longue sortie minimale en fin de prépa (S10) pour que la course reste raisonnable (Frandsen 2025 : au-delà de +100 % de la plus longue sortie, risque plus que doublé)
 // la course ne fait jamais plus de 2 fois la plus longue sortie du plan (10 km : 7 km au moins ; 5 km : 3,5 km)
 const LONG_NEED={5:3.5,10:7,21:16,42:28};
+const LONG_MAX_MIN={forme:90,5:100,10:120,21:150,42:180};   // durée maximale d'une sortie longue, en minutes
 // débutant : semi possible sur 30 semaines et plus, marathon sur un an ; la sortie longue doit toujours atteindre LONG_NEED
 const reachable=(o,wk,deb)=> !LONG_NEED[o] || (!(deb&&((o==="21"&&wk.length<30)||(o==="42"&&wk.length<52))) && wk.topLong>=LONG_NEED[o]-.05);
 function buildPlan(p){
@@ -699,8 +700,8 @@ function prefApply(weeks,p){ const pf=p.prefK; if(!pf||(!pf.no.length&&!pf.like.
    Débutant, moins de 18 ans, 65 ans et plus, IMC de 35 et plus, douleur notée : variante prudente seulement, sans aucun test maximal.
    Aucun test sur un plan de 4 semaines ou moins, ni quand la semaine 1 est déjà l'affûtage ou la semaine de course. */
 const EV_T={vma6:"Test VMA : 6 minutes",end:"Test d'endurance",cont:"Test en aisance : course continue",ref:"Footing de référence",deb:"Test course / marche"};
-const EV_NO="Ne fais pas ce test si tu as mal quelque part, si tu es malade ou fiévreux, ou après une mauvaise nuit ou une grosse fatigue : fais un footing facile à la place et décale le test de quelques jours.";
-const EV_NO_SOFT="Si tu as mal quelque part, si tu es malade ou très fatigué, remplace-le par de la marche ou du repos et décale-le de quelques jours.";
+const EV_NO="Ne fais pas ce test si tu as mal quelque part, si tu es malade ou fiévreux, ou après une mauvaise nuit ou une grosse fatigue : fais un footing facile à la place et décale le test de quelques jours. Arrête immédiatement et appelle le 15 en cas de douleur dans la poitrine, de malaise, de palpitations ou d'essoufflement anormal.";
+const EV_NO_SOFT="Si tu as mal quelque part, si tu es malade ou très fatigué, remplace-le par de la marche ou du repos et décale-le de quelques jours. Arrête immédiatement et appelle le 15 en cas de douleur dans la poitrine, de malaise, de palpitations ou d'essoufflement anormal.";
 const evBmi=p=> p.poids/Math.pow(p.taille/100,2);
 // douleur notée ces 14 derniers jours (ressenti après séance, ou suivi) : pas de test maximal
 // douleur à une date : notée dans les 14 jours qui la précèdent (ressenti, ou dernière mesure du suivi à cette date) ; ce qui est noté après ne compte pas
@@ -861,6 +862,10 @@ function buildPlanRun(p){
   const o=p.objectif, deb=p.niveau==="deb";
   // la distance doit être atteignable avec la complexité choisie ET en standard : la complexité ne fait jamais viser plus loin que le plan standard
   const ok=(c,w)=> reachable(c,w,deb) && (!p.cplx||p.cplx==="standard"||!LONG_NEED[c]||reachable(c,buildPlanFor({...p,cplx:"standard",objectif:c}),deb));
+  // avant 18 ans : ni semi ni marathon (repli sur 10 km, ou moins si besoin)
+  if(p.minor&&(o==="21"||o==="42")){ const chain=["10","5","forme"]; let weeks=null;
+    for(const c of chain){ const w2= c==="forme"? buildPlanFor({...p,objectif:"forme"}) : buildPlanFor({...p,objectif:c}); if(c==="forme"||ok(c,w2)){ weeks=w2; weeks.unreal={asked:o,used:c,top:w2.topLong,minor:true}; break; } }
+    capSimple(weeks,{...p,objectif:weeks.unreal.used}); capLong(weeks,{...p,objectif:weeks.unreal.used}); return weeks; }
   let weeks=buildPlanFor(p);
   if(!ok(o,weeks)){
     // repli sur la distance atteignable la plus proche : marathon → semi → 10 km → 5 km → forme
@@ -1007,6 +1012,7 @@ function planCore(p,lin){
     let V=V0*fact[w-1];
     // plafond absolu de volume hebdo selon l'objectif (débutant : 60 %), jamais sous le volume de départ
     if(p.vmax) V=Math.min(V,Math.max(V0,(VMAX[o]||60)*(deb?.6:1)));
+    if(p.minor) V=Math.min(V,Math.max(V0,40));   // avant 18 ans : 40 km par semaine au plus
     // pas de saut de volume : une semaine normale ne dépasse pas de plus de 8 % (1 km au moins) la dernière semaine normale réellement placée
     // (exception : un footing de plus tant que la semaine a moins de 3 sorties, la fréquence passe avant la longueur)
     // quand le volume placé reste sous le volume prévu (sorties au minimum), le repère est le volume prévu de la semaine d'avant :
@@ -1018,7 +1024,10 @@ function planCore(p,lin){
     const ref=Math.min(maxLong,cap), lim=maxLong*1.1;
     // plan long (après la préparation générale) : sortie longue de 3 h au plus, sauf ce qu'il faut pour atteindre LONG_NEED ;
     // au-delà de 29,5 km seulement en phase spécifique (2 sorties de 30 km et plus au maximum)
-    const capL= p.vmax? Math.min(cap,Math.max(need,Math.min(3*vma*.64,phase==="spe"?cap:29.5))) : cap;
+    // durée maximale de la sortie longue (Daniels, Pfitzinger : 2 h 30 à 3 h ; au-delà, le risque monte sans gain) : en km à l'allure de la sortie longue,
+    // jamais sous ce qu'il faut pour atteindre LONG_NEED ; avant 18 ans, 1 h 30 au plus
+    const durKm=(p.minor?90:LONG_MAX_MIN[o]||150)/60*vma*.64;
+    const capL= p.minor? Math.min(cap,durKm) : Math.min(cap,Math.max(need,p.vmax? Math.min(durKm,phase==="spe"?cap:29.5) : durKm));
     let L=null, shortAlt=false;
     if(phase==="taper") L=Math.min(lim,Math.max(5,ref*.6),prevL||Infinity);
     else if(deload) L=Math.max(4,Math.min(ref*.8,V*.33));
@@ -1038,6 +1047,8 @@ function planCore(p,lin){
     if(L){ let r=Math.round(L*2)/2; if(r>lim+1e-9) r=Math.floor(lim*10)/10; if(deload&&prevL) r=Math.max(Math.min(r,prevL-.5),Math.min(3,lim)); L=r; }
     const ctxW={wt:tplWeek(w,isRace,N),N,lim,ref,debLong,debBout,debS10Min,debS10LongMin,lastRuns,lastQ,lastKm,vol:Math.max(vol,deb?8:0),seen};
     let wk=buildWeek(p,w,phase,deload,V,L,vma,ctxW);
+    // débutant, semaine allégée : la semaine allégée du modèle de 12 semaines (4 ou 8) si elle est plus légère (audit MET-07 : jamais plus chargée que la semaine normale d'avant)
+    if(deb&&deload){ const tw=ctxW.wt, dlT= tw>=8?8 : tw>=4?4 : Math.max(1,tw-1); if(dlT!==tw){ const km=x=>x.days.reduce((a,d)=>a+(d.run&&d.run.type!=="race"?sessionKm(d.run,vma):0),0), w2=buildWeek(p,w,phase,deload,V,L,vma,{...ctxW,wt:dlT}); if(km(w2)<km(wk)-1e-9) wk=w2; } }
     // INVARIANT : le volume placé ne dépasse jamais +8 % et ne redescend pas sous la semaine normale d'avant
     // volume réellement placé (arrondis, minimums, séances retirées) : la semaine est reconstruite avec un autre volume prévu si elle
     // dépasse la règle des +8 %, si une semaine allégée n'est pas plus légère, ou si une semaine normale redescend sous la précédente
@@ -1399,7 +1410,7 @@ function dayFuel(p,E,wk){
   const raceI=days.findIndex(d=>d.kind==="race"||d.obj), long_= p.objectif==="21"||p.objectif==="42";
   const preOf=i=> raceI<0? null : i===(raceI+6)%7? "eve" : long_&&i===(raceI+5)%7? "pre" : null;
   let defs=days.map(d=> d.kind==="race"||d.obj||d.kind==="before"||((long_||evSport(p.sport))&&preOf(d.i))?0 : lowBmi? Math.min(0,-adj) : base + ((d.kind==="rest"||d.kind==="easy")?extra:0) - adj);
-  const hardMin=25*E.ffm+exAvg;           // apport moyen minimum : 25 kcal/kg de masse maigre après le sport
+  const hardMin=30*E.ffm+exAvg;           // apport moyen minimum : 30 kcal/kg de masse maigre après le sport (seuil d'énergie basse, consensus CIO RED-S 2023)
   const wanted=defs.reduce((a,x)=>a+x,0)/7, allowed=maintAvg-hardMin;
   let floorHit=false;
   if(wanted>allowed){
@@ -1900,9 +1911,10 @@ function renderWeek(){
   const longRace= P.objectif==="21"||P.objectif==="42";
   if(f.taper&&runSport()) al.push(`<div class="alert ok">${wk.phase==="race"?"Semaine de course":"Affûtage"} : le déficit fixe est gardé, mais sans supplément les jours faciles${wk.phase==="race"?", et le jour de la course est à l'équilibre":""}. ${wk.phase==="race"&&longRace?"Les 2 jours avant la course sont aussi à l'équilibre, avec des féculents à chaque repas.":"Si tu te sens à plat, repasse à l'équilibre les 2 jours avant la course."}</div>`);
   const absMinK=P.sexe==="F"?1200:1500;
-  if(f.floorHit&&Math.max(0,f.realDef)<15) keep.push(`<div class="alert bad">Aucun déficit possible cette semaine : ${f.maintAvg<=absMinK+100?"ton maintien est déjà sous "+(P.sexe==="F"?"1 200":"1 500")+" kcal environ":"une fois le sport payé, il te resterait moins de 25 kcal par kg de masse maigre"}. L'objectif reste au maintien.${E.mgEst?" Ta masse grasse est estimée à "+E.mg+" % ; renseigne-la dans ton profil si tu la connais.":""}</div>`);
-  else if(f.floorHit) keep.push(`<div class="alert bad">Déficit limité à ${fmt0(Math.max(0,f.realDef))} kcal/jour au lieu de ${fmt0(f.wanted)} : au-delà, il te resterait moins de 25 kcal par kg de masse maigre une fois le sport payé, ce qui est trop peu pour s'entraîner sans risque.${f.adj<0?" L'ajustement manuel est compris dans ce calcul.":""} ${E.mgEst?"Ta masse grasse est estimée à "+E.mg+" % ; renseigne-la dans ton profil si tu la connais.":""}</div>`);
-  else if(!f.noDef && f.ea<30) al.push(`<div class="alert ${f.ea<28?"warn":"ok"}">Énergie disponible : <b>${fmt1(f.ea)} kcal/kg</b> de masse maigre, ${f.ea<28?"sous":"juste sous"} le repère de 30. <details><summary>Pourquoi ?</summary><p>C'est ce qui reste à ton corps une fois le sport payé, rapporté à ta masse maigre. Sous 30, la récupération peut souffrir ; l'outil bloque sous 25. Surveille fatigue et sommeil dans l'onglet Suivi, et remonte un peu si les séances deviennent difficiles.</p></details></div>`);
+  if(f.floorHit&&Math.max(0,f.realDef)<15) keep.push(`<div class="alert bad">Aucun déficit possible cette semaine : ${f.maintAvg<=absMinK+100?"ton maintien est déjà sous "+(P.sexe==="F"?"1 200":"1 500")+" kcal environ":"une fois le sport payé, il te resterait moins de 30 kcal par kg de masse maigre"}. L'objectif reste au maintien.${E.mgEst?" Ta masse grasse est estimée à "+E.mg+" % ; renseigne-la dans ton profil si tu la connais.":""}</div>`);
+  else if(f.floorHit) keep.push(`<div class="alert bad">Déficit limité à ${fmt0(Math.max(0,f.realDef))} kcal/jour au lieu de ${fmt0(f.wanted)} : au-delà, il te resterait moins de 30 kcal par kg de masse maigre une fois le sport payé, ce qui est trop peu pour s'entraîner sans risque.${f.adj<0?" L'ajustement manuel est compris dans ce calcul.":""} ${E.mgEst?"Ta masse grasse est estimée à "+E.mg+" % ; renseigne-la dans ton profil si tu la connais.":""}</div>`);
+  // énergie disponible entre 30 (plancher imposé par l'outil) et 35 : repère d'information, pas une alerte (audit UX-17)
+  else if(!f.noDef && f.ea<35) al.push(`<div class="alert warn">Tes apports sont un peu justes pour ton entraînement. <details><summary>Pourquoi ?</summary><p>L'énergie disponible (ce qui reste à ton corps une fois le sport payé, rapporté à ta masse maigre) est de <b>${fmt1(f.ea)} kcal/kg</b>. L'outil ne descend jamais sous 30 ; entre 30 et 35, un déficit tenu longtemps peut peser sur la récupération. Surveille fatigue et sommeil dans l'onglet Suivi, et réduis le déficit si les séances deviennent difficiles.</p></details></div>`);
   if(f.absHit) keep.push(`<div class="alert bad">Certains jours, l'objectif est remonté à ${P.sexe==="F"?"1 200":"1 500"} kcal : en dessous, seulement avec un suivi médical. Le déficit réel de ces jours est plus petit que celui demandé.</div>`);
   else if(f.bmrHit && !f.floorHit) al.push(`<div class="alert warn">Certains jours, l'objectif est remonté à ton métabolisme de base (${fmt0(E.bmr)} kcal) : le déficit réel de ces jours est plus petit que celui demandé.</div>`);
   if(E.bmi>=35||P.age>=65) keep.push(`<div class="alert warn">${E.bmi>=35&&P.age>=65?"À "+P.age+" ans et avec un IMC de "+fmt1(E.bmi):E.bmi>=35?"Avec un IMC de "+fmt1(E.bmi):"À "+P.age+" ans"}, demande l'avis d'un médecin avant de commencer ce plan, surtout pour les séances intenses.</div>`);
@@ -2028,7 +2040,7 @@ function restoreFocus(fid){
 // objectif trop loin : première date de course (même jour de la semaine, dimanche par défaut) qui le rend atteignable sans risque, début du plan inchangé
 let safeCache={k:"",v:null};
 function safeRaceDate(){
-  const u=plan.unreal; if(!u||!runSport()) return null;
+  const u=plan.unreal; if(!u||u.minor||!runSport()) return null;
   const pr=state.profile, tdy=todayIso(), st=realStart()||tdy, k=JSON.stringify([pr,st,tdy]); if(safeCache.k===k) return safeCache.v;
   const wd= okIso(pr.raceDate)? (new Date(pr.raceDate+"T12:00:00").getDay()+6)%7 : 6;
   let v=null;
@@ -2046,6 +2058,7 @@ function unrealAlert(){
   // débutant : semi à partir de 30 semaines, marathon à partir de 52 ; au-delà de ces seuils, c'est la sortie longue qui manque
   const debMin= P.niveau==="deb"? {21:30,42:52}[u.asked] : 0, tooShort= debMin&&plan.length<debMin;
   const later= tooShort? "Garde ton objectif pour la suite, avec un plan d'au moins "+debMin+" semaines"+(debMin===52?" (un an)":"")+"." : plan.length>=N_MAX? "Garde ton objectif pour plus tard, une fois cette course faite." : "Garde ton objectif pour la suite, avec un plan plus long.";
+  if(u.minor) return `<div class="alert warn"><b>Avant 18 ans, pas de semi-marathon ni de marathon.</b> Ces distances sont déconseillées avant 18 ans : le plan prépare donc <b>${usedTxt}</b>, avec des sorties longues de 1 h 30 au plus. Parles-en avec ton médecin ou ton club.</div>`;
   const sd=safeRaceDate();
   if(sd) return `<div class="alert bad act"><span><b>Objectif trop loin pour ${plan.length} semaines.</b> ${tooShort?"En débutant, "+lab+" demande au moins "+debMin+" semaines de course régulière.":"Ta plus longue sortie ne monterait qu'à "+fmt1(u.top)+" km : la course ferait environ "+fmt1(RACE_KM[u.asked]/Math.max(1,u.top))+" fois cette distance, trop risqué."} <b>Pour viser ${lab} sans risque, choisis une course le ${yearDate(sd.d)} ou après.</b> En attendant, le plan prépare ${usedTxt}.</span><button class="btn" type="button" data-safedate>Viser cette date</button></div>`;
   return `<div class="alert bad"><b>Objectif trop loin pour ${plan.length} semaines.</b> ${tooShort?"En débutant, "+lab+" demande au moins "+debMin+" semaines de course régulière.":"Pour "+lab+", ta plus longue sortie ne monterait qu'à "+fmt1(u.top)+" km d'ici la semaine "+Math.max(1,plan.length-2)+" : la course ferait environ "+fmt1(RACE_KM[u.asked]/Math.max(1,u.top))+" fois cette distance, ce qui multiplie le risque de blessure."} Le plan prépare donc <b>${usedTxt}</b>. ${later}</div>`;
@@ -2063,7 +2076,7 @@ function renderPlan(){
   rows.map(({wk,f,km})=>{const d=firstDay(wk.w);
     return `<tr data-w="${wk.w}" class="${wk.w===state.week?"cur":""}" tabindex="0"><td class="n">${wk.w}</td><td class="nw">${dfmt(d)}</td><td>${phLab(wk.phase)}${wk.deload?" · allégée":""}</td><td class="n">${volTxt14(km,wk)}</td><td><div class="vbar" data-sw="${Math.round(km/max*100)}"></div></td><td class="n">${lrOf(wk)}</td><td>${q(wk)}</td><td class="n">${fmt0(f.kcalAvg)}</td></tr>`;}).join("")+`</tbody>`;
   const items=rows.map(({wk,f,km})=>{const d=firstDay(wk.w);
-    return `<li data-w="${wk.w}" class="${wk.w===state.week?"cur":""}" tabindex="0" role="button"><div class="m-main"><div class="m-t"><span>Sem. ${wk.w}${d?" · "+dfmt(d):""}${plan.length>20?"":" · "+phLab(wk.phase)}${wk.deload?" · allégée":""}</span><span class="num">${volTxt14(km,wk)}</span></div><div class="m-s">${wk.phase==="race"?lrOf(wk):lrLab14()+lrOf(wk)} · ${q(wk)} · ${fmt0(f.kcalAvg)} kcal/j</div></div><span class="chev" aria-hidden="true">›</span></li>`;});
+    return `<li data-w="${wk.w}" class="${wk.w===state.week?"cur":""}" tabindex="0" role="button"><div class="m-main"><div class="m-t"><span>Sem. ${wk.w}${d?" · "+dfmt(d):""}${plan.length>20?"":" · "+phLab(wk.phase)}${wk.deload?" · allégée":""}</span><span class="num">${volTxt14(km,wk)}</span></div><div class="m-s">${wk.phase==="race"?lrOf(wk):(()=>{ const l=lrOf(wk), k=q(wk); return l==="–"&&k==="–"? "Footings faciles seulement" : [l!=="–"?lrLab14()+l:"",k!=="–"?k:""].filter(Boolean).join(" · "); })()} · ${fmt0(f.kcalAvg)} kcal/j</div></div><span class="chev" aria-hidden="true">›</span></li>`;});
   // plan long sur téléphone : semaines regroupées par phase, phases terminées repliées, la phase de la semaine choisie ouverte
   if(plan.length<=20) $("#planList").innerHTML=items.join("");
   else{ const tdy=todayIso(), grp=[];
@@ -2119,7 +2132,7 @@ function renderLog(){
   document.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>removeEntry(b.dataset.del,b)));
   renderAdvice(log); renderProg(log); renderPerf(log);
 }
-// un ajustement négatif qui ferait passer sous le plancher de sécurité (25 kcal/kg MM) une semaine du plan
+// un ajustement négatif qui ferait passer sous le plancher de sécurité (30 kcal/kg MM) une semaine du plan
 function adjHitsFloor(a){ if(P.minor||E.bmi<18.5) return true; const Q={...P,adj:a}; return plan.some(wk=>dayFuel(Q,E,wk).floorHit); }
 // retrait ou remplacement d'une semaine : barre « Annuler » pendant 6 s, sans boîte de confirmation.
 // Les changements faits pendant que la barre est affichée s'empilent : « Annuler » les défait tous, aucun n'est perdu.
@@ -2477,7 +2490,7 @@ $("nav.tabs [role=tablist]").addEventListener("keydown",e=>{
   const j= e.key==="ArrowRight"? (i+1)%tabs.length : e.key==="ArrowLeft"? (i-1+tabs.length)%tabs.length : e.key==="Home"? 0 : e.key==="End"? tabs.length-1 : -1;
   if(j<0)return; e.preventDefault(); selectTab(tabs[j].id.slice(4)); tabs[j].focus();
 });
-$("#goProfile").addEventListener("click",()=>{selectTab("profil");psecReveal($("#age")).focus();});
+$("#goProfile").addEventListener("click",e=>openWizard(e.currentTarget));   // l'assistant part de zéro : jamais les valeurs de l'exemple gardées sans les voir
 $("#weekSel").addEventListener("change",e=>goWeek(+e.target.value));
 $("#prevW").addEventListener("click",()=>{if(state.week>1)goWeek(state.week-1);});
 $("#nextW").addEventListener("click",()=>{if(state.week<plan.length)goWeek(state.week+1);});
@@ -3365,7 +3378,7 @@ function openFeel(w,i,opener){
   const zoneOpt=`<option value="">Choisis…</option>`+Object.entries(PAIN_ZONES).map(([k,t])=>`<option value="${k}"${has&&has.zone===k?" selected":""}>${esc(t)}</option>`).join("");
   const pain=has?has.pain:0;
   openSheet({title:"Ressenti : "+name,kind:"feel",opener,
-    html:`<p class="note">${esc(DAYS[i])} ${esc(dfmt(weekDate(w,i)))}. Quelques secondes pour garder la trace de comment tu te sens : ça sert à repérer la fatigue avant qu'elle ne s'installe.</p>
+    html:`<p class="note">${esc(DAYS[i])} ${esc(dfmt(weekDate(w,i)).replace(/\.$/,""))}. Quelques secondes pour garder la trace de comment tu te sens : ça sert à repérer la fatigue avant qu'elle ne s'installe.</p>
     <div class="field"><label for="fRpe">Effort perçu (RPE)</label><select id="fRpe" data-first aria-describedby="fRpeH">${rpeOpt}</select><span class="hint" id="fRpeH">De 1 (très facile) à 10 (effort maximal). 7 : phrases courtes, ou 3 répétitions en réserve. 9 : une seule répétition en réserve.</span></div>
     <div class="field"><span class="lbl" id="fMoodL">Forme du jour</span><div class="seg" role="radiogroup" aria-labelledby="fMoodL" aria-describedby="fMoodH">${[1,2,3,4,5].map(k=>rad("fMood",k,String(k),has&&has.mood===k)).join("")}</div><span class="hint" id="fMoodH">1 : au plus bas, 5 : au top. Facultatif.</span></div>
     <div class="field"><span class="lbl" id="fPainL">Douleur</span><div class="seg" role="radiogroup" aria-labelledby="fPainL">${rad("fPain",0,"Aucune",pain===0)}${rad("fPain",1,"Légère",pain===1)}${rad("fPain",2,"Forte",pain===2)}</div></div>
@@ -3695,10 +3708,10 @@ function renderRegen(){ const box=$("#regen"); if(!box) return; box.hidden=!!sta
   const tdy=todayIso(), nm=Object.entries(cleanMoves(state.moves)).filter(([k,m])=>m&&m.to&&(k>=tdy||m.to>=tdy)).length; $(".rg-opt").hidden=!nm; }
 $("#rgGo").addEventListener("click",e=>{ const v=regenPreview(), keep=$("#rgMoves").checked&&!$(".rg-opt").hidden, df=d=>longDate(d);
   if(!v.n){ toast("Complète d'abord ton profil : âge, taille et poids."); return; }
-  openSheet({title:"Regénérer mon plan",opener:e.currentTarget,kind:"regen",closeLabel:"Annuler",firstClose:true,
+  openSheet({title:"Régénérer mon plan",opener:e.currentTarget,kind:"regen",closeLabel:"Annuler",firstClose:true,
     html:`<p class="note">Ton plan sera recréé avec ton profil actuel : <b>${v.n} semaine${v.n>1?"s":""}</b>, du ${esc(df(v.st))} au ${esc(df(v.end))}${v.race?", jusqu'à ta course":""}.</p>
       <ul class="rg-list"><li><b>Repart</b> de la semaine 1${keep?", séances déplacées remises à leur place":""}.</li><li><b>Conservés</b> : suivi, pesées, séances cochées, ressenti et activités importées.</li>${state.aip&&state.aip.p&&!state.aip.p.x?"<li><b>Ajustement de l'IA</b> : il ne s'appliquera plus au nouveau plan ; relance-le ensuite dans le Profil.</li>":""}</ul>`,
-    foot:`<button class="btn" type="button" id="rgOk">Regénérer</button>`,
+    foot:`<button class="btn" type="button" id="rgOk">Régénérer</button>`,
     onReady:sh=>{ sh.querySelector("#rgOk").addEventListener("click",()=>{ const r=regenPlan(keep); closeSheet(true); selectTab("semaine"); window.scrollTo(0,0);
       toast("Plan regénéré : "+r.n+" semaine"+(r.n>1?"s":"")+", à partir du "+longDate(r.st)+(r.nm?" · "+r.nm+" séance"+(r.nm>1?"s":"")+" remise"+(r.nm>1?"s":"")+" en place":"")+"."); }); }}); });
 /* ---- ajustement du plan par l'IA (api/plan.js) : rien n'est envoyé sans un accord donné à chaque envoi, réservé aux adultes connectés ----
@@ -3738,11 +3751,12 @@ function aipSheet(opener){
   const host=(()=>{ try{ return new URL(PLAN_AI_URL).host; }catch(e){ return ""; } })(), prov=esc(String((window.APP_CONFIG||{}).CHAT_PROVIDER_NAME||"un fournisseur d'IA").replace(/[\u0000-\u001f<>]/g,"").slice(0,60));
   const chk=(id,t,d)=>`<label class="chk"><input type="checkbox" id="${id}"><span>${t}<small>${d}</small></span></label>`;
   openSheet({title:"Ajuster mon plan avec l'IA",opener,kind:"aip",
-    html:`<p class="note">Pour ajuster ton plan, Pacebook envoie à la fonction du site (<b>${esc(host)}</b>) puis à <b>${prov}</b> : ton âge, ton sport, ton niveau, ton objectif, tes séances de sport et de renforcement par semaine, la durée de ton plan, la complexité choisie (<b>${esc(CPLX_LAB[P.cplx]||"Standard")}</b>)${P.pref?", tes préférences de séances écrites dans le Profil":""} et la structure des semaines à venir (phase, semaine allégée ou non, kilomètres, minutes, séances d'intensité). Ni ton nom, ni ton poids, ni tes notes ne sont envoyés. Ces données sortent de ton appareil et peuvent sortir de l'Union européenne. Rien n'est envoyé sans ton accord.</p>
-<div class="field"><label for="aipWish">Ta demande (facultatif)</label><textarea id="aipWish" maxlength="300" rows="3" placeholder="ex. je préfère les côtes au fractionné ; mes semaines sont chargées en ce moment" aria-describedby="aipWishH"></textarea><span class="hint" id="aipWishH">N'écris ni ton nom ni de détail médical. 300 caractères au plus.</span></div>
+    html:`<p class="note">Pour ajuster ton plan, Pacebook envoie à la fonction du site (<b>${esc(host)}</b>, hébergée par Vercel dans l'Union européenne) puis à <b>${prov}</b> (une intelligence artificielle) : ton âge, ton sport, ton niveau, ton objectif, tes séances de sport et de renforcement par semaine, la durée de ton plan, la complexité choisie (<b>${esc(CPLX_LAB[P.cplx]||"Standard")}</b>)${P.pref?", tes préférences de séances écrites dans le Profil":""} et la structure des semaines à venir (phase, semaine allégée ou non, kilomètres, minutes, séances d'intensité). Ni ton nom, ni ton poids, ni tes notes ne sont envoyés. Ces données sortent de ton appareil et de l'Union européenne. Rien n'est envoyé sans ton accord.</p>
+<div class="alert warn"><b>Offre gratuite de Google Gemini</b> : Google peut conserver ces données, s'en servir pour améliorer ses produits et les faire relire par des personnes.</div>
+<div class="field"><label for="aipWish">Ta demande (facultatif)</label><textarea id="aipWish" maxlength="300" rows="3" placeholder="ex. je préfère les côtes au fractionné ; mes semaines sont chargées en ce moment" aria-describedby="aipWishH"></textarea><span class="hint" id="aipWishH">${P.pref?"Tes préférences du Profil sont déjà incluses. ":""}N'écris ni ton nom ni de détail médical. 300 caractères au plus.</span></div>
 <div class="grp" role="group" aria-label="Ce qui est envoyé">${chk("aipFeel","Inclure mon ressenti après séance","Les 8 derniers : effort perçu, forme, douleur (sans tes notes). Décoché par défaut.")}
 ${chk("aipOk","J'accepte cet envoi","Obligatoire, pour cet ajustement seulement.")}</div>
-<div class="alert warn">L'IA ne touche ni aux volumes ni aux jours : elle choisit parmi les séances que le plan permet. C'est une aide générale, <b>pas un avis médical</b>.</div>
+<div class="alert warn">L'IA ne touche ni au volume de chaque semaine ni à tes jours : elle choisit parmi les séances que le plan permet, si bien qu'une séance peut devenir plus courte ou plus longue. C'est une aide générale, <b>pas un avis médical</b>.</div>
 <p class="note" id="aipErr" role="alert" hidden></p>`,
     foot:`<button class="btn" type="button" id="aipSend">Envoyer</button>`,
     onReady:sh=>{ const go=sh.querySelector("#aipSend"), err=sh.querySelector("#aipErr"), ok=sh.querySelector("#aipOk"); ok.setAttribute("data-first","");
@@ -3815,6 +3829,7 @@ psecInit();
 window.CarnetBridge=Object.freeze({
   openSheet, closeSheet, esc,
   ready:()=>!!P&&!state.isExample&&!P.incomplete, minor:()=>!!(P&&P.minor),
+  guest:()=>acct.st==="guest",   // invité (sans compte) : le coach demande une connexion avant tout envoi
   summary(inc){ const o={}, fin=v=>Number.isFinite(+v)? Math.round(+v*10)/10 : null; inc=inc||{};
     if(P) o.profil={age:fin(P.age)};   // l'âge est toujours joint (avec le consentement) : le serveur réserve le coach aux adultes
     if(inc.profile&&P) o.profil={sport:SPORTS.includes(P.sport)?P.sport:"course",niveau:["deb","int","conf"].includes(P.niveau)?P.niveau:null,objectif:Object.hasOwn(OBJ,P.objectif)?P.objectif:null,seances:fin(P.seances),renfo:fin(P.renfo),age:fin(P.age),poids_kg:fin(P.poids),semaine:state.week,semaines_plan:plan.length};
@@ -4026,13 +4041,17 @@ function wzPrefill(){
   s("#wzVolume",ex?p.volume:""); s("#wzLongest",ex?p.longest:"");
   wzset("wz_seances",ex?p.seances:EXAMPLE.seances); wzset("wz_renfo",ex?p.renfo:EXAMPLE.renfo); wzset("wz_lieu",ex?p.lieu:EXAMPLE.lieu); wzset("wz_equip",ex?p.equip:EXAMPLE.equip); wzset("wz_longDay",ex?p.longDay:EXAMPLE.longDay);
   wzset("wz_act",ex&&["1.25","1.4","1.55"].includes(String(p.activite))? String(p.activite) : (ex&&isFinite(+p.activite)&&+p.activite>0? ([1.25,1.4,1.55].reduce((a,b)=>Math.abs(b-p.activite)<Math.abs(a-p.activite)?b:a)) : EXAMPLE.activite));
-  const d=ex&&isFinite(+p.deficit)&&String(p.deficit).trim()!==""? +p.deficit : 300, keep=$("#wzDefKeep");
+  const d=ex&&isFinite(+p.deficit)&&String(p.deficit).trim()!==""? +p.deficit : 0, keep=$("#wzDefKeep");   // par défaut : maintien (la perte de poids est un choix explicite)
   if([0,200,300,400].includes(d)){ keep.hidden=true; keep.querySelector("input").value="-1"; } else{ keep.hidden=false; keep.querySelector("input").value=String(d); setT(keep.querySelector("span"),"garder "+d+" · actuel"); }
   wzset("wz_def",d); $("#wzAck").checked=false; wzSportPrefill14(ex,p);
 }
 // erreur de l'assistant : champ marqué invalide et relié au message (#wzErr) par aria-describedby
 const wzClr=()=>wizEl.querySelectorAll("[aria-invalid]").forEach(x=>{ x.removeAttribute("aria-invalid"); const d=(x.getAttribute("aria-describedby")||"").split(" ").filter(y=>y&&y!=="wzErr"); if(d.length) x.setAttribute("aria-describedby",d.join(" ")); else x.removeAttribute("aria-describedby"); });
-function wzFail(el,msg){ const e=$("#wzErr"); e.textContent=msg; e.hidden=false; wzClr(); if(el){ el.setAttribute("aria-invalid","true"); el.setAttribute("aria-describedby",((el.getAttribute("aria-describedby")||"")+" wzErr").trim()); el.focus(); } return false; }
+function wzFail(el,msg){ const e=$("#wzErr"); e.textContent=msg; e.hidden=false; wzClr();
+  // message placé juste sous le champ fautif (sur petit écran, en bas du formulaire, il restait caché sous la barre « Continuer »)
+  const f=el&&el.closest(".field,.ack"); if(f) f.after(e); else { const st=wizEl.querySelector(".wz-step:not([hidden])"); if(st) st.append(e); }
+  if(el){ el.setAttribute("aria-invalid","true"); el.setAttribute("aria-describedby",((el.getAttribute("aria-describedby")||"")+" wzErr").trim()); el.focus(); }
+  try{ e.scrollIntoView({block:"nearest"}); }catch(x){} return false; }
 const wzNum=(id,lo,hi,int)=>{ const v=numOf($(id).value); return !isNaN(v)&&v>=lo&&v<=hi&&(!int||Number.isInteger(v))? v : NaN; };
 function wzCheck(i){
   $("#wzErr").hidden=true; wzClr();
@@ -4063,6 +4082,7 @@ function wzProfile(){
   const p={...base,types:[...(base.types||EXAMPLE.types)],activite:wzr("wz_act")||base.activite,sexe:wzr("wz_sexe"),age:String(wzNum("#wzAge",15,90,true)),taille:String(wzNum("#wzTaille",130,220,true)),poids:wzv("#wzPoids"),cible:wzv("#wzCible"),
     niveau,objectif:$("#wzObjectif").value,raceDate,volume:wzv("#wzVolume"),longest:wzv("#wzLongest"),seances,renfo:wzr("wz_renfo"),lieu:wzr("wz_lieu"),equip:wzr("wz_equip"),longDay:wzr("wz_longDay"),deficit:wzr("wz_def"),sport:wzSport(),sObj:wzSObjVal(),hSem:wzSport()==="force"?"":wzv("#wzHSem")};
   if(p.sport==="force"&&+p.seances>5) p.seances="5";
+  if(String(p.deficit)==="0") p.bonus=0;   // maintien : pas de supplément de déficit les jours faciles non plus
   p.evalOn= vmaOf(profileNums(p)).estimated? "1" : "0"; p.debRun=""; p.evalFrom="";   // nouveau plan : séances de test proposées, sauf si une référence de vitesse est déjà connue
   const lo=raceOn(p); p.start= lo? autoStart(lo) : todayIso();
   return p;
@@ -4093,7 +4113,8 @@ function wzPrep(i){
       row("Ta semaine",wzWeek14(p,n,lieu,eq)),
       row("Quotidien",{"1.25":"Assis la plupart du temps","1.4":"Un peu actif","1.55":"Métier physique ou très actif"}[String(p.activite)]||"Assis la plupart du temps"),
       row("Déficit",+p.deficit>0? p.deficit+" kcal par jour" : "Aucun (maintien)")].join("");
-    $("#wzPlan").textContent="Ton plan : "+pl.length+" semaine"+(pl.length>1?"s":"")+(st?", à partir du "+longDate(okIso(p.start)&&mondayOf(p.start)===st? p.start : st):"")+"."+(pl.unreal?" Ton objectif est trop loin pour le temps disponible : le plan prépare "+OBJ[pl.unreal.used].label+".":"");
+    $("#wzPlan").className="alert "+(pl.unreal?"warn":"ok");   // objectif rétrogradé : avertissement, pas un encadré vert
+    $("#wzPlan").textContent="Ton plan : "+pl.length+" semaine"+(pl.length>1?"s":"")+(st?", à partir du "+longDate(okIso(p.start)&&mondayOf(p.start)===st? p.start : st):"")+"."+(pl.unreal? pl.unreal.minor? " Avant 18 ans, pas de semi-marathon ni de marathon : le plan prépare "+OBJ[pl.unreal.used].label+"." : " Pour cette distance, il faut plus de temps depuis ton volume actuel : le plan prépare "+OBJ[pl.unreal.used].label+". Ajoute une date de course plus lointaine pour garder ton objectif." : "");
     $("#wzRepl").hidden=state.isExample;
   }
 }
@@ -4163,7 +4184,7 @@ wizEl.addEventListener("keydown",e=>{ if(e.key==="Escape"){ e.preventDefault(); 
 
 /* compte : état de connexion, export / import / effacement des données */
 const fmtDT=t=> t>0? new Date(t).toLocaleString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"}) : "";
-const LEGAL_NAV=`<nav class="legalnav" aria-label="Informations légales"><a href="cgu.html" target="_blank" rel="noopener">CGU</a><a href="confidentialite.html" target="_blank" rel="noopener">Confidentialité</a><a href="cookies.html" target="_blank" rel="noopener">Stockage local</a><a href="mentions-legales.html" target="_blank" rel="noopener">Mentions légales</a><a href="contact.html" target="_blank" rel="noopener">Tes droits RGPD</a></nav>`;
+const LEGAL_NAV=`<nav class="legalnav" aria-label="Informations légales"><a href="faq" target="_blank" rel="noopener">FAQ</a><a href="contact" target="_blank" rel="noopener">Contact</a><a href="cgu" target="_blank" rel="noopener">CGU</a><a href="confidentialite" target="_blank" rel="noopener">Confidentialité</a><a href="cookies" target="_blank" rel="noopener">Stockage local</a><a href="mentions-legales" target="_blank" rel="noopener">Mentions légales</a></nav>`;
 // feuille Compte : invité ou accord manquant -> bouton vers l'écran de connexion
 function loginCta(cs){ return `<div class="acc-login"><p><b>${cs?"Ton accord est nécessaire":"Synchronise tes données"}</b></p><p class="note">${cs?"Rien n'est enregistré dans ton compte tant que tu n'as pas donné ton accord.":"Crée ton compte ou connecte-toi en un clic avec Google ou GitHub. Ce que tu as déjà rempli ici est repris."}</p><div class="prov"><button class="btn" type="button" data-acc="login">${cs?"Donner mon accord":"Se connecter ou créer un compte"}</button>${cs?`<button class="btn ghost" type="button" data-acc="consent-no">Refuser et me déconnecter</button>`:""}</div></div>`; }
 // un compte différent de celui qui a créé les données de cet appareil : rien n'est fusionné ni écrit avant ton choix

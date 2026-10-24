@@ -1,0 +1,6 @@
+# fichiers inutiles au déploiement (le site est statique, les fonctions api/ n'ont aucune dépendance npm)
+package.json
+package-lock.json
+node_modules
+.github
+audit

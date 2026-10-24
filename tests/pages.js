@@ -1,5 +1,5 @@
 const {chromium}=require("playwright"); const L=require("./lib"); const fs=require("fs");
-const PAGES=["mentions-legales","confidentialite","cgu","cookies","contact","definitely-missing"]; let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")+m+(x!==undefined&&!c?" -> "+JSON.stringify(x):"")); };
+const PAGES=["mentions-legales","confidentialite","cgu","cookies","contact","faq","definitely-missing"]; let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")+m+(x!==undefined&&!c?" -> "+JSON.stringify(x):"")); };
 const lum=([r,g,b])=>{ const f=v=>{ v/=255; return v<=.03928? v/12.92 : Math.pow((v+.055)/1.055,2.4); }; return .2126*f(r)+.7152*f(g)+.0722*f(b); };
 (async()=>{ const S=await L.serve(); const b=await chromium.launch(); const E=[], CSPV=[], OV=[], CON=[];
  for(const cs of ["light","dark"]) for(const w of [320,375,768,1280,1440]){ const ctx=await b.newContext({viewport:{width:w,height:800},colorScheme:cs}); const p=await ctx.newPage();
@@ -12,9 +12,9 @@ const lum=([r,g,b])=>{ const f=v=>{ v/=255; return v<=.03928? v/12.92 : Math.pow
      const worst=[]; for(const el of document.querySelectorAll("h1,h2,p,li,a,td,th,.ph,.banner,.lf p,.back,.btn,code")){ if(!el.getClientRects().length||!el.textContent.trim()) continue; const cs=getComputedStyle(el); const bg=bgOf(el), t=px(cs.color); const fg=t.rgb.map((v,i)=>v*t.a+bg[i]*(1-t.a));
        const L=c=>{ const f=v=>{ v/=255; return v<=.03928? v/12.92 : Math.pow((v+.055)/1.055,2.4); }; return .2126*f(c[0])+.7152*f(c[1])+.0722*f(c[2]); }; const a=L(fg), b2=L(bg), ratio=(Math.max(a,b2)+.05)/(Math.min(a,b2)+.05); worst.push([ratio,el.tagName+"."+el.className]); }
      worst.sort((x,y)=>x[0]-y[0]);
-     return {ov,h1:(document.querySelector("h1")||{}).textContent,nav:document.querySelectorAll(".legalnav a").length,ph:document.querySelectorAll(".ph:not(.done)").length,title:document.title,worst:worst[0],csp:window.__csp,noscript:document.querySelectorAll("script:not([src])").length,inl:document.querySelectorAll("[style],[onclick],[onerror]").length}; });
+     return {ov,h1:(document.querySelector("h1")||{}).textContent,nav:document.querySelectorAll(".legalnav a").length,ph:document.querySelectorAll(".ph:not(.done)").length,todo:/À COMPLÉTER/.test(document.body.innerText),title:document.title,worst:worst[0],csp:window.__csp,noscript:document.querySelectorAll("script:not([src]):not([type=\"application/ld+json\"])").length,inl:document.querySelectorAll("[style],[onclick],[onerror]").length}; });
    if(r.ov!==0) OV.push([n,w,cs,r.ov]); if(r.csp.length) CSPV.push(...r.csp); if(r.worst&&r.worst[0]<4.5) CON.push([n,w,cs,r.worst]);
-   if(w===1280&&cs==="light"){ ok(!!r.h1&&r.nav===(n==="definitely-missing"?5:5)&&!r.noscript&&!r.inl,"page "+n+" : h1, 5 liens légaux, aucun script/style en ligne",r); if(n!=="definitely-missing") ok((r.ph>0||n==="cookies")&&r.title.length>3,"   "+n+" : "+r.ph+" champ(s) à compléter visibles"); else ok(resp.status()===404,"   404 : statut 404"); }
+   if(w===1280&&cs==="light"){ ok(!!r.h1&&r.nav>=5&&!r.noscript&&!r.inl,"page "+n+" : h1, liens légaux, aucun script/style en ligne",r); if(n!=="definitely-missing") ok(r.ph===0&&!r.todo&&r.title.length>3,"   "+n+" : aucun champ « À COMPLÉTER » visible (audit RGPD-17)",r); else ok(resp.status()===404,"   404 : statut 404"); }
    if(w===375&&n==="confidentialite") await p.screenshot({path:`/tmp/priv-${cs}.png`,fullPage:false}); }
   await ctx.close(); }
  ok(OV.length===0,"aucun débordement horizontal 320-1440, clair et sombre",OV); ok(CSPV.length===0,"CSP : aucune violation",CSPV); ok(CON.length===0,"contrastes AA (>= 4,5) sur tous les textes",CON.slice(0,5)); ok(E.length===0,"console propre",E.slice(0,5));

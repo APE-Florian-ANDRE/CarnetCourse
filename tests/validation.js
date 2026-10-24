@@ -21,7 +21,7 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
   await L.fake(p,L.makeDb(),{session});
   await p.addInitScript(({sd,ls})=>{ window.__csp=[]; window.__inj=[]; document.addEventListener("securitypolicyviolation",e=>window.__csp.push(e.violatedDirective+" "+e.blockedURI));
     // tout élément dangereux ajouté au DOM, même brièvement, est relevé
-    const bad=n=> n.nodeType===1&&(/^(IMG|SCRIPT|IFRAME|OBJECT|EMBED)$/.test(n.tagName)&&!(n.tagName==="SCRIPT"&&n.src&&n.src.startsWith(location.origin))||[...n.attributes].some(a=>/^on/i.test(a.name)||/^\s*javascript:/i.test(a.value)));
+    const bad=n=> n.nodeType===1&&(/^(IMG|SCRIPT|IFRAME|OBJECT|EMBED)$/.test(n.tagName)&&!(n.tagName==="SCRIPT"&&(n.src&&n.src.startsWith(location.origin)||n.type==="application/ld+json"&&!n.src))||[...n.attributes].some(a=>/^on/i.test(a.name)||/^\s*javascript:/i.test(a.value)));
     new MutationObserver(ms=>{ for(const m of ms) for(const n of m.addedNodes){ if(bad(n)) window.__inj.push(n.outerHTML.slice(0,120)); if(n.querySelectorAll) n.querySelectorAll("*").forEach(c=>{ if(bad(c)) window.__inj.push(c.outerHTML.slice(0,120)); }); } }).observe(document,{childList:true,subtree:true});
     if(!sessionStorage.__seed){ sessionStorage.__seed=1; if(sd) localStorage.setItem("carnet-course.v1",sd); localStorage.setItem("carnet.hv","1"); localStorage.setItem("carnet.cookies",JSON.stringify({v:1,analytics:false,at:new Date().toISOString()})); localStorage.setItem("carnet.vu","15"); for(const [k,v] of Object.entries(ls)) localStorage.setItem(k,v); } },{sd,ls});
   await p.goto(S.url+path); await p.waitForTimeout(800); p.ctx=ctx; return p; };
@@ -106,7 +106,7 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
    await clean(p,"V5 Import JSON"); await p.ctx.close(); }
 
  // V6 : Coach — message hostile, réponse hostile, longueur, limite de fréquence
- { const p=await mk({session:GOOD,ls:{"carnet.consent":JSON.stringify({cgu:"2026-10-10",privacy:"2026-10-10",terms:true,health:true,age15:true,at:new Date().toISOString()}),"carnet.coach.consent":JSON.stringify({v:"2026-10-10.3",send:true,at:new Date().toISOString(),profile:false,feel:false,stats:false})}}); await p.click("#tab-coach"); await p.waitForTimeout(150);
+ { const p=await mk({session:GOOD,ls:{"carnet.consent":JSON.stringify({cgu:"2026-10-10",privacy:"2026-10-10",terms:true,health:true,age15:true,at:new Date().toISOString()}),"carnet.coach.consent":JSON.stringify({v:/COACH_V="([^"]+)"/.exec(require("fs").readFileSync(require("path").join(L.ROOT,"coach.js"),"utf8"))[1],send:true,at:new Date().toISOString(),profile:false,feel:false,stats:false})}}); await p.click("#tab-coach"); await p.waitForTimeout(150);
    if(await p.evaluate(()=>document.querySelector("#coachPop").hidden)) await p.click("#coachFab");   // le coach s'ouvre dans la bulle
   const n0=hits.length; await p.fill("#coachIn",H[1]+" "+H[0]); await p.click("#coachSend"); await p.waitForFunction(()=>document.querySelectorAll("#coachLog .cmsg.bot").length>0,null,{timeout:5000}).catch(()=>{});
    ok(hits.length===n0+1,"V6 message envoyé au webhook");

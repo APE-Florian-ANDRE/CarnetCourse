@@ -1,0 +1,29 @@
+# Tests à chaque push et pull request (audit CODE-01) : rapides d'abord, puis la suite complète (navigateur Chromium).
+name: tests
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      TZ: Europe/Paris
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # progression.js et pref.js comparent à d'anciens commits (git show)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Fonctions générées à jour
+        run: npm run build:api && git diff --exit-code -- api integrations/n8n/workflow-coach.json
+      - name: Tests rapides
+        run: npm run test:fast
+      - name: Suite complète
+        run: node tests/run-all.js --jobs=2

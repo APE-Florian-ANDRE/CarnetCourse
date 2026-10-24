@@ -112,10 +112,17 @@ const PEND=JSON.stringify({cgu:"2026-10-10",privacy:"2026-10-10",terms:true,heal
    ok(/prévu et réalisé/.test(await p.textContent("#impCard")),"V4 comparaison prévu et réalisé de la semaine");
    await p.click("#impClear"); await p.waitForTimeout(300); await p.click("#scGo"); await p.waitForTimeout(400); ok(await p.evaluate(()=>Object.keys(window.__T.state.acts).filter(k=>!window.__T.state.acts[k].del).length===0),"V4 « Tout retirer » : activités retirées (marques d'effacement)");
    { const t=Date.now(); await p.click("#impOpen"); await pick(files.big); await p.waitForSelector("#stA, .sheet .alert",{timeout:60000}); ok(Date.now()-t<30000,"V4 gros fichier (60 Mo) lu en moins de 30 s : "+(Date.now()-t)+" ms"); await p.keyboard.press("Escape"); await p.waitForTimeout(200); }
-   { const huge=wr("huge.xml",Buffer.concat(FX.bigAppleXml(300).map(x=>Buffer.from(x)))); await p.click("#impOpen"); await pick(huge); await p.waitForTimeout(250);
-     const t=Date.now(); const lag=await p.evaluate(()=>new Promise(r=>{ let m=0, l=performance.now(); const iv=setInterval(()=>{ const n=performance.now(); m=Math.max(m,n-l); l=n; },20); setTimeout(()=>{ clearInterval(iv); r(m); },600); }));
+   { const huge=wr("huge.xml",Buffer.concat(FX.bigAppleXml(300).map(x=>Buffer.from(x))));
+     // gel de l'interface : mesuré pendant une première lecture complète (la lecture est rapide : elle peut finir avant 600 ms)
+     await p.click("#impOpen"); await pick(huge); await p.waitForTimeout(50);
+     const lag=await p.evaluate(()=>new Promise(r=>{ let m=0, l=performance.now(); const iv=setInterval(()=>{ const n=performance.now(); m=Math.max(m,n-l); l=n; },20); setTimeout(()=>{ clearInterval(iv); r(m); },600); }));
      ok(lag<400,"V4 pendant la lecture d'un fichier de 300 Mo, l'interface ne gèle pas (pire retard "+Math.round(lag)+" ms)",lag);
-     await p.click("#stPick"); await p.waitForSelector("#stMsg .alert",{timeout:5000}).catch(()=>{}); ok(/annulée/.test(await p.textContent(".sheet .sh-b"))&&Date.now()-t<4000,"V4 « Annuler la lecture » répond tout de suite, rien n'est importé",await p.textContent(".sheet .sh-b")); await p.keyboard.press("Escape"); await p.waitForTimeout(200); fs.rmSync(huge,{force:true}); }
+     await p.waitForSelector("#stA, .sheet .alert",{timeout:60000}).catch(()=>{}); await p.keyboard.press("Escape"); await p.waitForTimeout(200);
+     // annulation : dès que le bouton devient « Annuler la lecture », avant la fin de la lecture
+     const n0=await p.evaluate(()=>Object.keys(window.__T.state.acts).length);
+     await p.click("#impOpen"); await pick(huge); await p.waitForFunction(()=>/Annuler la lecture/.test((document.querySelector("#stPick")||{}).textContent||""),null,{timeout:5000}); const t=Date.now(); await p.click("#stPick");
+     await p.waitForSelector("#stMsg .alert",{timeout:5000}).catch(()=>{}); const txt=await p.textContent(".sheet .sh-b").catch(()=>"(feuille fermée)");
+     ok(/annulée/.test(txt)&&Date.now()-t<4000&&await p.evaluate(n0=>Object.keys(window.__T.state.acts).length===n0,n0),"V4 « Annuler la lecture » répond tout de suite, rien n'est importé",txt); await p.keyboard.press("Escape"); await p.waitForTimeout(200); fs.rmSync(huge,{force:true}); }
    ok(NET.length===0,"V4 aucune requête hors du site pendant les imports",NET.slice(0,3)); await csp(p); await p.ctx.close(); }
 
  // V5 : compte (faux Supabase) : synchronisation, fusion entre appareils, effacement

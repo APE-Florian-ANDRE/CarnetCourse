@@ -54,7 +54,7 @@ function collect(arr){ const T=window.__T; const res=[];
   for(const pr of arr){ const o={};
     try{ const n=T.profileNums(pr), run=n.sport==="course"||n.sport==="trail", v=run? T.vmaOf(n).vma : 0;
       const t0=performance.now(); const pl=T.buildPlan({...n,noAi:true}); o.ms=performance.now()-t0;
-      o.n={sport:n.sport,niveau:n.niveau,objectif:n.objectif,cplx:n.cplx,seances:n.seances,types:n.types,minor:n.minor,cross:n.cross,startIdx:n.startIdx,longest:n.longest,volume:n.volume,nWeeks:n.nWeeks,raceIdx:n.raceIdx};
+      o.vma=v; o.n={sport:n.sport,niveau:n.niveau,objectif:n.objectif,cplx:n.cplx,seances:n.seances,types:n.types,minor:n.minor,cross:n.cross,startIdx:n.startIdx,longest:n.longest,volume:n.volume,nWeeks:n.nWeeks,raceIdx:n.raceIdx};
       o.unreal=pl.unreal?pl.unreal.used:null; o.sig=T.planSig(n); o.wk=sum(pl,n,v);
       if(run&&n.cplx==="simple"){ const st=T.buildPlan({...n,cplx:"standard",noAi:true}); o.std={unreal:st.unreal?st.unreal.used:null,wk:sum(st,{...n,cplx:"standard"},v)}; }
       // IA hostile : demande la VMA (puis le seuil) partout, et d'alléger une semaine sur trois
@@ -100,12 +100,17 @@ function linStats(r){ const nw=r.wk.filter(w=>isNorm(w)&&w.w>1&&!w.cross); if(nw
   // Jamais de liste de profils ni de seuil global relâché : la condition est vérifiée sur le plan lui-même (et sur la référence).
   const wkOf=(r,msg)=>{ const m=/^S(\d+)/.exec(msg); return m? r.wk.findIndex(w=>w.w===+m[1]) : -1; };
   const normW=r=>r.wk.filter(w=>isNorm(w)&&w.w>1&&!w.cross);
+  const longCapped=(r,m)=>{ const tl=x=>Math.max(0,...x.wk.filter(w=>w.ph!=="race").map(w=>w.L)), L=tl(r), cap=({forme:90,5:100,10:120,21:150,42:180}[r.unreal||r.n.objectif]||150)/60*r.vma*.64;
+    return r.vma>0&&L>=cap*.9-.6&&(!m||tl(m)>cap+.05); };
   const EXEMPT={
     // le simple a une seule séance d'intensité : à 3 sorties ou moins, le standard en a une de moins (sa 2e séance d'intensité prend la place
     // d'un footing) ; le simple ne peut descendre à son volume qu'en supprimant une sortie
     simpleKm:(x,r)=>{ const j=wkOf(r,x.msg), w=r.wk[j], s=r.std&&r.std.wk[j]; return w&&s&&w.runs<=3&&s.runs<w.runs? "3 sorties ou moins, le standard a une sortie de moins" : null; },
     // le pic de la référence passe par une hausse de plus de 8 % : la règle des +8 %, contrôlée sur le volume placé, l'interdit
-    picBaisse:(x,r,m)=>{ const n=normW(m); for(let i=1;i<n.length;i++){ const y=n[i-1].km, lim=Math.max(y*1.08,y+(n[i-1].runs<Math.min(r.n.seances,3)?3.2:1)); if(n[i].km>lim+.3) return "pic de la référence obtenu par une hausse de plus de 8 %"; } return null; },
+    picBaisse:(x,r,m)=>{ if(r.n.minor) return "moins de 18 ans : 40 km par semaine au plus"; if(longCapped(r,m)) return "sortie longue de la référence au-delà du plafond de durée"; const n=normW(m); for(let i=1;i<n.length;i++){ const y=n[i-1].km, lim=Math.max(y*1.08,y+(n[i-1].runs<Math.min(r.n.seances,3)?3.2:1)); if(n[i].km>lim+.3) return "pic de la référence obtenu par une hausse de plus de 8 %"; } return null; },
+    // audit MET-01 / MET-03 (24/10/2026) : avant 18 ans, 40 km par semaine et 1 h 30 de sortie longue au plus ; à tout âge, sortie longue plafonnée en durée
+    // (100 min en 5 km, 120 en 10 km, 150 en semi, 180 en marathon, 90 en forme, à 64 % de la VMA), jamais sous ce qu'il faut pour la distance visée
+    longBaisse:(x,r)=>{ if(r.n.minor) return "moins de 18 ans : sortie longue de 1 h 30 au plus"; return longCapped(r)? "sortie longue plafonnée en durée" : null; },
     // la référence n'avait aucune séance d'intensité en développement (types cochés remplacés par rien) : ici les types cochés y sont, une séance d'intensité prend une sortie
     seancesBaisse:(x,r,m)=>{ const d=m.wk.filter(w=>w.ph==="dev"); return d.length&&d.every(w=>!w.q.length)? "référence sans intensité en développement" : null; },
     // sortie longue de 4 km au plus : aucune séance des types qui arrivent en premier (fartlek, côtes, seuil) n'y tient (remplacée par un footing) ;

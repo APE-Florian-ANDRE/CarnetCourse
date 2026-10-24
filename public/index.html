@@ -6,8 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://yunidhwvpusrsgxqdzpb.supabase.co https://carnetcourse.vercel.app; manifest-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'; worker-src 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark">
-<meta name="description" content="Plan de course à pied, allures et calories de chaque jour, calculés à partir de ton profil. Gratuit, sans publicité, tes données restent chez toi.">
-<title>Pacebook – plan de course à pied gratuit</title>
+<meta name="description" content="Ton plan de course à pied gratuit, du 5 km au marathon et au trail : séances aux bonnes allures, progression prudente et calories de chaque jour. Sans pub, sans compte obligatoire.">
+<title>Pacebook – plan d&#x27;entraînement gratuit : 5 km, 10 km, semi, marathon, trail</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="canonical" href="https://carnetcourse.vercel.app/">
 <meta name="theme-color" content="#0E0F12">
@@ -20,14 +20,18 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Pacebook">
 <meta property="og:locale" content="fr_FR">
-<meta property="og:title" content="Pacebook – plan de course à pied gratuit">
-<meta property="og:description" content="Plan de course à pied, allures et calories de chaque jour, calculés à partir de ton profil. Gratuit, sans publicité, tes données restent chez toi.">
+<meta property="og:title" content="Pacebook – plan d&#x27;entraînement gratuit : 5 km, 10 km, semi, marathon, trail">
+<meta property="og:description" content="Ton plan de course à pied gratuit, du 5 km au marathon et au trail : séances aux bonnes allures, progression prudente et calories de chaque jour. Sans pub, sans compte obligatoire.">
 <meta property="og:url" content="https://carnetcourse.vercel.app/">
 <meta property="og:image" content="https://carnetcourse.vercel.app/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Pacebook : ton plan de course à pied, avec allures et calories au jour le jour.">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Pacebook – plan d&#x27;entraînement gratuit : 5 km, 10 km, semi, marathon, trail">
+<meta name="twitter:description" content="Ton plan de course à pied gratuit, du 5 km au marathon et au trail : séances aux bonnes allures, progression prudente et calories de chaque jour. Sans pub, sans compte obligatoire.">
+<meta name="twitter:image" content="https://carnetcourse.vercel.app/og-image.png">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebApplication", "name": "Pacebook", "url": "https://carnetcourse.vercel.app/", "applicationCategory": "HealthApplication", "operatingSystem": "Web", "inLanguage": "fr", "description": "Ton plan de course à pied gratuit, du 5 km au marathon et au trail : séances aux bonnes allures, progression prudente et calories de chaque jour. Sans pub, sans compte obligatoire.", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"}}</script>
 <link rel="preload" href="fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/dm-sans.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="app.css">
@@ -37,6 +41,7 @@
 
 
 <div class="wrap">
+  <a class="skip" href="#appMain">Aller au contenu</a>
   <div class="apptop"><button class="linkbtn" type="button" data-act="home"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7M6 10v10h12V10"/></svg>Accueil</button><span class="aptr"><button class="nbtn" type="button" id="notifBtn" data-notif aria-haspopup="dialog"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg><span class="nb-l">Notifications</span></button><button class="av js-av" type="button" data-act="acct" aria-haspopup="dialog" aria-label="Compte"><span class="av-i" aria-hidden="true"></span><svg class="av-p" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c1-4 4-6 7.5-6s6.5 2 7.5 6"/></svg><span class="av-d" aria-hidden="true"></span></button></span></div>
   <header class="top">
     <div>
@@ -57,10 +62,11 @@
     <button role="tab" type="button" id="tab-suivi" aria-controls="p-suivi" aria-selected="false" tabindex="-1"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg><span>Suivi</span></button>
     <button role="tab" type="button" id="tab-profil" aria-controls="p-profil" aria-selected="false" tabindex="-1"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c1-4 4-6 7.5-6s6.5 2 7.5 6"/></svg><span>Profil</span></button>
     <button role="tab" type="button" id="tab-reperes" aria-controls="p-reperes" aria-selected="false" tabindex="-1"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg><span>Repères</span></button>
-    <button role="tab" type="button" id="tab-coach" aria-controls="p-coach" aria-selected="false" tabindex="-1" hidden><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 0 1-12.3 7.6L3.5 20.5l1-4.4A8.5 8.5 0 1 1 20.5 12z"/></svg><span>Coach</span></button>
+    <button role="tab" type="button" id="tab-coach" aria-controls="p-coach" aria-selected="false" tabindex="-1" hidden><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 0 1-12.3 7.6L3.5 20.5l1-4.4A8.5 8.5 0 1 1 20.5 12z"/></svg><span>Coach IA</span></button>
   </div></nav>
 
   <!-- SEMAINE -->
+  <main id="appMain" tabindex="-1">
   <section class="panel" id="p-semaine" role="tabpanel" aria-labelledby="tab-semaine">
     <div class="nextc" id="nextCard" hidden></div>
     <div class="weekbar">
@@ -232,15 +238,15 @@
     </form>
     <section class="regen" id="regen" aria-labelledby="rgT">
       <div class="rg-h"><span class="rg-i" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg></span>
-        <div><h3 id="rgT">Regénérer mon entraînement</h3><p class="rg-sub">Recrée ton plan à partir de ton profil actuel, en repartant de cette semaine.</p></div></div>
+        <div><h3 id="rgT">Régénérer mon entraînement</h3><p class="rg-sub">Recrée ton plan à partir de ton profil actuel, en repartant de cette semaine.</p></div></div>
       <dl class="rg-prev" id="rgPrev" aria-live="polite"></dl>
       <label class="ack rg-opt"><input type="checkbox" id="rgMoves" checked><span>Remettre à leur place les séances que j'ai déplacées</span></label>
       <p class="rg-keep"><b>Conservés :</b> ton suivi, tes pesées, tes séances cochées et ton ressenti.</p>
-      <button class="btn" type="button" id="rgGo" aria-haspopup="dialog">Regénérer mon plan</button>
+      <button class="btn" type="button" id="rgGo" aria-haspopup="dialog">Régénérer mon plan</button>
     </section>
     <section class="regen aip" id="aiPlan" aria-labelledby="aipT" hidden>
       <div class="rg-h"><span class="rg-i" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></span>
-        <div><h3 id="aipT">Ajuster mon plan avec l'IA</h3><p class="rg-sub">L'IA choisit tes séances d'intensité selon la complexité choisie (<b id="aipCplx">Standard</b>) et ton ressenti, allège les semaines difficiles et ajoute un conseil par semaine. Les volumes et les garde-fous du plan ne changent pas.</p></div></div>
+        <div><h3 id="aipT">Ajuster mon plan avec l'IA</h3><p class="rg-sub">L'IA choisit tes séances d'intensité selon la complexité choisie (<b id="aipCplx">Standard</b>) et ton ressenti, allège les semaines difficiles et ajoute un conseil par semaine. Le volume de chaque semaine, tes jours et les garde-fous du plan ne changent pas ; une séance peut devenir plus courte ou plus longue.</p></div></div>
       <p class="rg-keep" id="aipSt" aria-live="polite"></p>
       <details class="aip-mods" id="aipMods" hidden><summary id="aipModsT">Voir avant / après</summary><ul class="aip-ml" id="aipModsL"></ul></details>
       <div class="aip-act"><button class="btn" type="button" id="aipGo" aria-haspopup="dialog">Ajuster avec l'IA</button><button class="btn ghost" type="button" id="aipOff" hidden>Retirer l'ajustement</button></div>
@@ -253,10 +259,11 @@
 
   <!-- COACH (affiché seulement si CHAT_WEBHOOK_URL est configuré dans config.js) -->
   <section class="panel" id="p-coach" role="tabpanel" aria-labelledby="tab-coach" hidden>
-    <h2>Coach</h2>
+    <h2>Coach IA</h2>
     <p class="alert ok csos" role="note"><b>En cas de détresse : 3114</b> (24 h/24) · <b>urgence : 15 / 112</b></p>
     <p class="lead" id="coachTabLead">Tes conversations précédentes, gardées sur cet appareil. Le coach s'ouvre aussi avec la bulle en bas à droite, depuis n'importe quel onglet.</p>
     <p class="alert warn" id="coachTabGate" hidden></p>
+    <p id="coachTabLogin" hidden><button class="btn" type="button" data-act="login">Se connecter</button></p>
     <div class="cconv-act" id="coachTabAct"><button class="btn" type="button" id="coachNew">Nouvelle conversation</button><button class="btn ghost sm" type="button" id="coachClearAll" hidden>Tout effacer</button></div>
     <ul class="mlist cconvs" id="coachConvs" aria-label="Conversations précédentes"></ul>
   </section>
@@ -298,10 +305,11 @@
       </ul></div>
     </div>
   </section>
+  </main>
 
   <footer>Calories estimées, pas un avis médical. <button class="linkbtn" type="button" data-news>Quoi de neuf</button>
   <details class="more why"><summary>Comment sont-elles calculées ?</summary><p>Formule de Mifflin-St Jeor, environ 0,9 kcal par kg et par km de course ; pour les autres sports, une dépense par heure d'après les valeurs MET du Compendium des activités physiques. Elles servent de point de départ : c'est la courbe de poids de l'onglet Suivi qui dit s'il faut ajuster. Si tu as un antécédent médical, un trouble alimentaire ou une douleur qui dure, demande l'avis d'un médecin ou d'un diététicien du sport.</p></details>
-  <nav class="legalnav" aria-label="Informations légales"><a href="cgu.html" target="_blank" rel="noopener">CGU</a><a href="confidentialite.html" target="_blank" rel="noopener">Confidentialité</a><a href="cookies.html" target="_blank" rel="noopener">Stockage local</a><a href="mentions-legales.html" target="_blank" rel="noopener">Mentions légales</a><a href="contact.html" target="_blank" rel="noopener">Tes droits RGPD</a><button type="button" data-consent-open>Gérer les cookies</button></nav></footer>
+  <nav class="legalnav" aria-label="Informations légales"><a href="faq" target="_blank" rel="noopener">FAQ</a><a href="contact" target="_blank" rel="noopener">Contact</a><a href="cgu" target="_blank" rel="noopener">CGU</a><a href="confidentialite" target="_blank" rel="noopener">Confidentialité</a><a href="cookies" target="_blank" rel="noopener">Stockage local</a><a href="mentions-legales" target="_blank" rel="noopener">Mentions légales</a><button type="button" data-consent-open>Gérer les cookies</button></nav></footer>
 </div>
 <main class="home" id="home" aria-labelledby="homeT" hidden>
   <div class="htop">
@@ -374,7 +382,19 @@
     <h2 id="homeR">Prêt pour ta prochaine course ?</h2>
     <div class="cta cta2" id="homeCta2"></div>
   </section>
-  <footer class="hfoot"><span class="fbrand">Pacebook</span><nav class="legalnav" aria-label="Informations légales"><a href="cgu.html" target="_blank" rel="noopener">CGU</a><a href="confidentialite.html" target="_blank" rel="noopener">Confidentialité</a><a href="cookies.html" target="_blank" rel="noopener">Stockage local</a><a href="mentions-legales.html" target="_blank" rel="noopener">Mentions légales</a><a href="contact.html" target="_blank" rel="noopener">Tes droits RGPD</a><button type="button" data-consent-open>Gérer les cookies</button></nav></footer>
+  <footer class="hfoot">
+    <div class="fmain">
+      <div class="fabout">
+        <span class="fbrand">Pacebook</span>
+        <p class="ftag">Ton plan de course, calé sur ta vie. Gratuit, sans publicité, tes données restent chez toi.</p>
+        <a class="btn sm fcontact" href="contact"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>Me contacter</a>
+      </div>
+      <nav class="fcol" aria-labelledby="fhP"><p class="fh" id="fhP">Produit</p><ul><li><a href="#features">Fonctionnalités</a></li><li><a href="#how">Comment ça marche</a></li><li><a href="#data">Tes données</a></li><li><button class="flink" type="button" data-news>Quoi de neuf</button></li></ul></nav>
+      <nav class="fcol" aria-labelledby="fhA"><p class="fh" id="fhA">Aide</p><ul><li><a href="faq">Questions fréquentes</a></li><li><a href="contact">Contact</a></li><li><a href="contact#droits">Tes droits sur tes données</a></li></ul></nav>
+      <nav class="fcol legalnav" aria-labelledby="fhL"><p class="fh" id="fhL">Légal</p><ul><li><a href="mentions-legales">Mentions légales</a></li><li><a href="cgu">CGU</a></li><li><a href="confidentialite">Confidentialité</a></li><li><a href="cookies">Stockage local</a></li><li><button type="button" data-consent-open>Gérer les cookies</button></li></ul></nav>
+    </div>
+    <div class="fbot"><span>© 2026 Pacebook</span><span>Plans et calories estimés : pas un avis médical.</span></div>
+  </footer>
 </main>
 <div class="wiz" id="wiz" role="dialog" aria-modal="true" aria-labelledby="wzT1" hidden>
   <div class="wz-top">
@@ -412,13 +432,13 @@
       <div class="field" data-sp="course trail vtt forme"><span class="lbl" id="wz-l-long">Jour de sortie longue</span><div class="seg" role="radiogroup" aria-labelledby="wz-l-long" aria-describedby="wzLoH"><label><input type="radio" name="wz_longDay" value="6"><span>Dimanche</span></label><label><input type="radio" name="wz_longDay" value="5"><span>Samedi</span></label></div><span class="hint" id="wzLoH" aria-live="polite"></span></div>
     </section>
     <section class="wz-step" data-s="4" hidden>
-      <p class="wz-k">Étape 4 sur 5</p><h2 id="wzT4" tabindex="-1">Un déficit prudent</h2>
-      <p class="lead">Un petit déficit chaque jour fait perdre du poids sans casser l'énergie des séances. Tu pourras le régler plus finement dans l'onglet Profil.</p>
-      <div class="field"><span class="lbl" id="wz-l-def">Déficit fixe par jour</span><div class="seg" role="radiogroup" aria-labelledby="wz-l-def" aria-describedby="wzDefH"><label><input type="radio" name="wz_def" value="0"><span>0 · maintien</span></label><label><input type="radio" name="wz_def" value="200"><span>200 · doux</span></label><label><input type="radio" name="wz_def" value="300"><span>300 · conseillé</span></label><label><input type="radio" name="wz_def" value="400"><span>400 · ferme</span></label><label id="wzDefKeep" hidden><input type="radio" name="wz_def" value="-1"><span></span></label></div><span class="hint" id="wzDefH" aria-live="polite">kcal par jour, appliqué tous les jours. L'outil le réduit tout seul si ta masse maigre ou ta perte par semaine l'exigent.</span></div>
+      <p class="wz-k">Étape 4 sur 5</p><h2 id="wzT4" tabindex="-1">Perdre du poids ?</h2>
+      <p class="lead">Par défaut, le plan te garde au maintien. Si tu veux perdre du poids, un petit déficit chaque jour suffit, sans casser l'énergie des séances. Tu pourras le régler plus finement dans l'onglet Profil.</p>
+      <div class="field"><span class="lbl" id="wz-l-def">Déficit fixe par jour</span><div class="seg" role="radiogroup" aria-labelledby="wz-l-def" aria-describedby="wzDefH"><label><input type="radio" name="wz_def" value="0"><span>0 · maintien</span></label><label><input type="radio" name="wz_def" value="200"><span>200 · doux</span></label><label><input type="radio" name="wz_def" value="300"><span>300 · modéré</span></label><label><input type="radio" name="wz_def" value="400"><span>400 · ferme</span></label><label id="wzDefKeep" hidden><input type="radio" name="wz_def" value="-1"><span></span></label></div><span class="hint" id="wzDefH" aria-live="polite">kcal par jour, appliqué tous les jours. L'outil le réduit tout seul si ta masse maigre ou ta perte par semaine l'exigent.</span></div>
       <div class="alert warn" id="wzDefW" hidden></div>
-      <div class="alert warn"><b>Rappel santé.</b> Ces calories sont des estimations, pas un avis médical. Demande l'avis d'un médecin avant de commencer si tu as une maladie, un antécédent de trouble alimentaire, ou une douleur qui dure.</div>
+      <div class="alert warn"><b>Rappel santé.</b> Ces calories sont des estimations, pas un avis médical. Demande l'avis d'un médecin avant de commencer si tu as une maladie, un traitement, une douleur qui dure, ou si tu as déjà eu une douleur dans la poitrine ou un malaise à l'effort. <b>Antécédent de trouble alimentaire</b> : reste au maintien et parles-en à un professionnel de santé.</div>
       <label class="ack"><input type="checkbox" id="wzAck"><span>J'ai compris : ce plan n'est pas un avis médical.</span></label>
-      <p class="hint">Ces informations restent sur cet appareil, sauf si tu te connectes ensuite à un compte. <a href="confidentialite.html" target="_blank" rel="noopener">Confidentialité</a> · <a href="cgu.html" target="_blank" rel="noopener">CGU</a></p>
+      <p class="hint">Ces informations restent sur cet appareil, sauf si tu te connectes ensuite à un compte. <a href="confidentialite" target="_blank" rel="noopener">Confidentialité</a> · <a href="cgu" target="_blank" rel="noopener">CGU</a></p>
     </section>
     <section class="wz-step" data-s="5" hidden>
       <p class="wz-k">Étape 5 sur 5</p><h2 id="wzT5" tabindex="-1">Ton résumé</h2>
@@ -445,7 +465,7 @@
       <fieldset class="au-cons" id="auCons">
         <legend>Avant de continuer</legend>
         <label class="au-chk"><input type="checkbox" id="accAge"><span>J'ai au moins 15 ans</span></label>
-        <label class="au-chk"><input type="checkbox" id="accTerms"><span>J'accepte les <a href="cgu.html" target="_blank" rel="noopener">CGU</a> et la <a href="confidentialite.html" target="_blank" rel="noopener">politique de confidentialité</a></span></label>
+        <label class="au-chk"><input type="checkbox" id="accTerms"><span>J'accepte les <a href="cgu" target="_blank" rel="noopener">CGU</a> et la <a href="confidentialite" target="_blank" rel="noopener">politique de confidentialité</a></span></label>
         <label class="au-chk"><input type="checkbox" id="accHealth" aria-describedby="auHealthD"><span>J'accepte que mes <b>données de santé</b> soient enregistrées dans mon compte</span></label>
         <details class="au-more"><summary>Quelles données ?</summary><p id="auHealthD">Âge, taille, poids, suivi, ressenti après séance, activités et pesées importées d'Apple Santé ou de Polar Flow, fréquence cardiaque de repos : seulement pour synchroniser tes données entre tes appareils. Tu peux retirer ce consentement à tout moment depuis l'écran Compte.</p></details>
       </fieldset>
@@ -459,7 +479,7 @@
         <button class="au-prov au-go" type="submit" id="auGo"><span>Créer mon compte</span></button>
         <button class="au-link au-forgot" type="button" id="auForgot" hidden>Mot de passe oublié ?</button>
       </form>
-      <p class="au-tos" id="auTos">En continuant, tu acceptes les <a href="cgu.html" target="_blank" rel="noopener">CGU</a> et la <a href="confidentialite.html" target="_blank" rel="noopener">politique de confidentialité</a>. Rien n'est enregistré dans ton compte avant ton accord, demandé une seule fois à ta première connexion.</p>
+      <p class="au-tos" id="auTos">En continuant, tu acceptes les <a href="cgu" target="_blank" rel="noopener">CGU</a> et la <a href="confidentialite" target="_blank" rel="noopener">politique de confidentialité</a>. Rien n'est enregistré dans ton compte avant ton accord, demandé une seule fois à ta première connexion.</p>
       <p class="au-hint" id="auHint" aria-live="polite">Coche les 3 cases pour continuer.</p>
       <div class="au-msg" id="accMsg" role="status" aria-live="polite"></div>
       <button class="au-link" type="button" id="auLater">Continuer sans compte</button>
@@ -478,13 +498,14 @@
     </div>
   </aside>
 </div>
-<button class="cfab" type="button" id="coachFab" aria-controls="coachPop" aria-expanded="false" aria-label="Ouvrir le coach" hidden><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 0 1-12.3 7.6L3.5 20.5l1-4.4A8.5 8.5 0 1 1 20.5 12z"/></svg></button>
+<button class="cfab" type="button" id="coachFab" aria-controls="coachPop" aria-expanded="false" aria-label="Ouvrir le coach IA" hidden><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 0 1-12.3 7.6L3.5 20.5l1-4.4A8.5 8.5 0 1 1 20.5 12z"/></svg></button>
 <div class="cpop" id="coachPop" role="dialog" aria-modal="false" aria-labelledby="coachPopT" hidden>
-  <div class="cpop-h"><h2 id="coachPopT">Coach</h2><button class="btn ghost sm" type="button" id="coachNew2">Nouvelle</button><button class="sh-x" type="button" id="coachClose" aria-label="Fermer le coach">×</button></div>
+  <div class="cpop-h"><h2 id="coachPopT">Coach IA</h2><button class="btn ghost sm" type="button" id="coachNew2">Nouvelle</button><button class="sh-x" type="button" id="coachClose" aria-label="Fermer le coach IA">×</button></div>
   <div class="cpop-b">
-    <div class="alert warn" id="coachNote"><b>Une aide générale, pas un avis médical.</b> Douleur forte, malaise, difficultés avec l'alimentation : consulte un professionnel de santé.</div>
+    <div class="alert warn" id="coachNote"><b>Réponses générées par une IA (Google Gemini) : elles peuvent être fausses. Une aide générale, pas un avis médical.</b> Douleur forte, malaise, difficultés avec l'alimentation : consulte un professionnel de santé.</div>
     <p class="alert ok" id="coachSos" role="note"><b>En cas de détresse : 3114</b> (24 h/24) · <b>urgence : 15 / 112</b></p>
     <p class="alert warn" id="coachGate" hidden></p>
+    <p id="coachLogin" hidden><button class="btn" type="button" data-act="login">Se connecter</button></p>
     <div class="cchat" id="coachLog" role="log" aria-label="Conversation avec le coach" aria-live="polite" tabindex="0"></div>
   </div>
     <form id="coachForm" autocomplete="off">

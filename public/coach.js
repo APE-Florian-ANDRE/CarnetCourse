@@ -1,10 +1,10 @@
-/* Coach : assistant de coaching (site déployé uniquement). Aucun secret ici, aucune clé d'IA dans le navigateur.
-   Actif seulement si APP_CONFIG.CHAT_WEBHOOK_URL est une adresse https valide (webhook n8n). Rien n'est envoyé avant l'accord explicite de l'utilisateur.
-   L'IA est appelée par n8n (clé dans les « credentials » n8n) ; ce fichier envoie des messages et reçoit du TEXTE : la réponse n'est jamais interprétée comme du HTML. */
+/* Coach IA : assistant de coaching (site déployé uniquement). Aucun secret ici, aucune clé d'IA dans le navigateur.
+   Actif seulement si APP_CONFIG.CHAT_WEBHOOK_URL est une adresse https valide (fonction api/coach.js du site, ou webhook n8n). Rien n'est envoyé avant l'accord explicite de l'utilisateur.
+   L'IA est appelée par le serveur (clé dans ses variables d'environnement) ; ce fichier envoie des messages et reçoit du TEXTE : la réponse n'est jamais interprétée comme du HTML. */
 (function(){
 "use strict";
 const CFG=window.APP_CONFIG||{}, B=window.CarnetBridge, isLocal=["localhost","127.0.0.1"].includes(location.hostname);
-const COACH_V="2026-10-10.3", K_CONSENT="carnet.coach.consent", K_HIST="carnet.coach.hist", K_RATE="carnet.coach.rate";
+const COACH_V="2026-10-24.1", K_CONSENT="carnet.coach.consent", K_HIST="carnet.coach.hist", K_RATE="carnet.coach.rate";
 const MAX_IN=1000, MAX_REPLY=4000, MAX_BODY=65536, MAX_HIST=40, MAX_CONV=12, SEND_N=6, TIMEOUT=45000, MIN_GAP=1500, RATE_N=20, RATE_WIN=3600000;
 const $=s=>document.querySelector(s);
 
@@ -17,6 +17,8 @@ function hookUrl(){
 const URL_OK=hookUrl();
 const PROVIDER=(typeof CFG.CHAT_PROVIDER_NAME==="string"&&CFG.CHAT_PROVIDER_NAME.replace(/[\u0000-\u001f<>]/g,"").trim().slice(0,60))||"un fournisseur d'IA";
 const hookHost=()=>{ try{ return new URL(URL_OK).host; }catch(e){ return ""; } };
+// destinataire nommé dans la feuille d'accord : la fonction du site quand le coach est servi par le site lui-même, sinon le serveur relais configuré
+const hookWho=()=>hookHost()===location.host? "au serveur de Pacebook (fonction du site, hébergée par Vercel dans l'Union européenne)" : "à un serveur relais choisi par l'éditeur ("+hookHost()+")";
 
 /* ---- filet de sécurité : ces messages ne sont JAMAIS envoyés au serveur, une réponse fixe de prudence s'affiche ---- */
 // texte normalisé : minuscules, sans accents, sans ponctuation ni caractères invisibles (l'apostrophe, le tiret, les points ne contournent rien)
@@ -103,7 +105,7 @@ function saveHist(touch){ hist=hist.slice(-MAX_HIST); let c=curConv();   // touc
   if(store.convs.length) ls.set(K_HIST,JSON.stringify({v:2,cur:store.cur,convs:store.convs,del:[...gone].slice(-30)})); else ls.del(K_HIST);
   renderConvs(); }
 
-/* ---- limite de fréquence côté navigateur (la vraie limite est dans n8n : 20 messages par heure et par personne) ---- */
+/* ---- limite de fréquence côté navigateur (la vraie limite est sur le serveur : 20 messages par heure et par personne) ---- */
 // horodatages des envois réels de l'heure écoulée (les messages de prudence, jamais envoyés, ne comptent pas)
 function rateList(){ let a=null; try{ a=JSON.parse(ls.get(K_RATE)||"[]"); }catch(e){} const now=Date.now(); return (Array.isArray(a)?a:[]).filter(t=>typeof t==="number"&&t>now-RATE_WIN&&t<=now+60000).slice(-RATE_N); }
 const rateWait=()=>{ const r=rateList(); return r.length<RATE_N? 0 : Math.max(1,Math.ceil((r[0]+RATE_WIN-Date.now())/60000)); };
@@ -139,30 +141,34 @@ async function callHook(userText,cons){
 }
 
 /* ---- interface ---- */
-function bubble(role,text,err){ const log=$("#coachLog"), d=document.createElement("div"); d.className="cmsg "+(role==="u"?"me":"bot")+(err?" err":""); const w=document.createElement("span"); w.className="cwho"; w.textContent=role==="u"?"Toi":err?"Coach (erreur)":"Coach"; const b=document.createElement("div"); b.className="cbody";
+function bubble(role,text,err){ const log=$("#coachLog"), d=document.createElement("div"); d.className="cmsg "+(role==="u"?"me":"bot")+(err?" err":""); const w=document.createElement("span"); w.className="cwho"; w.textContent=role==="u"?"Toi":err?"Coach IA (erreur)":"Coach IA"; const b=document.createElement("div"); b.className="cbody";
   if(role==="u"||err) b.textContent=text; else renderMd(b,text); d.append(w,b); log.append(d); log.scrollTop=log.scrollHeight; return d; }
-function paint(){ const log=$("#coachLog"); if(!log) return; log.textContent=""; if(!hist.length){ const p=document.createElement("p"); p.className="muted"; p.textContent="Pose une question sur ton entraînement, tes séances ou ton alimentation. Le coach ne remplace pas un avis médical."; log.append(p); } for(const m of hist) bubble(m.r,m.t,m.e===1); log.scrollTop=log.scrollHeight; }
+function paint(){ const log=$("#coachLog"); if(!log) return; log.textContent=""; if(!hist.length){ const p=document.createElement("p"); p.className="muted"; p.textContent="Pose une question sur ton entraînement, tes séances ou ta récupération."; log.append(p); } for(const m of hist) bubble(m.r,m.t,m.e===1); log.scrollTop=log.scrollHeight; }
 function setBusy(v){ const had=document.activeElement===$("#coachSend"); busy=v; $("#coachSend").disabled=v; $("#coachIn").readOnly=v; $("#coachCancel").hidden=!v; $("#coachWait").hidden=!v; $("#coachForm").setAttribute("aria-busy",String(v)); if(v&&had) $("#coachCancel").focus(); }
 function gateState(){
   const g=$("#coachGate"); let msg="";
+  let login=false;
   if(!B.ready()) msg="Remplis d'abord ton profil (âge compris) : le coach est réservé aux personnes qui l'ont fait.";
   else if(B.minor()) msg="Le coach est désactivé avant 18 ans.";
+  else if(B.guest&&B.guest()){ msg="Le coach IA demande un compte : le serveur vérifie qui tu es avant de répondre. Sans connexion, rien n'est envoyé."; login=true; }
   g.hidden=!msg; g.textContent=msg; const off=!!msg;
+  for(const id of ["#coachLogin","#coachTabLogin"]){ const x=$(id); if(x) x.hidden=!login; }
   { const tg=$("#coachTabGate"); if(tg){ tg.hidden=!msg; tg.textContent=msg; } for(const id of ["#coachTabAct","#coachTabLead","#coachConvs"]){ const x=$(id); if(x) x.hidden=off; } const n2=$("#coachNew2"); if(n2) n2.hidden=off; }
   for(const id of ["#coachIn","#coachSend"]) $(id).disabled=off||(id==="#coachSend"&&busy); for(const id of ["#coachForm","#coachTools","#coachLog","#coachNote"]) $(id).hidden=off;   // coach indisponible (profil incomplet, moins de 18 ans) : le seul message affiché est celui du verrou
   return !off;
 }
 function consentSheet(opener,after){
   const cur=getConsent(), chk=(id,on,t,d)=>`<label class="chk"><input type="checkbox" id="${id}"${on?" checked":""}><span>${t}<small>${d}</small></span></label>`;
-  B.openSheet({title:"Envoyer mes messages au coach",opener,kind:"coach",
-    html:`<p class="note">Pour répondre, le coach envoie <b>tes messages</b> à un serveur n8n (<b>${B.esc(hookHost())}</b>) puis à <b>${B.esc(PROVIDER)}</b>, choisi par l'éditeur du site. Ces échanges sortent de ton appareil et peuvent sortir de l'Union européenne. <b>Tes messages peuvent contenir des informations de santé</b> : n'écris que ce qui est utile. Le coach ne remplace pas un avis médical, et son filtre de sécurité (qui repère certains mots graves) n'est pas exhaustif : en cas de doute ou de danger, appelle le 15, le 112 ou le 3114. Rien n'est envoyé tant que tu n'as pas accepté, et tu peux retirer ton accord à tout moment. Ton <b>âge</b> est toujours joint (le coach est réservé aux adultes) ; si tu es connecté, ton jeton de connexion l'est aussi, pour vérifier qui tu es.</p>
+  B.openSheet({title:"Envoyer mes messages au coach IA",opener,kind:"coach",
+    html:`<p class="note">Le coach est une <b>intelligence artificielle</b> : ses réponses sont générées automatiquement et peuvent être fausses. Pour te répondre, il envoie <b>tes messages</b> ${B.esc(hookWho())}, qui les transmet à <b>${B.esc(PROVIDER)}</b>. Ces échanges sortent de ton appareil et de l'Union européenne.</p>
+<div class="alert warn"><b>Offre gratuite de Google Gemini</b> : Google peut conserver tes messages, s'en servir pour améliorer ses produits et les faire relire par des personnes. <b>Tes messages peuvent contenir des informations de santé</b> : n'écris que ce qui est utile, jamais ton nom ni ton adresse.</div>
+<details class="more"><summary>En savoir plus</summary><p class="note">Le coach ne remplace pas un avis médical, et son filtre de sécurité (qui repère certains mots graves) n'est pas exhaustif : en cas de doute ou de danger, appelle le 15, le 112 ou le 3114. Rien n'est envoyé tant que tu n'as pas accepté, et tu peux retirer ton accord à tout moment. Ton <b>âge</b> est toujours joint (le coach est réservé aux adultes), ainsi que ton jeton de connexion, pour vérifier qui tu es. Détails : <a href="confidentialite#ia" target="_blank" rel="noopener">politique de confidentialité</a>.</p></details>
 <div class="grp" role="group" aria-label="Ce qui est envoyé">${chk("coAccept",!!cur,"J'accepte l'envoi de mes messages","Obligatoire pour utiliser le coach.")}
 ${chk("coProf",cur&&cur.profile,"Inclure un résumé de mon profil","Sport, niveau, objectif, séances par semaine, âge et poids. Décoché par défaut.")}
-${chk("coFeel",cur&&cur.feel,"Inclure mon ressenti après séance","Les 8 derniers : effort perçu, forme, douleur (sans tes notes). Décoché par défaut.")}
+${chk("coFeel",cur&&cur.feel,"Inclure mon ressenti après séance","Les 8 derniers, avec leur date : effort perçu, forme, douleur (sans tes notes). Décoché par défaut.")}
 ${chk("coStat",cur&&cur.stats,"Inclure mes statistiques importées","Durée et distance par semaine sur 4 semaines. Décoché par défaut.")}</div>
-<div class="alert warn">Le coach est une aide générale, <b>pas un avis médical</b>. Ne lui écris pas ton nom, ton adresse ni d'autres données qui n'ont rien à voir avec ton entraînement.</div>
 <p class="note" id="coErr" role="alert" hidden></p>`,
-    foot:`${cur?'<button class="btn ghost" type="button" id="coRevoke">Retirer mon accord</button>':""}<button class="btn" type="button" id="coGo">Enregistrer</button>`,
+    foot:`${cur?'<button class="btn ghost" type="button" id="coRevoke">Retirer mon accord</button>':""}<button class="btn" type="button" id="coGo">${cur?"Enregistrer":after?"Accepter et envoyer":"Accepter"}</button>`,
     onReady:sh=>{ const a=sh.querySelector("#coAccept"); a.setAttribute("data-first","");
       sh.querySelector("#coGo").addEventListener("click",()=>{ if(!a.checked){ const e=sh.querySelector("#coErr"); e.hidden=false; e.textContent="Coche « J'accepte l'envoi de mes messages » pour utiliser le coach."; a.focus(); return; }
         setConsent({profile:sh.querySelector("#coProf").checked,feel:sh.querySelector("#coFeel").checked,stats:sh.querySelector("#coStat").checked}); B.closeSheet(true); renderCfg(); if(after) after(); else $("#coachIn").focus(); });
@@ -204,9 +210,9 @@ function renderConvs(){ const ul=$("#coachConvs"); if(!ul) return; ul.textConten
     li.append(btn,del); ul.append(li); } }
 const popOpen=()=>!$("#coachPop").hidden;
 const fullPop=()=>window.matchMedia("(max-width:720px)").matches;
-function openPop(focusIn){ const p=$("#coachPop"), f=$("#coachFab"); p.hidden=false; p.setAttribute("aria-modal",String(fullPop())); f.setAttribute("aria-expanded","true"); f.setAttribute("aria-label","Fermer le coach"); document.documentElement.classList.add("cpop-on");
+function openPop(focusIn){ const p=$("#coachPop"), f=$("#coachFab"); p.hidden=false; p.setAttribute("aria-modal",String(fullPop())); f.setAttribute("aria-expanded","true"); f.setAttribute("aria-label","Fermer le coach IA"); document.documentElement.classList.add("cpop-on");
   const ok=gateState(); paint(); renderCfg(); if(focusIn!==false) setTimeout(()=>{ const i=$("#coachIn"); if(ok&&i&&!i.disabled) i.focus(); else $("#coachClose").focus(); },0); }
-function closePop(){ const p=$("#coachPop"), f=$("#coachFab"); if(p.hidden) return; const back=p.contains(document.activeElement); p.hidden=true; f.setAttribute("aria-expanded","false"); f.setAttribute("aria-label","Ouvrir le coach"); document.documentElement.classList.remove("cpop-on"); if(back) f.focus(); }
+function closePop(){ const p=$("#coachPop"), f=$("#coachFab"); if(p.hidden) return; const back=p.contains(document.activeElement); p.hidden=true; f.setAttribute("aria-expanded","false"); f.setAttribute("aria-label","Ouvrir le coach IA"); document.documentElement.classList.remove("cpop-on"); if(back) f.focus(); }
 const busyMsg=()=>{ $("#coachLive").textContent="Attends la réponse du coach (ou annule l'envoi) avant de changer de conversation."; if(!popOpen()) openPop(false); };
 function openConv(id){ if(busy){ if(id!==store.cur) busyMsg(); else openPop(); return; } const c=store.convs.find(x=>x.id===id); if(!c) return; store.cur=id; hist=c.m; saveHist(false); openPop(); }
 function newConv(){ if(busy){ busyMsg(); return; } store.cur=null; hist=[]; saveHist(false); const i=$("#coachIn"); if(i){ i.value=""; $("#coachCount").textContent="0 / "+MAX_IN; } openPop(); $("#coachLive").textContent="Nouvelle conversation."; }
@@ -218,6 +224,7 @@ function init(){
   const fab=$("#coachFab"); fab.hidden=false; document.documentElement.classList.add("cfab-on");
   fab.addEventListener("click",()=>popOpen()? closePop() : openPop());
   $("#coachClose").addEventListener("click",closePop);
+  { const lg=$("#coachLogin"); if(lg) lg.addEventListener("click",closePop); }   // la feuille de connexion s'ouvre (data-act="login", app.js) ; la bulle se ferme
   document.addEventListener("keydown",e=>{ if(!popOpen()||document.querySelector(".sheet-bg")) return;
     if(e.key==="Escape"){ e.preventDefault(); closePop(); return; }
     if(e.key==="Tab"&&fullPop()){ const p=$("#coachPop"), f=[...p.querySelectorAll('button,textarea,input,select,a[href],[tabindex]:not([tabindex="-1"])')].filter(x=>!x.disabled&&!x.hidden&&x.offsetParent!==null); if(!f.length) return;

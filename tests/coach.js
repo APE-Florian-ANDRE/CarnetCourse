@@ -54,7 +54,8 @@ const JWT="aaaaaaaaaa.bbbbbbbbbb.cccccccccc"; const GOOD={...L.SESSION(),access_
    await p.fill("#coachIn","bonjour"); await p.click("#coachSend"); await p.waitForSelector(".sheet #coAccept");
    ok(hits.length===0,"C1 la feuille de consentement s'ouvre, rien n'est envoyé");
    ok(await p.evaluate(()=>!document.querySelector("#coAccept").checked&&!document.querySelector("#coProf").checked&&!document.querySelector("#coFeel").checked&&!document.querySelector("#coStat").checked),"C1 aucune case précochée (profil, ressenti, stats : non par défaut)");
-   ok(await p.evaluate(()=>{ const t=document.querySelector(".sheet").textContent; return /serveur n8n/.test(t)&&t.includes("127.0.0.1")&&t.includes("Fournisseur-Test (États-Unis)")&&/informations de santé/.test(t)&&/âge/.test(t)&&/Union européenne/.test(t); }),"C1 la feuille nomme n8n, l'hôte, le fournisseur (config), la santé, l'âge et les transferts hors UE");
+   ok(await p.evaluate(()=>{ const t=document.querySelector(".sheet").textContent; return !/n8n/.test(t)&&/intelligence artificielle/.test(t)&&/serveur relais/.test(t)&&t.includes("127.0.0.1")&&t.includes("Fournisseur-Test (États-Unis)")&&/Offre gratuite de Google Gemini/.test(t)&&/relire par des personnes/.test(t)&&/informations de santé/.test(t)&&/âge/.test(t)&&/Union européenne/.test(t); }),"C1 la feuille dit que c'est une IA, nomme l'hôte (relais), le fournisseur, la réutilisation par Google, la santé, l'âge et les transferts hors UE (audit RGPD-03, RGPD-08)");
+   ok(await p.evaluate(()=>/^Accepter et envoyer$/.test(document.querySelector("#coGo").textContent)),"C1 bouton « Accepter et envoyer » (audit UX-10)");
    await p.click("#coGo"); ok(await p.evaluate(()=>!document.querySelector("#coErr").hidden)&&hits.length===0,"C1 sans « J'accepte » : refus, rien envoyé");
    await p.keyboard.press("Escape"); await p.waitForTimeout(300); ok(hits.length===0,"C1 fermer la feuille n'envoie rien");
    ok(await p.evaluate(()=>!localStorage.getItem("carnet.coach.consent")),"C1 aucun consentement enregistré");
@@ -67,8 +68,10 @@ const JWT="aaaaaaaaaa.bbbbbbbbbb.cccccccccc"; const GOOD={...L.SESSION(),access_
    ok(await p.evaluate(()=>document.querySelector("#coachIn").value===""&&!document.querySelector("#coachSend").disabled),"C1 champ vidé, bouton rendu");
    await csp(p); await p.ctx.close(); }
  // C1b : invité => bloqué localement, aucun envoi, aucune demande de consentement
- { const p=await mk(S,{session:null}); await open(p); hits.length=0; await p.fill("#coachIn","bonjour"); await p.waitForTimeout(1600); await p.click("#coachSend"); await p.waitForTimeout(400);
-   const m=await last(p); ok(/Connecte-toi/.test(m.txt)&&hits.length===0&&await p.evaluate(()=>!document.querySelector(".sheet")),"C1b invité : bloqué dans le navigateur (E.auth), 0 requête, pas de consentement demandé",m); await p.ctx.close(); }
+ { const p=await mk(S,{session:null}); await open(p); hits.length=0; await p.waitForTimeout(300);
+   ok(await p.evaluate(()=>{ const g=document.querySelector("#coachGate"); return !g.hidden&&/demande un compte/.test(g.textContent)&&!document.querySelector("#coachLogin").hidden&&document.querySelector("#coachIn").disabled&&document.querySelector("#coachForm").hidden; }),"C1b invité : le coach annonce tout de suite qu'il faut un compte, bouton « Se connecter », champ désactivé (audit UX-01)");
+   await p.click("#coachLogin button"); await p.waitForTimeout(300); ok(await p.evaluate(()=>!document.querySelector("#auth").hidden&&document.querySelector("#coachPop").hidden),"C1b « Se connecter » ouvre la connexion et ferme la bulle");
+   ok(hits.length===0&&await p.evaluate(()=>!document.querySelector(".sheet")),"C1b invité : 0 requête, pas de consentement demandé"); await p.ctx.close(); }
  // C2 : rubriques choisies (profil, ressenti, stats) et JWT si connecté
  { const p=await mk(S,{session:{...L.SESSION(),access_token:JWT}}); await open(p); hits.length=0;
    await p.fill("#coachIn","bonjour"); await p.waitForTimeout(1600); await p.click("#coachSend"); await consent(p,{prof:true,feel:true,stats:true}); await p.waitForFunction(()=>document.querySelectorAll("#coachLog .cmsg.bot").length>0);
