@@ -1309,3 +1309,5 @@ html.cfab-on .wrap{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
 @media (max-width:520px){.me-id{padding:14px}.me-av{width:56px;height:56px;font-size:1.6rem}.me-fa .btn{flex:1 1 0}}
 @media (prefers-reduced-motion:no-preference){.me:not([hidden]){animation:sin .2s ease-out}}
 @media print{.me-priv,.me-top .linkbtn{display:none}}
+
+.aip-time{border:0;margin:0;padding:0;display:grid;gap:8px}.aip-time legend{font-weight:600;font-size:.92rem;color:var(--fg2);padding:0;margin-bottom:6px}

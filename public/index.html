@@ -212,6 +212,10 @@
         <div class="field" data-sp="course trail vtt forme"><span class="lbl" id="lbl-renfo">Séances de renforcement</span>
           <div class="seg" role="radiogroup" aria-labelledby="lbl-renfo" aria-describedby="renfoHint"><label><input type="radio" name="renfo" value="0"><span>0</span></label><label><input type="radio" name="renfo" value="1"><span>1</span></label><label><input type="radio" name="renfo" value="2"><span>2</span></label></div>
           <span class="hint" id="renfoHint">2 recommandées : le renforcement divise le risque de blessure par environ 3.</span></div>
+        <div class="row2">
+          <div class="field"><label for="renfoMin">Durée d'un renfo (min) · optionnel</label><input id="renfoMin" name="renfoMin" type="number" min="20" max="120" step="5" inputmode="numeric" placeholder="selon le plan" aria-describedby="renfoMinHint"><span class="hint" id="renfoMinHint">De 20 à 120 min (60 au plus pour un débutant). Vide : la durée du plan.</span></div>
+          <div class="field" data-sp="course trail"><label for="hQuota">Temps de sport par semaine (h) · optionnel</label><input id="hQuota" name="hQuota" maxlength="8" type="text" inputmode="decimal" placeholder="ex. 5" aria-describedby="hQuotaHint"><span class="hint" id="hQuotaHint">Un plafond, renfo compris : au-delà, les footings puis la sortie longue sont raccourcis. Rien n'est ajouté en dessous.</span></div>
+        </div>
         <div class="field" data-sp="course trail vtt forme"><span class="lbl" id="lbl-longDay">Jour de sortie longue</span>
           <div class="seg" id="segLongDay" role="radiogroup" aria-labelledby="lbl-longDay" aria-describedby="longDayHint"><label><input type="radio" name="longDay" value="6"><span>Dimanche</span></label><label><input type="radio" name="longDay" value="5"><span>Samedi</span></label></div>
           <span class="hint" id="longDayHint" aria-live="polite" hidden></span></div>
@@ -246,7 +250,7 @@
     </section>
     <section class="regen aip" id="aiPlan" aria-labelledby="aipT" hidden>
       <div class="rg-h"><span class="rg-i" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></span>
-        <div><h3 id="aipT">Ajuster mon plan avec l'IA</h3><p class="rg-sub">L'IA choisit tes séances d'intensité selon la complexité choisie (<b id="aipCplx">Standard</b>) et ton ressenti, allège les semaines difficiles et ajoute un conseil par semaine. Le volume de chaque semaine, tes jours et les garde-fous du plan ne changent pas ; une séance peut devenir plus courte ou plus longue.</p></div></div>
+        <div><h3 id="aipT">Ajuster mon plan avec l'IA</h3><p class="rg-sub">L'IA ajuste tout ton entraînement selon ta demande, la complexité choisie (<b id="aipCplx">Standard</b>) et ton ressenti : séances d'intensité, footings (lignes droites ou cardio sans impact), sortie longue, renforcement, semaines difficiles allégées, et un conseil par semaine. Tes jours et les garde-fous du plan ne changent pas : jamais plus de volume ni d'intensité.</p></div></div>
       <p class="rg-keep" id="aipSt" aria-live="polite"></p>
       <details class="aip-mods" id="aipMods" hidden><summary id="aipModsT">Voir avant / après</summary><ul class="aip-ml" id="aipModsL"></ul></details>
       <div class="aip-act"><button class="btn" type="button" id="aipGo" aria-haspopup="dialog">Ajuster avec l'IA</button><button class="btn ghost" type="button" id="aipOff" hidden>Retirer l'ajustement</button></div>

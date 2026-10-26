@@ -29,7 +29,7 @@ const aiCall=()=>calls.find(c=>/generativelanguage/.test(c.url));
  reset(); r=await call(mk({headers:{authorization:""}})); ok(r.status===401&&!calls.length,"sans jeton : 401 sans aucun appel réseau");
  const bad=[["null",null],["v=2",{...BODY(),v:2}],["complexité inconnue",{...BODY(),complexite:"extreme"}],["sans profil",{...BODY(),profil:undefined}],["sans semaine",{...BODY(),semaines:[]}],["53 semaines",{...BODY(),semaines:Array.from({length:53},(_,i)=>({s:i+1,phase:"base"}))}],["phase inconnue",{...BODY(),semaines:[{s:1,phase:"zzz"}]}],["semaine en double",{...BODY(),semaines:[{s:1,phase:"base"},{s:1,phase:"base"}]}],["type inconnu",{...BODY(),semaines:[{s:1,phase:"base",qualite:[{type:"sprint",options:[]}]}]}],["souhait non texte",{...BODY(),souhait:{a:1}}],["ressenti non liste",{...BODY(),ressenti:"x"}]];
  for(const [n,bd] of bad){ reset(); r=await call(mk({body:bd})); ok(r.status===400&&!calls.length,"corps invalide refusé sans appel : "+n,r.status); }
- reset(); r=await call(mk({body:{...BODY(),souhait:"x".repeat(40000)}})); ok(r.status===413&&!calls.length,"corps trop gros : 413");
+ reset(); r=await call(mk({body:{...BODY(),souhait:"x".repeat(60000)}})); ok(r.status===413&&!calls.length,"corps trop gros : 413");
  reset(); supa={status:401,body:{}}; r=await call(mk()); ok(r.status===401&&!aiCall(),"jeton refusé par Supabase : 401, pas d'IA");
  reset(); supa={status:200,body:{id:UID,is_anonymous:true}}; r=await call(mk()); ok(r.status===401&&!aiCall(),"session anonyme refusée");
  reset(); supa={throw:true}; r=await call(mk()); ok(r.status===502&&!aiCall(),"Supabase injoignable : 502");
@@ -88,5 +88,18 @@ const aiCall=()=>calls.find(c=>/generativelanguage/.test(c.url));
  for(const bp of [{a:1},42,["x"]]){ reset(); r=await call(mk({body:{...BODY(),preferences:bp}})); ok(r.status===400&&!calls.length,"préférences non texte refusées : "+JSON.stringify(bp)); }
  for(const w of ["je veux en finir avec la vie","douleur dans la poi<trine","je me fais vo<mir après chaque repas"]){ reset(); r=await call(mk({body:{...BODY(),preferences:w}})); ok(r.status===200&&r.json.safe&&/(3114|15|112|médecin)/.test(r.json.reply)&&!r.json.plan&&!aiCall(),"préférences graves : message fixe, aucun appel à l'IA ("+w+")"); }
  reset(); r=await call(mk({body:{...BODY(),souhait:"je préfère les côtes",preferences:"pas de VMA"}})); ok(r.status===200&&/"souhait":"je préfère les côtes","preferences":"pas de VMA"/.test(JSON.parse(aiCall().o.body).contents[0].parts[0].text),"souhait et préférences transmis ensemble");
+ // tout l'entraînement : footings, sortie longue, renforcement (options permises seulement, rien en affûtage ni en course)
+ { const W=(s,phase)=>({s,phase,allegee:false,km:30,minutes:200,qualite:[{type:"seuil",options:["seuil","fartlek"],j:1}],faciles:[{j:2,min:40,options:["lignes","cardio"]},{j:4,min:40,options:["cardio"]}],longue:{j:6,km:14,min:90,options:["allege"]},renfo:[{j:1,min:45,options:["leger"]},{j:3,min:30,options:[]}]});
+   const body={...BODY(),semaines:[W(4,"base"),W(11,"taper")]};
+   reset(); ai=gem({resume:"Moins d'impacts.",semaines:[{s:4,focus:"F",conseil:"C",q:["fartlek"],allege:false,faciles:["cardio","lignes"],longue:"allege",renfo:["leger","leger"]},{s:11,focus:"F",conseil:"C",q:["garder"],allege:false,faciles:["cardio","cardio"],longue:"allege",renfo:["leger"]}]});
+   r=await call(mk({body})); const w4=r.json&&r.json.plan&&r.json.plan.semaines[0], w11=r.json&&r.json.plan&&r.json.plan.semaines[1], sent=JSON.parse(aiCall().o.body).contents[0].parts[0].text;
+   ok(/"faciles":\[\{"j":2,"min":40,"options":\["lignes","cardio"\]\}/.test(sent)&&/"longue":\{"j":6/.test(sent)&&/"renfo":\[/.test(sent),"footings, sortie longue et renfo transmis à l'IA",sent.slice(0,300));
+   ok(w4&&w4.faciles.join()==="cardio,garder"&&w4.longue==="allege"&&w4.renfo.join()==="leger,garder","choix permis gardés, choix hors options ramenés à « garder »",w4);
+   ok(w11&&w11.faciles.join()==="garder,garder"&&w11.longue==="garder"&&w11.renfo.join()==="garder,garder","affûtage : footings, sortie longue et renfo inchangés",w11);
+   ok(/TOUT l'entraînement/.test(JSON.parse(aiCall().o.body).systemInstruction.parts[0].text)&&/s'appliquent à TOUT le plan/.test(JSON.parse(aiCall().o.body).systemInstruction.parts[0].text),"consigne : la demande s'applique à tout le plan");
+   reset(); r=await call(mk({body:{...BODY(),semaines:[{...W(4,"base"),faciles:[{j:2,min:40,options:"cardio"}]}]}})); ok(r.status===400,"footings mal formés refusés");
+   reset(); r=await call(mk({body:{...BODY(),semaines:[{...W(4,"base"),faciles:Array.from({length:8},()=>({j:1,min:30,options:[]}))}]}})); ok(r.status===400,"plus de 7 footings refusés"); }
+ reset(); r=await call(mk({body:{...BODY(),temps:{renfo_min:90,quota_h:5}}})); ok(r.status===200&&/"temps":\{"renfo_min":90,"quota_h":5\}/.test(JSON.parse(aiCall().o.body).contents[0].parts[0].text)&&/quota_h/.test(JSON.parse(aiCall().o.body).systemInstruction.parts[0].text),"temps choisi transmis à l'IA, avec sa consigne");
+ for(const t of [{renfo_min:500},{quota_h:0},"5h",[1]]){ reset(); r=await call(mk({body:{...BODY(),temps:t}})); ok(r.status===400&&!calls.length,"temps invalide refusé : "+JSON.stringify(t)); }
  console.log(fails?"ECHECS "+fails:"TOUT OK"); process.exit(fails?1:0);
 })();
