@@ -171,7 +171,8 @@ const appT=()=>fs.readFileSync(path.join(L.ROOT,"app.js"),"utf8").replace(/initA
    const h=hits[0]||{body:{}};
    ok(h.auth==="Bearer "+JWT,"U6 jeton de connexion joint");
    ok(h.body.v===1&&h.body.complexite==="standard"&&h.body.souhait==="je préfère les côtes"&&h.body.profil&&h.body.profil.age===35&&!h.body.ressenti&&!/NOTE-SECRETE|genou|"poids"|taille/.test(h.raw),"U7 corps : complexité, souhait, âge ; ni ressenti non coché, ni notes, ni poids",h.body);
-   ok(Array.isArray(h.body.semaines)&&h.body.semaines[0].s===4&&h.body.semaines.every(w=>(w.qualite||[]).every(x=>x.options[0]===x.type)),"U8 semaines à venir seulement (à partir de la semaine en cours), options permises",h.body.semaines&&h.body.semaines[0]);
+   const currentWeek=Number(await p.$eval("#weekSel",e=>e.value));
+   ok(Array.isArray(h.body.semaines)&&h.body.semaines[0].s===currentWeek&&h.body.semaines.every(w=>(w.qualite||[]).every(x=>x.options[0]===x.type)),"U8 semaines à venir seulement (à partir de la semaine en cours), options permises",h.body.semaines&&h.body.semaines[0]);
    ok(await p.evaluate(()=>!document.querySelector(".sheet")&&/Ajusté le/.test(document.querySelector("#aipSt").textContent)&&!document.querySelector("#aipOff").hidden),"U9 succès : feuille fermée, statut « Ajusté le », bouton Retirer");
    ok(await p.evaluate(()=>/Plan ajusté par l'IA/.test(document.querySelector("#toasts").textContent)),"U10 message de confirmation");
    const am=await p.evaluate(()=>{ const d=document.querySelector("#aipMods"); return {vis:!d.hidden,sum:document.querySelector("#aipModsT").textContent,li:[...document.querySelectorAll("#aipModsL li")].map(x=>x.textContent)}; });

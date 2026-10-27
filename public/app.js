@@ -948,7 +948,8 @@ function capSimple(weeks,p){
     // Dans l'ordre : le plus long footing raccourcit (3 km au plus bas), la séance d'intensité raccourcit, devient un footing plus court, puis est retirée.
     const km=W=>W.days.reduce((a,d)=>a+(d.run&&d.run.type!=="race"?sessionKm(d.run,vma):0),0), normal=!wk.deload&&wk.phase!=="taper"&&wk.phase!=="race";
     const runsOf=W=>W.days.filter(d=>d.run&&d.kind!=="before").length;
-    const cap2=Math.min(km(sw)+.05, isN(wk)? suf[i] : Infinity, normal&&lastN? Math.max(lastN*1.08,lastN+(lastR<Math.min(p.seances,3)?3.2:1))+.2 : wk.deload&&lastN? lastN-.3 : Infinity);
+    const taper=wk.phase==="race"? weeks.slice(0,i).reverse().find(x=>x.phase==="taper") : null;
+    const cap2=Math.min(km(sw)+.05, isN(wk)? suf[i] : Infinity, normal&&lastN? Math.max(lastN*1.08,lastN+(lastR<Math.min(p.seances,3)?3.2:1))+.2 : wk.deload&&lastN? lastN-.3 : Infinity, taper?km(taper):Infinity);
     // footings : 3 km au plus bas (2,5 en affûtage et semaine de course), ou la plus courte séance (footing ou intensité) du standard si elle descend plus bas
     const eStd=sw.days.filter(d=>d.run&&(d.run.type==="easy"||d.run.type==="q")&&!d.run.deb).map(d=>Math.floor(sessionKm(d.run,vma)*2)/2), minE0=normal||wk.deload? 3 : 2.5;
     // semaine allégée : la sortie longue peut descendre à 3 km et un footing peut sauter (sans passer sous les sorties du standard)
@@ -958,7 +959,7 @@ function capSimple(weeks,p){
 // plan simple, plus longue sortie déclarée : règle des +10 % revérifiée après le plafond du simple (qui peut raccourcir la séance qui servait de repère) :
 // une sortie longue ne dépasse jamais 1,1 × la plus longue séance faite avant (déclarée, ou placée en semaine normale)
 function capLong(weeks,p){
-  if(evSport(p.sport)||p.niveau==="deb"||p.cplx!=="simple"||!(p.longest>0)) return; const {vma}=vmaOf(p); let mx=p.longest>0?p.longest:0;
+  if(evSport(p.sport)||p.niveau==="deb"||p.cplx!=="simple"||(!(p.longest>0)&&!p.minor)) return; const {vma}=vmaOf(p); let mx=p.longest>0?p.longest:0;
   for(const wk of weeks){ const i=wk.days.findIndex(d=>d.run&&d.run.type==="long"&&d.kind!=="before"), d=wk.days[i];
     if(d&&mx>0&&wk.w>1){ const k0=sessionKm(d.run,vma), lim=mx*1.1; if(k0>lim+.1){ let k=Math.floor(lim*10)/10, r=longRun(k,vma,p.objectif,wk.phase);
       for(let t=0;t<10&&sessionKm(r,vma)>lim+.05;t++){ k-=.1; r=longRun(k,vma,p.objectif,wk.phase); } wk.days[i]={...d,run:r}; } }
