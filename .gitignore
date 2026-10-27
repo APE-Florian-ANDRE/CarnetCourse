@@ -7,3 +7,5 @@
 node_modules/
 audit/
 .reports/
+coverage/
+coverage-run.log
