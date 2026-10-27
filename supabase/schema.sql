@@ -54,17 +54,19 @@ alter table public.consent_log enable row level security;
 alter table public.consent_log force row level security;
 revoke all on public.consent_log from anon, authenticated;   -- réservé au serveur (service_role / postgres)
 
--- Horodatage SERVEUR du consentement + journalisation : le client ne décide pas de consent.at (anti-falsification).
+-- Validation + horodatage SERVEUR du consentement (BEFORE) : le client ne décide pas de consent.at (anti-falsification).
 create or replace function public.stamp_consent() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin
-  if new.consent is not null and (tg_op = 'INSERT' or new.consent is distinct from old.consent) then
-    new.consent := jsonb_set(new.consent, '{at}', to_jsonb(to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')));
-    insert into public.consent_log (user_id, consent) values (new.user_id, new.consent);
-    -- RGPD « consentement périmé » ACTIVÉ : refuse un accord qui ne porte pas la version courante des textes.
-    -- À CHAQUE changement des CGU / de la politique, aligne cette date sur CONSENT_V (public/auth.js, actuellement 2026-10-10) :
-    if new.consent ->> 'cgu' <> '2026-10-10' or new.consent ->> 'privacy' <> '2026-10-10' then
+  if new.consent is not null then
+    -- RGPD « consentement périmé » : version des textes exigée à CHAQUE écriture (y compris une mise à jour de « doc » seule, et une version JSON null).
+    -- « is distinct from » gère les null (« null <> '...' » vaudrait null et laisserait passer). Aligner cette date sur CONSENT_V (public/auth.js, actuellement 2026-10-10) à chaque changement des CGU / de la politique :
+    if new.consent ->> 'cgu' is distinct from '2026-10-10' or new.consent ->> 'privacy' is distinct from '2026-10-10' then
       raise exception 'consentement : version des textes perimee' using errcode = '22023'; end if;
+    -- horodatage serveur seulement quand l'accord change
+    if tg_op = 'INSERT' or new.consent is distinct from old.consent then
+      new.consent := jsonb_set(new.consent, '{at}', to_jsonb(to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')));
+    end if;
   end if;
   return new;
 end $$;
@@ -72,6 +74,21 @@ revoke all on function public.stamp_consent() from public, anon, authenticated;
 drop trigger if exists user_data_stamp_consent on public.user_data;
 create trigger user_data_stamp_consent before insert or update on public.user_data
   for each row execute function public.stamp_consent();
+
+-- Journalisation du consentement (AFTER) : UNE seule entrée par accord réellement enregistré.
+-- En BEFORE, un upsert en conflit déclenche INSERT puis UPDATE et journaliserait deux fois ; l'AFTER ne s'exécute que pour l'opération réellement effectuée.
+create or replace function public.log_consent() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.consent is not null and (tg_op = 'INSERT' or new.consent is distinct from old.consent) then
+    insert into public.consent_log (user_id, consent) values (new.user_id, new.consent);
+  end if;
+  return null;
+end $$;
+revoke all on function public.log_consent() from public, anon, authenticated;
+drop trigger if exists user_data_log_consent on public.user_data;
+create trigger user_data_log_consent after insert or update on public.user_data
+  for each row execute function public.log_consent();
 
 alter table public.user_data enable row level security;
 alter table public.user_data force row level security;
