@@ -1447,14 +1447,14 @@ function dayFuel(p,E,wk){
   });
   const maintAvg=days.reduce((a,d)=>a+d.maint,0)/7;
   const exAvg=days.reduce((a,d)=>a+d.ex,0)/7;
-  // déficit : socle fixe tous les jours, supplément les jours de repos et de footing ; l'ajustement manuel entre dans le contrôle de sécurité
+  // déficit : socle fixe tous les jours, supplément les jours de repos et de footing SEULEMENT (pas les jours de renfo, qui restent des jours d'entraînement) ; l'ajustement manuel entre dans le contrôle de sécurité
   const isRaceWk = wk.phase==="race", taper = wk.phase==="taper"||isRaceWk;
   const base=Math.min(p.deficit,500), extra= taper?0:Math.min(p.bonus,200), adj=p.adj||0;
   const lowBmi=E.bmi<18.5||!!p.minor; // maigreur : aucun déficit, seul un ajustement vers le haut reste possible
   // semaine de course : veille (et avant-veille en semi et marathon) ; en semi et marathon, ces 2 jours sont à l'équilibre pour remplir les réserves de glucides
   const raceI=days.findIndex(d=>d.kind==="race"||d.obj), long_= p.objectif==="21"||p.objectif==="42";
   const preOf=i=> raceI<0? null : i===(raceI+6)%7? "eve" : long_&&i===(raceI+5)%7? "pre" : null;
-  let defs=days.map(d=> d.kind==="race"||d.obj||d.kind==="before"||((long_||evSport(p.sport))&&preOf(d.i))?0 : lowBmi? Math.min(0,-adj) : base + ((d.kind==="rest"||d.kind==="easy")?extra:0) - adj);
+  let defs=days.map(d=> d.kind==="race"||d.obj||d.kind==="before"||((long_||evSport(p.sport))&&preOf(d.i))?0 : lowBmi? Math.min(0,-adj) : base + ((!d.renfo&&(d.kind==="rest"||d.kind==="easy"))?extra:0) - adj);
   const hardMin=30*E.ffm+exAvg;           // apport moyen minimum : 30 kcal/kg de masse maigre après le sport (seuil d'énergie basse, consensus CIO RED-S 2023)
   const wanted=defs.reduce((a,x)=>a+x,0)/7, allowed=maintAvg-hardMin;
   let floorHit=false;
