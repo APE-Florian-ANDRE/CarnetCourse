@@ -8,19 +8,87 @@ create table if not exists public.user_data (
   updated_at timestamptz not null default now(),
   constraint doc_is_object   check (jsonb_typeof(doc) = 'object'),
   constraint doc_max_size    check (octet_length(doc::text) <= 1500000),      -- 1,5 Mo au plus
+  -- forme stricte : vrais booléens JSON, vraies dates, horodatage texte, EXACTEMENT ces 6 clés (empêche un consentement falsifié écrit directement via l'API REST)
   constraint consent_shape   check (consent is null or (
       jsonb_typeof(consent) = 'object'
       and octet_length(consent::text) <= 1000
-      and consent ->> 'terms' = 'true'     -- CGU + confidentialité lues et acceptées
-      and consent ->> 'health' = 'true'    -- consentement explicite aux données de santé (art. 9.2.a)
-      and consent ->> 'age15' = 'true'
-      and (consent ->> 'cgu') ~ '^\d{4}-\d{2}-\d{2}$'
-      and (consent ->> 'privacy') ~ '^\d{4}-\d{2}-\d{2}$'
-      and (consent ->> 'at') is not null))
+      and jsonb_typeof(consent -> 'terms')  = 'boolean' and (consent -> 'terms')  = 'true'::jsonb   -- CGU + confidentialité lues et acceptées
+      and jsonb_typeof(consent -> 'health') = 'boolean' and (consent -> 'health') = 'true'::jsonb   -- consentement explicite aux données de santé (art. 9.2.a)
+      and jsonb_typeof(consent -> 'age15')  = 'boolean' and (consent -> 'age15')  = 'true'::jsonb
+      and (consent ->> 'cgu')     ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'
+      and (consent ->> 'privacy') ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'
+      and jsonb_typeof(consent -> 'at') = 'string'
+      and consent ?& array['terms','health','age15','cgu','privacy','at']
+      and consent - array['terms','health','age15','cgu','privacy','at'] = '{}'::jsonb))   -- aucune clé en trop (exactement ces 6)
 );
 
 -- NB : les anciens comptes de test créés avant la colonne « terms » doivent être supprimés ou mis à jour.
 comment on table public.user_data is 'Pacebook : une ligne par utilisateur, protégée par RLS. Contient des données de santé (art. 9 RGPD).';
+
+-- Réapplique les contraintes sur une base DÉJÀ existante (« create table if not exists » ne les met pas à jour) : rejouer ce fichier durcit alors le consentement et la taille.
+alter table public.user_data drop constraint if exists consent_shape;
+alter table public.user_data add constraint consent_shape check (consent is null or (
+    jsonb_typeof(consent) = 'object'
+    and octet_length(consent::text) <= 1000
+    and jsonb_typeof(consent -> 'terms')  = 'boolean' and (consent -> 'terms')  = 'true'::jsonb
+    and jsonb_typeof(consent -> 'health') = 'boolean' and (consent -> 'health') = 'true'::jsonb
+    and jsonb_typeof(consent -> 'age15')  = 'boolean' and (consent -> 'age15')  = 'true'::jsonb
+    and (consent ->> 'cgu')     ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'
+    and (consent ->> 'privacy') ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'
+    and jsonb_typeof(consent -> 'at') = 'string'
+    and consent ?& array['terms','health','age15','cgu','privacy','at']
+    and consent - array['terms','health','age15','cgu','privacy','at'] = '{}'::jsonb));   -- aucune clé en trop (exactement ces 6)
+alter table public.user_data drop constraint if exists doc_is_object;
+alter table public.user_data add constraint doc_is_object check (jsonb_typeof(doc) = 'object');
+alter table public.user_data drop constraint if exists doc_max_size;
+alter table public.user_data add constraint doc_max_size check (octet_length(doc::text) <= 1500000);
+
+-- Journal d'accord (preuve du consentement, art. 7.1) : une ligne par enregistrement, jamais lisible ni modifiable par le client.
+create table if not exists public.consent_log (
+  id      bigint generated always as identity primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  consent jsonb not null,
+  at      timestamptz not null default now()
+);
+alter table public.consent_log enable row level security;
+alter table public.consent_log force row level security;
+revoke all on public.consent_log from anon, authenticated;   -- réservé au serveur (service_role / postgres)
+
+-- Validation + horodatage SERVEUR du consentement (BEFORE) : le client ne décide pas de consent.at (anti-falsification).
+create or replace function public.stamp_consent() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.consent is not null then
+    -- RGPD « consentement périmé » : version des textes exigée à CHAQUE écriture (y compris une mise à jour de « doc » seule, et une version JSON null).
+    -- « is distinct from » gère les null (« null <> '...' » vaudrait null et laisserait passer). Aligner cette date sur CONSENT_V (public/auth.js, actuellement 2026-10-10) à chaque changement des CGU / de la politique :
+    if new.consent ->> 'cgu' is distinct from '2026-10-10' or new.consent ->> 'privacy' is distinct from '2026-10-10' then
+      raise exception 'consentement : version des textes perimee' using errcode = '22023'; end if;
+    -- horodatage serveur seulement quand l'accord change
+    if tg_op = 'INSERT' or new.consent is distinct from old.consent then
+      new.consent := jsonb_set(new.consent, '{at}', to_jsonb(to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')));
+    end if;
+  end if;
+  return new;
+end $$;
+revoke all on function public.stamp_consent() from public, anon, authenticated;
+drop trigger if exists user_data_stamp_consent on public.user_data;
+create trigger user_data_stamp_consent before insert or update on public.user_data
+  for each row execute function public.stamp_consent();
+
+-- Journalisation du consentement (AFTER) : UNE seule entrée par accord réellement enregistré.
+-- En BEFORE, un upsert en conflit déclenche INSERT puis UPDATE et journaliserait deux fois ; l'AFTER ne s'exécute que pour l'opération réellement effectuée.
+create or replace function public.log_consent() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.consent is not null and (tg_op = 'INSERT' or new.consent is distinct from old.consent) then
+    insert into public.consent_log (user_id, consent) values (new.user_id, new.consent);
+  end if;
+  return null;
+end $$;
+revoke all on function public.log_consent() from public, anon, authenticated;
+drop trigger if exists user_data_log_consent on public.user_data;
+create trigger user_data_log_consent after insert or update on public.user_data
+  for each row execute function public.log_consent();
 
 alter table public.user_data enable row level security;
 alter table public.user_data force row level security;
@@ -72,6 +140,10 @@ language plpgsql security definer set search_path = '' as $$
 declare uid uuid := (select auth.uid());
 begin
   if uid is null then raise exception 'not authenticated' using errcode = '28000'; end if;
+  if coalesce((select auth.jwt() ->> 'is_anonymous'), 'false') <> 'false' then raise exception 'compte anonyme' using errcode = '28000'; end if;
+  -- Option (action sensible) : exiger une session récente. Décommente pour forcer une reconnexion de moins de 5 min avant suppression :
+  -- if coalesce((select (auth.jwt() ->> 'iat')::bigint), 0) < extract(epoch from now())::bigint - 300 then
+  --   raise exception 'reconnecte-toi pour supprimer ton compte' using errcode = '28000'; end if;
   delete from auth.users where id = uid;   -- cascade sur public.user_data
 end $$;
 revoke all on function public.delete_my_account() from public, anon;

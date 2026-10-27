@@ -948,7 +948,8 @@ function capSimple(weeks,p){
     // Dans l'ordre : le plus long footing raccourcit (3 km au plus bas), la séance d'intensité raccourcit, devient un footing plus court, puis est retirée.
     const km=W=>W.days.reduce((a,d)=>a+(d.run&&d.run.type!=="race"?sessionKm(d.run,vma):0),0), normal=!wk.deload&&wk.phase!=="taper"&&wk.phase!=="race";
     const runsOf=W=>W.days.filter(d=>d.run&&d.kind!=="before").length;
-    const cap2=Math.min(km(sw)+.05, isN(wk)? suf[i] : Infinity, normal&&lastN? Math.max(lastN*1.08,lastN+(lastR<Math.min(p.seances,3)?3.2:1))+.2 : wk.deload&&lastN? lastN-.3 : Infinity);
+    const taper=wk.phase==="race"? weeks.slice(0,i).reverse().find(x=>x.phase==="taper") : null;
+    const cap2=Math.min(km(sw)+.05, isN(wk)? suf[i] : Infinity, normal&&lastN? Math.max(lastN*1.08,lastN+(lastR<Math.min(p.seances,3)?3.2:1))+.2 : wk.deload&&lastN? lastN-.3 : Infinity, taper?km(taper):Infinity);
     // footings : 3 km au plus bas (2,5 en affûtage et semaine de course), ou la plus courte séance (footing ou intensité) du standard si elle descend plus bas
     const eStd=sw.days.filter(d=>d.run&&(d.run.type==="easy"||d.run.type==="q")&&!d.run.deb).map(d=>Math.floor(sessionKm(d.run,vma)*2)/2), minE0=normal||wk.deload? 3 : 2.5;
     // semaine allégée : la sortie longue peut descendre à 3 km et un footing peut sauter (sans passer sous les sorties du standard)
@@ -958,7 +959,7 @@ function capSimple(weeks,p){
 // plan simple, plus longue sortie déclarée : règle des +10 % revérifiée après le plafond du simple (qui peut raccourcir la séance qui servait de repère) :
 // une sortie longue ne dépasse jamais 1,1 × la plus longue séance faite avant (déclarée, ou placée en semaine normale)
 function capLong(weeks,p){
-  if(evSport(p.sport)||p.niveau==="deb"||p.cplx!=="simple"||!(p.longest>0)) return; const {vma}=vmaOf(p); let mx=p.longest>0?p.longest:0;
+  if(evSport(p.sport)||p.niveau==="deb"||p.cplx!=="simple"||(!(p.longest>0)&&!p.minor)) return; const {vma}=vmaOf(p); let mx=p.longest>0?p.longest:0;
   for(const wk of weeks){ const i=wk.days.findIndex(d=>d.run&&d.run.type==="long"&&d.kind!=="before"), d=wk.days[i];
     if(d&&mx>0&&wk.w>1){ const k0=sessionKm(d.run,vma), lim=mx*1.1; if(k0>lim+.1){ let k=Math.floor(lim*10)/10, r=longRun(k,vma,p.objectif,wk.phase);
       for(let t=0;t<10&&sessionKm(r,vma)>lim+.05;t++){ k-=.1; r=longRun(k,vma,p.objectif,wk.phase); } wk.days[i]={...d,run:r}; } }
@@ -3769,7 +3770,8 @@ $("#rgGo").addEventListener("click",e=>{ const v=regenPreview(), keep=$("#rgMove
    Envoyé : âge, sport, niveau, objectif, séances par semaine, la structure des semaines à venir du plan de base (phase, km, minutes, séances d'intensité
    et leurs remplaçants permis), la complexité choisie ; si coché, les 8 derniers ressentis (sans notes) ; si écrit, une demande de 300 caractères au plus. */
 const PLAN_AI_URL=(()=>{ const u=String((window.APP_CONFIG||{}).PLAN_AI_URL||"").trim(), loc=["localhost","127.0.0.1"].includes(location.hostname);
-  return u.length<=300&&(/^https:\/\/[a-z0-9]([a-z0-9.-]{0,120})(:\d{2,5})?(\/[A-Za-z0-9._~\/-]{0,120})?$/i.test(u)||(loc&&/^http:\/\/(localhost|127\.0\.0\.1)(:\d{2,5})?(\/[A-Za-z0-9._~\/-]{0,120})?$/.test(u)))? u : ""; })();
+  // chemin same-origin « /api/… » (fonction du site), ou https absolue, ou http vers localhost pour tester
+  return u.length<=300&&(/^\/(?!\/)[A-Za-z0-9._~%\/-]{0,160}$/.test(u)||/^https:\/\/[a-z0-9]([a-z0-9.-]{0,120})(:\d{2,5})?(\/[A-Za-z0-9._~\/-]{0,120})?$/i.test(u)||(loc&&/^http:\/\/(localhost|127\.0\.0\.1)(:\d{2,5})?(\/[A-Za-z0-9._~\/-]{0,120})?$/.test(u)))? u : ""; })();
 const CPLX_LAB={simple:"Simple",standard:"Standard",avance:"Avancé"};
 let aipBusy=false;
 function aipBody(feel,wish){
@@ -3811,7 +3813,7 @@ function wishTime(w){ const t=String(w||"").toLowerCase(), o={};
   const q=/(\d{1,2}(?:[.,]\d)?)\s*(?:h|heures?)(?:\s*(\d{2}))?\s*(?:de sport|d.entra[iî]nement|de course)?\s*(?:par|\/|chaque|toutes? les?)\s*(?:la\s*)?sem/.exec(t); if(q) o.hQuota=numOf(q[1])+(+q[2]||0)/60;
   return o; }
 function aipSheet(opener){
-  const host=(()=>{ try{ return new URL(PLAN_AI_URL).host; }catch(e){ return ""; } })(), prov=esc(String((window.APP_CONFIG||{}).CHAT_PROVIDER_NAME||"un fournisseur d'IA").replace(/[\u0000-\u001f<>]/g,"").slice(0,60));
+  const host=(()=>{ try{ return new URL(PLAN_AI_URL, location.origin).host; }catch(e){ return ""; } })(), prov=esc(String((window.APP_CONFIG||{}).CHAT_PROVIDER_NAME||"un fournisseur d'IA").replace(/[\u0000-\u001f<>]/g,"").slice(0,60));
   const chk=(id,t,d)=>`<label class="chk"><input type="checkbox" id="${id}"><span>${t}<small>${d}</small></span></label>`;
   openSheet({title:"Ajuster mon plan avec l'IA",opener,kind:"aip",
     html:`<p class="note">Pour ajuster ton plan, Pacebook envoie à la fonction du site (<b>${esc(host)}</b>, hébergée par Vercel dans l'Union européenne) puis à <b>${prov}</b> (une intelligence artificielle) : ton âge, ton sport, ton niveau, ton objectif, tes séances de sport et de renforcement par semaine, la durée de ton plan, la complexité choisie (<b>${esc(CPLX_LAB[P.cplx]||"Standard")}</b>)${P.pref?", tes préférences de séances écrites dans le Profil":""} et la structure des semaines à venir (phase, semaine allégée ou non, kilomètres, minutes, et chaque séance : jour, durée, type). Ni ton nom, ni ton poids, ni tes notes ne sont envoyés. Ces données sortent de ton appareil et de l'Union européenne. Rien n'est envoyé sans ton accord.</p>

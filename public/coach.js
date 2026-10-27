@@ -11,18 +11,19 @@ const $=s=>document.querySelector(s);
 /* ---- adresse du webhook : https obligatoire (http seulement vers localhost, pour tester), pas d'identifiants, pas de paramètres ---- */
 function hookUrl(){
   const u=String(CFG.CHAT_WEBHOOK_URL||"").trim(); if(!u||u.length>300) return "";
-  const ok=/^https:\/\/[a-z0-9]([a-z0-9.-]{0,120})(:\d{2,5})?(\/[A-Za-z0-9._~%\/-]{0,160})?$/i.test(u)||(isLocal&&/^http:\/\/(localhost|127\.0\.0\.1)(:\d{2,5})?(\/[A-Za-z0-9._~%\/-]{0,160})?$/.test(u));
+  // chemin same-origin « /api/… » (fonction du site) : un seul « / » au début, jamais « // » (protocole-relatif) ni « \ »
+  const ok=/^\/(?!\/)[A-Za-z0-9._~%\/-]{0,160}$/.test(u)||/^https:\/\/[a-z0-9]([a-z0-9.-]{0,120})(:\d{2,5})?(\/[A-Za-z0-9._~%\/-]{0,160})?$/i.test(u)||(isLocal&&/^http:\/\/(localhost|127\.0\.0\.1)(:\d{2,5})?(\/[A-Za-z0-9._~%\/-]{0,160})?$/.test(u));
   return ok? u : "";
 }
 const URL_OK=hookUrl();
 const PROVIDER=(typeof CFG.CHAT_PROVIDER_NAME==="string"&&CFG.CHAT_PROVIDER_NAME.replace(/[\u0000-\u001f<>]/g,"").trim().slice(0,60))||"un fournisseur d'IA";
-const hookHost=()=>{ try{ return new URL(URL_OK).host; }catch(e){ return ""; } };
+const hookHost=()=>{ try{ return new URL(URL_OK, location.origin).host; }catch(e){ return ""; } };   // chemin relatif => hôte du site
 // destinataire nommé dans la feuille d'accord : la fonction du site quand le coach est servi par le site lui-même, sinon le serveur relais configuré
 const hookWho=()=>hookHost()===location.host? "au serveur de Pacebook (fonction du site, hébergée par Vercel dans l'Union européenne)" : "à un serveur relais choisi par l'éditeur ("+hookHost()+")";
 
 /* ---- filet de sécurité : ces messages ne sont JAMAIS envoyés au serveur, une réponse fixe de prudence s'affiche ---- */
 // texte normalisé : minuscules, sans accents, sans ponctuation ni caractères invisibles (l'apostrophe, le tiret, les points ne contournent rien)
-const norm=s=>String(s).normalize("NFKD").replace(/[̀-ͯ​-‏⁠﻿­]/g,"").toLowerCase().replace(/œ/g,"oe").replace(/[^a-z0-9]+/g," ").trim();
+const norm=s=>String(s).normalize("NFKD").replace(/[̀-ͯ​-‏⁠﻿­]/g,"").replace(/[͏؜ᅟᅠ឴឵᠋-᠎‪-‮⁡-⁤⁪-⁯ㅤﾠ￹-￻]/g,"").toLowerCase().replace(/[Ͱ-ϿЀ-ӿ]/g,c=>({"а":"a","е":"e","о":"o","р":"p","с":"c","у":"y","х":"x","к":"k","м":"m","т":"t","в":"b","н":"h","і":"i","ј":"j","ѕ":"s","ԁ":"d","ο":"o","α":"a","ε":"e","ρ":"p","ς":"c","ν":"v","τ":"t","υ":"u","κ":"k","χ":"x","ι":"i"}[c]||" ")).replace(/œ/g,"oe").replace(/[^a-z0-9]+/g," ").trim();
 const RULES=[
   {k:"detresse",re:new RegExp([
     "ne (plus )?jamais (me )?reveill","ne jamais me reveiller","(aimerais|voudrais|veux|souhaite|envie de) ne plus me reveiller","(veux|voudrais|aimerais|envie de|vais|vouloir) (juste )?disparaitre(?! (dans|de|du|des|d|en|a|au|sur|pour (le|la|les|un|une|mes|ma|ce|cette)))","disparaitre (pour (de bon|toujours)|definitivement|a jamais)","(sois|serais) plus la\\b","attent\\w* (a|contre) (ma|mes|sa|ses) (vie|jours)","attenter","tout arreter definitivement","(vie|moi) (ne )?(vaut|valent) (plus )?rien","ma vie (ne )?vaut (plus )?rien","(poids|fardeau|boulet) (pour|pour tout|pour les|pour mes) (tout le monde|tous|les autres|mes proches|ma famille|mon entourage)","(poids|fardeau) pour (tout le monde|les autres|tous)","me jeter (sous|du|par|dans)","me pendre","me noyer","plus (de |d )?(raison|but|sens) (de |d )?(vivre|exister|continuer)","plus rien n a de sens","ne veux plus exister","tout laisser tomber (pour toujours|definitivement)","j en peux plus de vivre",

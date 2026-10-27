@@ -11,10 +11,10 @@ window.APP_CONFIG = Object.freeze({
   /* --- Coach (assistant IA, optionnel). Laisse vide : l'onglet « Coach » est caché et rien n'est envoyé.
        Adresse https du webhook n8n (voir integrations/n8n/README.md). Après l'avoir renseignée : lance « node tools/set-csp.js »
        (ajoute l'origine exacte à connect-src). JAMAIS de clé d'IA ni de secret ici : la clé reste dans n8n. --- */
-  CHAT_WEBHOOK_URL: "https://carnetcourse.vercel.app/api/coach",      // ex. https://n8n.example.org/webhook/carnet-coach  ou, sans n8n, https://ton-site.example.org/api/coach (integrations/vercel/README.md)
+  CHAT_WEBHOOK_URL: "/api/coach",      // fonction du site (même origine) : un chemin « /api/… » vise TON déploiement (une prévisualisation Vercel ne tape jamais la prod). Webhook externe : https absolue (ex. https://n8n.example.org/webhook/carnet-coach)
   CHAT_PROVIDER_NAME: "Google Gemini, États-Unis",    // fournisseur d'IA appelé par le serveur, affiché dans la feuille de consentement (ex. "Google Gemini, États-Unis")
   /* --- Ajustement du plan par l'IA (optionnel) : adresse de la fonction api/plan.js du site (integrations/vercel/README.md). Vide : le bloc est caché. --- */
-  PLAN_AI_URL: "https://carnetcourse.vercel.app/api/plan",
+  PLAN_AI_URL: "/api/plan",   // chemin « /api/… » : TON déploiement (même origine) ; une prévisualisation Vercel ne tape jamais la prod
 
   /* --- Informations légales à compléter par l'éditeur (affichées dans les pages légales) --- */
   LEGAL: Object.freeze({
