@@ -56,12 +56,12 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
  // serveur MCP : lecture seule
  const M=require(D+"/mcp-server/server.js"); const calls=[]; const doc={profile:{sport:"vtt",niveau:"int",objectif:"forme",seances:4,renfo:2,start:"2026-09-28",age:35,poids:"80,5",email:"a@b.c"},log:[{date:"2026-09-27",poids:81,sommeil:7,fatigue:2,faites:3,prevues:4,note:"PRIVÉ"}],feel:{"2026-10-08":{rpe:7,mood:4,pain:1,zone:"genou",note:"NOTE-SECRETE"},"__proto__":{rpe:9}}};
  const fi=async(u,o)=>{ calls.push({u,o}); return {ok:true,status:200,text:async()=>JSON.stringify([{doc}])}; };
- const env={SUPABASE_URL:"https://abc.supabase.co",SUPABASE_ANON_KEY:"anonkeyanonkey",USER_JWT:"aaa.bbb.ccc"};
+ const env={SUPABASE_URL:"https://abc.supabase.co",SUPABASE_ANON_KEY:"anonkeyanonkey",USER_JWT:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjNlNDU2Ny1lODliLTEyZDMtYTQ1Ni00MjY2MTQxNzQwMDAiLCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImV4cCI6NDEwMjQ0NDgwMCwiaXNfYW5vbnltb3VzIjpmYWxzZX0.sig"};
  const rpc=(m,p)=>M.handle({jsonrpc:"2.0",id:1,method:m,params:p},env,fi);
  ok((await rpc("initialize",{protocolVersion:"2024-11-05"})).result.serverInfo.name==="carnet-coach-mcp","MCP : initialize");
  const tl=(await rpc("tools/list")).result.tools; ok(tl.length===3&&tl.every(t=>/^lire_/.test(t.name)&&/Lecture seule/.test(t.description)),"MCP : 3 outils, tous en lecture seule");
  for(const t of tl){ const o=(await rpc("tools/call",{name:t.name})).result; ok(!o.isError&&o.content[0].type==="text","MCP : "+t.name+" répond"); }
- ok(calls.length===3&&calls.every(c=>c.o.method==="GET"&&c.u.startsWith("https://abc.supabase.co/rest/v1/user_data?")&&c.o.headers.Authorization==="Bearer aaa.bbb.ccc"&&!c.o.body),"MCP : uniquement des GET, avec le jeton de l'utilisateur");
+ ok(calls.length===3&&calls.every(c=>c.o.method==="GET"&&c.u.startsWith("https://abc.supabase.co/rest/v1/user_data?")&&c.o.headers.Authorization===("Bearer "+env.USER_JWT)&&!c.o.body),"MCP : uniquement des GET, avec le jeton de l'utilisateur");
  const all=[(await rpc("tools/call",{name:"lire_profil"})).result,(await rpc("tools/call",{name:"lire_suivi"})).result,(await rpc("tools/call",{name:"lire_ressenti"})).result].map(x=>x.content[0].text).join("\n");
  ok(!/NOTE-SECRETE|PRIVÉ|genou|a@b\.c/.test(all)&&/"poids_kg": 80.5/.test(all)&&/"effort": 7/.test(all),"MCP : champs en liste blanche, notes et e-mail jamais renvoyés");
  ok((await rpc("tools/call",{name:"ecrire"})).error.code===-32602&&(await rpc("tools/call",{name:"constructor"})).error,"MCP : aucun outil d'écriture ; outil inconnu refusé");

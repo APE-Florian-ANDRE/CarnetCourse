@@ -23,7 +23,7 @@ ok(fs.existsSync(R+"/vendor/supabase-"+ver+".js"),"supabase-js "+ver+" hébergé
 const cfg0=fs.readFileSync(R+"/config.js","utf8"), su=(cfg0.match(/SUPABASE_URL:\s*"([^"]*)"/)||[])[1]||"";
 const conn=(csp.match(/connect-src ([^;]*)/)||[])[1]; let want="'self'"; if(su){ try{ want+=" "+new URL(su).origin; }catch(e){} }
 const chat=(cfg0.match(/CHAT_WEBHOOK_URL:\s*"([^"]*)"/)||[])[1]||""; if(chat){ try{ const o=new URL(chat).origin; if(!want.includes(o)) want+=" "+o; }catch(e){} }
-ok(!chat||/^https:\/\//i.test(chat),"CHAT_WEBHOOK_URL : https obligatoire",chat);
+ok(!chat||/^https:\/\//i.test(chat)||/^\/(?!\/)[A-Za-z0-9._~%\/-]{0,160}$/.test(chat),"CHAT_WEBHOOK_URL : https absolue ou chemin same-origin /api/…",chat);
 ok(conn===want,"CSP connect-src = "+want+" (lance node tools/set-csp.js si besoin)",conn);
 ok(!/\*/.test(conn||""),"CSP connect-src sans joker");
 // déploiement bloqué si des champs légaux restent à compléter alors que la connexion est configurée
@@ -44,8 +44,8 @@ const leak=all.filter(p=>!/\.(png|jpg)$/.test(p)).filter(p=>{ const s=fs.readFil
 const cfg=fs.readFileSync(R+"/config.js","utf8"); ok(!su||/^https:\/\/[a-z0-9.-]+$/i.test(su),"SUPABASE_URL : https, sans chemin"); ok(!/service_role["']?\s*[:=]/i.test(cfg)&&!/SUPABASE_JS_SRI/.test(cfg),"config.js : pas de clé service_role");
 ok(!/eval\(|new Function|document\.write|innerHTML\s*=\s*[^`'"]*location/.test(fs.readFileSync(R+"/app.js","utf8")+auth),"pas d'eval / new Function / document.write");
 ok(/target="_blank"(?![^>]*noopener)/.test(fs.readFileSync(R+"/app.js","utf8")+idx)===false,"liens target=_blank avec rel=noopener");
-const sql=fs.readFileSync(REPO+"/supabase/schema.sql","utf8"); for(const k of ["enable row level security","force row level security","on delete cascade","delete_my_account","octet_length(doc::text)","revoke all on public.user_data from anon","consent ->> 'terms' = 'true'","consent ->> 'health' = 'true'","is_anonymous","purge_inactive_accounts","greatest("]) ok(sql.includes(k),"schema.sql : "+k);
-ok(!/to anon|to public/i.test(sql.replace(/revoke[^;]*;/gi,"")),"schema.sql : aucune politique pour anon/public");
+const sql=fs.readFileSync(REPO+"/supabase/schema.sql","utf8"); for(const k of ["enable row level security","force row level security","on delete cascade","delete_my_account","octet_length(doc::text)","revoke all on public.user_data from anon","consent -> 'terms'","consent -> 'health'","consent_log","stamp_consent","is_anonymous","purge_inactive_accounts","greatest("]) ok(sql.includes(k),"schema.sql : "+k);
+ok(!/\bto\s+(anon|public)\b/i.test(sql.replace(/revoke[^;]*;/gi,"")),"schema.sql : aucune politique pour anon/public");
 // set-csp.js : refuse toute SUPABASE_URL qui n'est pas https://domaine (copie jetable du dépôt, fichiers jamais modifiés en cas de refus)
 { const cp=require("child_process"), os=require("os"); const tmp=fs.mkdtempSync(path.join(os.tmpdir(),"csp-"));
   const cpy=(a,b)=>fs.cpSync(a,b,{recursive:true,filter:x=>!/node_modules|\.git$/.test(x)}); cpy(R,tmp+"/public"); cpy(REPO+"/tools",tmp+"/tools"); fs.copyFileSync(REPO+"/vercel.json",tmp+"/vercel.json");
@@ -81,8 +81,9 @@ ok(/sb-carnet-auth-code-verifier/.test(fs.readFileSync(R+"/cookies.html","utf8")
   ok(/données de santé/.test(pr.slice(pr.indexOf("Échanges avec le Coach")))&&/6\.1\.a et 9\.2\.a[^<]*<\/td>/.test(pr)&&/Google/.test(pr)&&/améliorer ses produits/.test(pr)&&/Data Privacy Framework/.test(pr.slice(pr.indexOf('id="transferts"')))&&/passent par les fonctions du site/.test(pr)&&/n'agit pas comme sous-traitant/.test(pr)&&/accès à ton compte pendant environ une heure/.test(pr),"v15 confidentialité : catégories, bases 6.1.a/9.2.a, destinataires, transferts hors UE, droits, jeton (accès au compte ~1 h)");
   const cp=require("child_process"), os=require("os"); const tmp=fs.mkdtempSync(path.join(os.tmpdir(),"csp2-")); const cpy=(a,b)=>fs.cpSync(a,b,{recursive:true,filter:x=>!/node_modules|\.git$/.test(x)}); cpy(R,tmp+"/public"); cpy(REPO+"/tools",tmp+"/tools"); fs.copyFileSync(REPO+"/vercel.json",tmp+"/vercel.json");
   const cfgP=tmp+"/public/config.js", orig=fs.readFileSync(cfgP,"utf8"); const run=u=>{ fs.writeFileSync(cfgP,orig.replace(/CHAT_WEBHOOK_URL:\s*"[^"]*"/,'CHAT_WEBHOOK_URL: "'+u+'"')); const before=fs.readFileSync(tmp+"/vercel.json","utf8"); const r=cp.spawnSync("node",[tmp+"/tools/set-csp.js"],{encoding:"utf8"}); return {st:r.status,same:fs.readFileSync(tmp+"/vercel.json","utf8")===before,v:fs.readFileSync(tmp+"/vercel.json","utf8")}; };
-  const bad=["http://n8n.example.org/webhook/x","https://*.example.org/x","https://n8n.example.org/x?a=b","https://n8n.example.org/x;script-src *","https://user:pw@n8n.example.org/x","javascript:alert(1)","https://n8n.example.org/x y"]; const bb=bad.filter(u=>{ const r=run(u); return r.st===0||!r.same; });
-  ok(bb.length===0,"v15 set-csp.js refuse un CHAT_WEBHOOK_URL non https ou piégé",bb);
+  const bad=["http://n8n.example.org/webhook/x","https://*.example.org/x","https://n8n.example.org/x?a=b","https://n8n.example.org/x;script-src *","https://user:pw@n8n.example.org/x","javascript:alert(1)","https://n8n.example.org/x y","//evil.example.org/x","/api/coach\\x"]; const bb=bad.filter(u=>{ const r=run(u); return r.st===0||!r.same; });
+  ok(bb.length===0,"v15 set-csp.js refuse un CHAT_WEBHOOK_URL non https ou piégé (dont //protocole-relatif et \\)",bb);
+  const rel=run("/api/coach"); ok(rel.st===0&&/connect-src 'self'(?: https:\/\/[a-z0-9]+\.supabase\.co)?(;|")/.test(rel.v),"v15 set-csp.js accepte un chemin same-origin /api/… sans l'ajouter à connect-src",rel.v);
   const g=run("https://n8n.example.org/webhook/carnet-coach"); ok(g.st===0&&/connect-src 'self'(?: https:\/\/[a-z0-9]+\.supabase\.co)? https:\/\/n8n\.example\.org(;|")/.test(g.v)&&!/n8n\.example\.org\/webhook/.test(g.v),"v15 set-csp.js : seule l'origine du webhook entre dans connect-src");
   fs.rmSync(tmp,{recursive:true,force:true}); }
 console.log(fails?"ECHECS "+fails:"TOUT OK"); process.exit(fails?1:0);

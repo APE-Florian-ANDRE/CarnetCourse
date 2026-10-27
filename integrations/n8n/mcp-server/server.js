@@ -21,10 +21,16 @@ const pick={
   lire_ressenti(doc){ const f=doc&&doc.feel&&typeof doc.feel==="object"&&!Array.isArray(doc.feel)? doc.feel : {};
     return Object.entries(f).filter(([k,v])=>iso(k)&&v&&typeof v==="object"&&!v.x).sort((a,b)=>a[0]<b[0]?1:-1).slice(0,20).map(([k,v])=>({date:k,effort:num(v.rpe,1,10),forme:num(v.mood,1,5),douleur:+v.pain===2?2:+v.pain===1?1:0})); }
 };
+// décode le payload du JWT (sans vérifier la signature : c'est Supabase qui la vérifie) pour contrôler rôle/expiration et cibler sa propre ligne
+function jwtClaims(jwt){ try{ const p=jwt.split("."); if(p.length!==3) return null; const c=JSON.parse(Buffer.from(p[1].replace(/-/g,"+").replace(/_/g,"/"),"base64").toString("utf8")); return c&&typeof c==="object"&&!Array.isArray(c)? c : null; }catch(e){ return null; } }
 async function readDoc(env,fetchImpl){
-  const url=String(env.SUPABASE_URL||""), key=String(env.SUPABASE_ANON_KEY||""), jwt=String(env.USER_JWT||"");
-  if(!/^https:\/\/[a-z0-9.-]+$/i.test(url)||!key||!/^[\w-]+\.[\w-]+\.[\w-]+$/.test(jwt)) throw new Error("configuration : SUPABASE_URL (https), SUPABASE_ANON_KEY et USER_JWT sont requis");
-  const r=await fetchImpl(url+"/rest/v1/user_data?select=doc&limit=1",{method:"GET",headers:{apikey:key,Authorization:"Bearer "+jwt,Accept:"application/json"}});   // GET uniquement
+  const url=String(env.SUPABASE_URL||"").replace(/\/$/,""), key=String(env.SUPABASE_ANON_KEY||""), jwt=String(env.USER_JWT||"");
+  if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)||!key||!/^[\w-]+\.[\w-]+\.[\w-]+$/.test(jwt)) throw new Error("configuration : SUPABASE_URL (https://….supabase.co), SUPABASE_ANON_KEY et USER_JWT sont requis");
+  // le jeton doit être celui d'un utilisateur authentifié, non anonyme et non expiré : on refuse sinon (évite d'envoyer par erreur une clé service_role, qui contournerait la RLS)
+  const cl=jwtClaims(jwt);
+  if(!cl||cl.role!=="authenticated"||cl.is_anonymous===true||!/^[0-9a-f-]{36}$/i.test(String(cl.sub||""))||(typeof cl.exp==="number"&&cl.exp*1000<=Date.now())) throw new Error("jeton invalide : USER_JWT doit être un jeton d'accès d'utilisateur authentifié, non expiré");
+  // filtre explicite sur sa propre ligne, en plus de la RLS (défense en profondeur)
+  const r=await fetchImpl(url+"/rest/v1/user_data?select=doc&user_id=eq."+cl.sub+"&limit=1",{method:"GET",headers:{apikey:key,Authorization:"Bearer "+jwt,Accept:"application/json"},redirect:"error"});   // GET uniquement
   if(!r.ok) throw new Error("Supabase a répondu "+r.status);
   const t=await r.text(); if(t.length>5e6) throw new Error("réponse trop volumineuse"); const rows=JSON.parse(t);
   return Array.isArray(rows)&&rows[0]&&rows[0].doc&&typeof rows[0].doc==="object"? rows[0].doc : {};

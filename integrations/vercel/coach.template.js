@@ -8,7 +8,7 @@ const SYSTEM = "__SYSTEM_PROMPT__";
 /*__MSGS__*/
 /*__SAFETY__*/
 /*__OUTF__*/
-const rl = { user: new Map(), ip: new Map() };   // mémoire de l'instance : filet « au mieux » ; la vraie limite par IP se règle dans le pare-feu Vercel (voir README)
+const rl = { user: new Map(), ip: new Map(), bad: new Map() };   // mémoire de l'instance : filet « au mieux » ; la vraie limite par IP se règle dans le pare-feu Vercel (voir README)
 function hit(map, key, limit, now) {
   const arr = (map.get(key) || []).filter((t) => now - t < WINDOW);
   if (arr.length >= limit) { map.set(key, arr); return false; }
@@ -38,22 +38,25 @@ module.exports = async function handler(req, res) {
   if (!m) return send(res, 401, "Connexion requise : reconnecte-toi puis réessaie.");   // sans jeton : rejet immédiat, aucun appel à Supabase ni à l'IA
   const ip = String(h["x-real-ip"] || String(h["x-forwarded-for"] || "").split(",")[0] || "inconnue").trim().slice(0, 64);
   const now = Date.now();
-  if (!hit(rl.ip, ip, IP_LIMIT, now)) return send(res, 429, "Trop de messages pour le moment : réessaie dans quelques minutes.");
-  if (Number(h["content-length"] || 0) > MAX_BODY) return send(res, 413, "Requête trop volumineuse.");
+  // IP : les échecs (jeton refusé, requête invalide) ont leur propre compteur ; ils ne bloquent pas les personnes connectées qui partagent l'adresse
+  const recent = (map) => (map.get(ip) || []).filter((t) => now - t < WINDOW).length;
+  if (recent(rl.bad) >= IP_LIMIT || recent(rl.ip) >= IP_LIMIT) return send(res, 429, "Trop de messages pour le moment : réessaie dans quelques minutes.");
+  const fail = (st, msg) => { hit(rl.bad, ip, Infinity, now); return send(res, st, msg); };
+  if (Number(h["content-length"] || 0) > MAX_BODY) return fail(413, "Requête trop volumineuse.");
   let b = req.body;
   if (typeof b === "string" || Buffer.isBuffer(b)) { try { b = JSON.parse(String(b)); } catch (e) { b = null; } }
   let size = 0; try { size = JSON.stringify(b).length; } catch (e) { size = Infinity; }
-  if (size > MAX_BODY) return send(res, 413, "Requête trop volumineuse.");
-  if (!b || typeof b !== "object" || Array.isArray(b) || b.v !== 1 || !Array.isArray(b.messages) || b.messages.length < 1 || b.messages.length > 8) return send(res, 400, "Requête invalide.");
+  if (size > MAX_BODY) return fail(413, "Requête trop volumineuse.");
+  if (!b || typeof b !== "object" || Array.isArray(b) || b.v !== 1 || !Array.isArray(b.messages) || b.messages.length < 1 || b.messages.length > 8) return fail(400, "Requête invalide.");
   const messages = [];
   for (const x of b.messages) {
-    if (!x || typeof x !== "object" || (x.role !== "user" && x.role !== "assistant") || typeof x.content !== "string") return send(res, 400, "Requête invalide.");
+    if (!x || typeof x !== "object" || (x.role !== "user" && x.role !== "assistant") || typeof x.content !== "string") return fail(400, "Requête invalide.");
     const c = x.content.replace(CLEAN, "").trim().slice(0, x.role === "user" ? 1000 : 1500);
-    if (!c) return send(res, 400, "Requête invalide.");
+    if (!c) return fail(400, "Requête invalide.");
     messages.push({ role: x.role, content: c });
   }
   while (messages.length && messages[0].role !== "user") messages.shift();
-  if (!messages.length || messages[messages.length - 1].role !== "user") return send(res, 400, "Requête invalide.");
+  if (!messages.length || messages[messages.length - 1].role !== "user") return fail(400, "Requête invalide.");
   const alt = [];
   // deux messages du même rôle à la suite (réponse en échec entre les deux) : réunis, pour ne pas perdre la question (l'API exige l'alternance)
   for (const x of messages) { const last = alt[alt.length - 1]; if (last && last.role === x.role) last.content = (last.content + "\n\n" + x.content).slice(-2000); else alt.push({ role: x.role, content: x.content }); }
@@ -65,12 +68,15 @@ module.exports = async function handler(req, res) {
     const r = await fetch(SUPA + "/auth/v1/user", { headers: { apikey: ANON, Authorization: "Bearer " + m[1] }, signal: AbortSignal.timeout(8000) });
     if (r.status === 200) user = await r.json();
   } catch (e) { console.error("coach: Supabase injoignable"); return send(res, 502, "Le coach n'a pas pu répondre. Réessaie dans un moment."); }
-  if (!user || typeof user.id !== "string" || !/^[0-9a-f-]{36}$/i.test(user.id) || user.is_anonymous === true) return send(res, 401, "Connexion requise : reconnecte-toi puis réessaie.");
+  if (!user || typeof user.id !== "string" || !/^[0-9a-f-]{36}$/i.test(user.id) || user.is_anonymous === true) return fail(401, "Connexion requise : reconnecte-toi puis réessaie.");
+  hit(rl.ip, ip, Infinity, now);   // requête légitime (jeton valide) : comptée à part des échecs
   // réservé aux adultes : l'âge (toujours envoyé avec le consentement) doit être connu et >= 18
   let age = NaN; try { age = Number(JSON.parse(context || "{}").profil.age); } catch (e) {}
   if (!(age >= 18 && age <= 110)) return send(res, 403, "Le coach est réservé aux personnes de 18 ans et plus.");
   // filet de sécurité AVANT l'IA (mêmes règles que le navigateur, « au mieux » : non exhaustif) : message fixe, aucun appel à l'IA, pas de décompte de débit
   for (const x of alt) { if (x.role !== "user") continue; const k = guard(x.content); if (k) return send(res, 200, SAFE[k]); }
+  // le contexte (résumé du profil/ressenti) passe aussi par le filet : un contenu grave inséré là ne doit pas atteindre l'IA
+  if (context) { const kc = guard(context); if (kc) return send(res, 200, SAFE[kc]); }
   if (!hit(rl.user, user.id, USER_LIMIT, now)) return send(res, 429, "Trop de messages pour le moment : réessaie dans quelques minutes.");
   // l'IA n'a pas répondu (quota Google, panne) : la demande n'est pas décomptée
   const refund = () => { const a = rl.user.get(user.id); if (a && a.length) a.pop(); };

@@ -3769,7 +3769,8 @@ $("#rgGo").addEventListener("click",e=>{ const v=regenPreview(), keep=$("#rgMove
    Envoyé : âge, sport, niveau, objectif, séances par semaine, la structure des semaines à venir du plan de base (phase, km, minutes, séances d'intensité
    et leurs remplaçants permis), la complexité choisie ; si coché, les 8 derniers ressentis (sans notes) ; si écrit, une demande de 300 caractères au plus. */
 const PLAN_AI_URL=(()=>{ const u=String((window.APP_CONFIG||{}).PLAN_AI_URL||"").trim(), loc=["localhost","127.0.0.1"].includes(location.hostname);
-  return u.length<=300&&(/^https:\/\/[a-z0-9]([a-z0-9.-]{0,120})(:\d{2,5})?(\/[A-Za-z0-9._~\/-]{0,120})?$/i.test(u)||(loc&&/^http:\/\/(localhost|127\.0\.0\.1)(:\d{2,5})?(\/[A-Za-z0-9._~\/-]{0,120})?$/.test(u)))? u : ""; })();
+  // chemin same-origin « /api/… » (fonction du site), ou https absolue, ou http vers localhost pour tester
+  return u.length<=300&&(/^\/(?!\/)[A-Za-z0-9._~%\/-]{0,160}$/.test(u)||/^https:\/\/[a-z0-9]([a-z0-9.-]{0,120})(:\d{2,5})?(\/[A-Za-z0-9._~\/-]{0,120})?$/i.test(u)||(loc&&/^http:\/\/(localhost|127\.0\.0\.1)(:\d{2,5})?(\/[A-Za-z0-9._~\/-]{0,120})?$/.test(u)))? u : ""; })();
 const CPLX_LAB={simple:"Simple",standard:"Standard",avance:"Avancé"};
 let aipBusy=false;
 function aipBody(feel,wish){
@@ -3811,7 +3812,7 @@ function wishTime(w){ const t=String(w||"").toLowerCase(), o={};
   const q=/(\d{1,2}(?:[.,]\d)?)\s*(?:h|heures?)(?:\s*(\d{2}))?\s*(?:de sport|d.entra[iî]nement|de course)?\s*(?:par|\/|chaque|toutes? les?)\s*(?:la\s*)?sem/.exec(t); if(q) o.hQuota=numOf(q[1])+(+q[2]||0)/60;
   return o; }
 function aipSheet(opener){
-  const host=(()=>{ try{ return new URL(PLAN_AI_URL).host; }catch(e){ return ""; } })(), prov=esc(String((window.APP_CONFIG||{}).CHAT_PROVIDER_NAME||"un fournisseur d'IA").replace(/[\u0000-\u001f<>]/g,"").slice(0,60));
+  const host=(()=>{ try{ return new URL(PLAN_AI_URL, location.origin).host; }catch(e){ return ""; } })(), prov=esc(String((window.APP_CONFIG||{}).CHAT_PROVIDER_NAME||"un fournisseur d'IA").replace(/[\u0000-\u001f<>]/g,"").slice(0,60));
   const chk=(id,t,d)=>`<label class="chk"><input type="checkbox" id="${id}"><span>${t}<small>${d}</small></span></label>`;
   openSheet({title:"Ajuster mon plan avec l'IA",opener,kind:"aip",
     html:`<p class="note">Pour ajuster ton plan, Pacebook envoie à la fonction du site (<b>${esc(host)}</b>, hébergée par Vercel dans l'Union européenne) puis à <b>${prov}</b> (une intelligence artificielle) : ton âge, ton sport, ton niveau, ton objectif, tes séances de sport et de renforcement par semaine, la durée de ton plan, la complexité choisie (<b>${esc(CPLX_LAB[P.cplx]||"Standard")}</b>)${P.pref?", tes préférences de séances écrites dans le Profil":""} et la structure des semaines à venir (phase, semaine allégée ou non, kilomètres, minutes, et chaque séance : jour, durée, type). Ni ton nom, ni ton poids, ni tes notes ne sont envoyés. Ces données sortent de ton appareil et de l'Union européenne. Rien n'est envoyé sans ton accord.</p>

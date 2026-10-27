@@ -1,0 +1,15 @@
+# Dependabot : petites PR régulières pour garder à jour les actions GitHub (SHA épinglés) et les dépendances npm.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"   # relève les @SHA de .github/workflows/* vers la dernière version (met à jour le commentaire # vX.Y.Z)
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+  - package-ecosystem: "npm"              # devDependencies (playwright) ; met à jour package-lock.json
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "deps"
