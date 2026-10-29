@@ -909,7 +909,7 @@ function buildPlanRun(p){
   // avant 18 ans : ni semi ni marathon (repli sur 10 km, ou moins si besoin)
   if(p.minor&&(o==="21"||o==="42")){ const chain=["10","5","forme"]; let weeks=null;
     for(const c of chain){ const w2= c==="forme"? buildPlanFor({...p,objectif:"forme"}) : buildPlanFor({...p,objectif:c}); if(c==="forme"||ok(c,w2)){ weeks=w2; weeks.unreal={asked:o,used:c,top:w2.topLong,minor:true}; break; } }
-    capSimple(weeks,{...p,objectif:weeks.unreal.used}); capLong(weeks,{...p,objectif:weeks.unreal.used}); return weeks; }
+    capLong(weeks,{...p,objectif:weeks.unreal.used}); capSimple(weeks,{...p,objectif:weeks.unreal.used}); capLong(weeks,{...p,objectif:weeks.unreal.used}); return weeks; }
   let weeks=buildPlanFor(p);
   if(!ok(o,weeks)){
     // repli sur la distance atteignable la plus proche : marathon → semi → 10 km → 5 km → forme
@@ -919,6 +919,7 @@ function buildPlanRun(p){
       if(c==="forme"||ok(c,w2)){ weeks= w2||buildPlanFor({...p,objectif:"forme"}); weeks.unreal={asked,used:c,top}; break; }
     }
   }
+  capLong(weeks,weeks.unreal? {...p,objectif:weeks.unreal.used} : p);
   capSimple(weeks,weeks.unreal? {...p,objectif:weeks.unreal.used} : p);
   capLong(weeks,weeks.unreal? {...p,objectif:weeks.unreal.used} : p);
   return weeks;
