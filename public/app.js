@@ -992,9 +992,10 @@ function trimWeek(wk,p,vma,cap,minE,drop,longMin,minRuns){
     if(!js.length) break; const d=wk.days[js[0]], r=d.run, k=Math.min(k00[js[0]],Math.floor(sessionKm(r,vma)*2)/2+.5), nr={...easyRun(k,vma,r.title,r.blocks[1]?r.blocks[1].iv.n:0),...(r.note?{note:r.note}:{})};
     if(km()-sessionKm(r,vma)+sessionKm(nr,vma)>cap) break; wk.days[js[0]]={...d,run:nr}; }
   if(!drop) return;
-  for(const j of qDays()){ if(km()<=cap) break; const d=wk.days[j], k0=sessionKm(d.run,vma), er=easyRun(Math.max(minE,Math.floor((k0-(km()-cap))*2)/2),vma,null,0);
+  const qs=qDays();
+  for(const j of qs){ if(km()<=cap) break; const d=wk.days[j], k0=sessionKm(d.run,vma), er=easyRun(Math.max(minE,Math.floor((k0-(km()-cap))*2)/2),vma,null,0);
     if(sessionKm(er,vma)<k0-1e-9) wk.days[j]={...d,run:er,kind:"easy"}; }
-  for(const j of qDays()){ if(km()<=cap) break; wk.days[j]={...wk.days[j],run:null,kind:"rest"}; }
+  for(const j of qs){ if(km()<=cap) break; wk.days[j]={...wk.days[j],run:null,kind:"rest"}; }
 }
 // première semaine du plan, avant la mise à jour des repères de progression (sinon la semaine 2 part d'une séance jamais faite) :
 // les jours d'avant le début sont au maintien, sans séance ; la première séance n'est jamais dure ni la sortie longue, mais un footing facile
