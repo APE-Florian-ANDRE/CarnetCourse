@@ -39,6 +39,8 @@ function profiles(n,seed){ const r=rnd(seed), pick=a=>a[Math.floor(r()*a.length)
   const T=(o)=>({...out[0],sport:"course",types:[...ALLT],volume:25,longest:10,seances:"4",cross:"non",ref:"none",refVal:"",start:monday(addD(TODAY,7)),...o});
   const fixed=[]; for(const niveau of ["deb","int","conf"]) for(const objectif of ["5","10","21","42","forme"]) for(const N of [6,12,16,20]) for(const cplx of ["simple","standard","avance"])
     fixed.push(T({niveau,objectif,cplx,raceDate:addD(monday(addD(TODAY,7)),7*(N-1)+6),volume:{deb:10,int:25,conf:45}[niveau],longest:{deb:4,int:10,conf:18}[niveau],seances:{deb:"3",int:"4",conf:"5"}[niveau]}));
+  const week=monday(addD(TODAY,7));
+  fixed.push(T({age:15,niveau:"conf",objectif:"10",cplx:"simple",volume:25,longest:0,seances:"7",types:["cotes","fartlek"],start:addD(week,5),raceDate:addD(week,7*15+2)}));
   return [...fixed,...out];
 }
 // exécuté dans la page : construit chaque plan et en extrait un résumé
