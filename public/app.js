@@ -1486,8 +1486,11 @@ function dayFuel(p,E,wk){
     const P=Math.round(2*(E.protW||p.poids)), pre=preOf(d.i), need=kcal-4*P;
     let Ft= pre&&long_? .6*p.poids : Math.max(.6*p.poids,.2*kcal/9);
     if((need-9*Ft)/4<2*p.poids) Ft=Math.max(.6*p.poids,(need-8*p.poids)/9);
-    let F=Math.max(0,Math.round(Ft));
-    for(let s=0,done=false;s<=4&&!done;s++) for(const F2 of [F-s,F+s]) if(F2>=0&&need-9*F2>=0&&(need-9*F2)%4===0){ F=F2; done=true; break; }
+    // lipides en grammes entiers tels que les glucides (need−9·L)/4 soient aussi entiers (L ≡ need mod 4) et tiennent dans le budget (9·L ≤ need) :
+    // on énumère ces valeurs et on prend la plus proche de la cible en gardant le plancher 0,6 g/kg quand le budget le permet. La somme P·4+G·4+L·9 vaut alors toujours exactement l'objectif.
+    const Fmin=Math.floor(Math.min(.6*p.poids,need/9)-1e-9), r=((need%4)+4)%4, Fmax=Math.max(0,Math.floor(need/9));
+    let F=r<=Fmax?r:0, bestD=Infinity, bestFl=2;
+    for(let F2=r;F2<=Fmax;F2+=4){ const fl=F2>=Fmin?0:1, dd=Math.abs(F2-Ft); if(fl<bestFl||(fl===bestFl&&dd<bestD)){ bestFl=fl; bestD=dd; F=F2; } }
     const C=Math.max(0,(need-9*F)/4);
     const raceKcal= d.kind==="race"? .95*p.poids*(RACE_KM[p.objectif]||5) : 0;
     return {...d,def,want,bmrHit,absHit,kcal,P,C,F,pre,eqPre:!!(pre&&long_),raceKcal};
