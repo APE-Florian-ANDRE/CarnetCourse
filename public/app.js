@@ -1473,20 +1473,23 @@ function dayFuel(p,E,wk){
   }
   const out=days.map(d=>{
     const want=defs[d.i];
-    let kcal=d.maint-want;
-    // planchers : métabolisme de base, et 1 200 kcal (femmes) / 1 500 kcal (hommes) sauf si le maintien est plus bas
-    const absMin=p.sexe==="F"?1200:1500, flo=Math.max(E.bmr,Math.min(d.maint,absMin));
-    const clamp=kcal<flo; if(clamp) kcal=flo;
-    kcal= clamp? Math.ceil(kcal/10)*10 : Math.round(kcal/10)*10;
-    const def=d.maint-kcal, bmrHit=clamp&&want>0, absHit=clamp&&want>0&&absMin>E.bmr&&kcal<=Math.ceil(absMin/10)*10&&d.maint>absMin;
-    // macros : protéines 2 g/kg, lipides 20 % (0,6 g/kg au moins), glucides = le reste ; la somme fait toujours l'objectif du jour
-    const P=Math.round(2*(E.protW||p.poids)), pre=preOf(d.i);
-    let F=Math.max(.6*p.poids,.2*kcal/9), C=(kcal-4*P-9*F)/4;
-    if(pre&&long_){ F=.6*p.poids; C=(kcal-4*P-9*F)/4; }   // veille de semi ou de marathon : lipides au plancher, le reste en glucides
-    if(C<2*p.poids){ F=Math.max(.6*p.poids,(kcal-4*P-8*p.poids)/9); C=(kcal-4*P-9*F)/4; }
-    if(C<0){ C=0; F=Math.max(0,(kcal-4*P)/9); }
+    // tous les nombres d'un jour se recoupent, sans décalage d'arrondi : dépense = maintien arrondi à 10, déficit arrondi à 10,
+    // objectif = dépense − déficit (donc « dépense − objectif = déficit » tombe toujours juste à l'affichage).
+    const mR=Math.round(d.maint/10)*10, absMin=p.sexe==="F"?1200:1500, flo=Math.max(E.bmr,Math.min(d.maint,absMin));
+    // objectif arrondi à 10 comme avant (le plancher d'énergie disponible RED-S est calé sur cette valeur), puis déficit = dépense − objectif (se recoupe toujours)
+    let raw=d.maint-want, clamp=raw<flo; if(clamp) raw=flo;
+    let kcal= clamp? Math.ceil(raw/10)*10 : Math.round(raw/10)*10, def=mR-kcal;
+    const bmrHit=clamp&&want>0, absHit=clamp&&want>0&&absMin>E.bmr&&kcal<=Math.ceil(absMin/10)*10&&d.maint>absMin;
+    // macros en grammes ENTIERS dont la somme vaut EXACTEMENT l'objectif (P·4 + G·4 + L·9 = kcal) : protéines 2 g/kg, lipides ~20 %
+    // (0,6 g/kg au moins), glucides = le reste ; on prend le L entier le plus proche tel que l'objectif restant se partage en glucides entiers.
+    const P=Math.round(2*(E.protW||p.poids)), pre=preOf(d.i), need=kcal-4*P;
+    let Ft= pre&&long_? .6*p.poids : Math.max(.6*p.poids,.2*kcal/9);
+    if((need-9*Ft)/4<2*p.poids) Ft=Math.max(.6*p.poids,(need-8*p.poids)/9);
+    let F=Math.max(0,Math.round(Ft));
+    for(let s=0,done=false;s<=4&&!done;s++) for(const F2 of [F-s,F+s]) if(F2>=0&&need-9*F2>=0&&(need-9*F2)%4===0){ F=F2; done=true; break; }
+    const C=Math.max(0,(need-9*F)/4);
     const raceKcal= d.kind==="race"? .95*p.poids*(RACE_KM[p.objectif]||5) : 0;
-    return {...d,def,want,bmrHit,absHit,kcal,P,C:Math.round(C),F:Math.round(F),pre,eqPre:!!(pre&&long_),raceKcal};
+    return {...d,def,want,bmrHit,absHit,kcal,P,C,F,pre,eqPre:!!(pre&&long_),raceKcal};
   });
   const kcalAvg=out.reduce((a,d)=>a+d.kcal,0)/7;
   const realDef=maintAvg-kcalAvg, noDef=realDef<15;
@@ -2029,8 +2032,8 @@ function renderWeek(){
     else if(d.pre==="pre") tip="Avant-veille de course : féculents à chaque repas, tu manges à l'équilibre aujourd'hui.";
     const why = d.bmrHit? " (limité par ton métabolisme de base)" : f.floorHit&&d.def>15? " (réduit par sécurité)" : f.rateCap? " (plafonné à 0,75 % du poids par semaine)" :
       ((f.extra&&(d.kind==="rest"||d.kind==="easy"))?" (fixe + supplément":" (fixe")+(f.adj?(f.adj<0?" + ajustement":" − ajustement"):"")+")";
-    // l'écart dû au seul arrondi de l'objectif (à 10 kcal) n'est pas montré : on affiche le déficit réglé
-    const shown= !d.bmrHit&&!f.floorHit&&Math.abs(d.def-d.want)<10? d.want : d.def;
+    // le déficit affiché vaut exactement « dépense − objectif » (tout est arrondi à 10 et se recoupe), même réduit par un plancher
+    const shown= d.def;
     // jour de course : la dépense de la course est comprise dans l'objectif (équilibre), elle ne se mange pas en une journée
     let raceNote="";
     if(d.kind==="race"&&d.raceKcal){ const rp=OBJ[P.objectif].racePct||[.7,.75], sp=d.run.raceSpeed||E.vma*(rp[0]+rp[1])/2, dur=raceKm()/sp*60+dpMin14(d.run);
@@ -2041,7 +2044,9 @@ function renderWeek(){
     const kP=4*d.P,kC=4*d.C,kF=9*d.F,kT=(kP+kC+kF)||1;
     const mg=(v,l,c)=>`<div class="mg" data-scv="${c}"><b>${v} <small>g</small></b><span>${l}</span></div>`;
     const macros=`<div class="mbar" role="img" aria-label="Protéines ${Math.round(kP/kT*100)} %, glucides ${Math.round(kC/kT*100)} %, lipides ${Math.round(kF/kT*100)} % des calories"><i data-sw="${kP/kT*100}" data-sbg="--mP"></i><i data-sw="${kC/kT*100}" data-sbg="--mC"></i><i data-sw="${kF/kT*100}" data-sbg="--mF"></i></div><div class="mgrid">${mg(d.P,"Protéines","--mP")}${mg(d.C,"Glucides","--mC")}${mg(d.F,"Lipides","--mF")}</div>`;
-    const fuelBox=(kc)=>`<div class="fuel"><div class="fh">${kc?`<div class="kc">${fmt0(d.kcal)} <small>kcal</small></div>`:""}${pill}</div>${macros}${whyTxt?`<div class="why">${whyTxt.charAt(0).toUpperCase()+whyTxt.slice(1)}</div>`:""}${d.ex>20?`<div class="why">Dépense du jour ≈ ${fmt0(Math.round(d.maint/10)*10)} kcal : base ${fmt0(Math.round(E.base/10)*10)}${d.ex-d.exRf>20?" + "+exLab14(d)+" "+fmt0(Math.round((d.ex-d.exRf)/10)*10):""}${d.exRf?" + renfo "+fmt0(Math.round(d.exRf/10)*10):""}</div>`:""}${raceNote}</div><p class="tip">${tip}</p>`;
+    const _bR=Math.round(E.base/10)*10,_mR=Math.round(d.maint/10)*10,_sf=d.ex-d.exRf>20; let _fR=_sf?Math.round((d.ex-d.exRf)/10)*10:0,_rR=d.exRf?Math.round(d.exRf/10)*10:0; if(d.exRf)_rR=_mR-_bR-_fR; else if(_sf)_fR=_mR-_bR;
+    const dep= d.ex>20?`<div class="why">Dépense du jour ≈ ${fmt0(_mR)} kcal : base ${fmt0(_bR)}${_sf?" + "+exLab14(d)+" "+fmt0(_fR):""}${d.exRf?" + renfo "+fmt0(_rR):""}</div>`:"";
+    const fuelBox=(kc)=>`<div class="fuel"><div class="fh">${kc?`<div class="kc">${fmt0(d.kcal)} <small>kcal</small></div>`:""}${pill}</div>${macros}${whyTxt?`<div class="why">${whyTxt.charAt(0).toUpperCase()+whyTxt.slice(1)}</div>`:""}${dep}${raceNote}</div><p class="tip">${tip}</p>`;
     const dragOk=sess&&movable(d), dlb=DAYS[d.i].toLowerCase();
     const grip=dragOk?'<span class="grip" aria-hidden="true" title="Glisser pour déplacer"><svg viewBox="0 0 10 16" width="10" height="16" aria-hidden="true"><circle cx="2" cy="2" r="1.6"/><circle cx="8" cy="2" r="1.6"/><circle cx="2" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="2" cy="14" r="1.6"/><circle cx="8" cy="14" r="1.6"/></svg></span>':"";
     const icb=sess&&dIso?`<button class="icb" type="button" data-ics="${d.i}" aria-haspopup="dialog" aria-label="Ajouter la séance de ${dlb} à Calendrier" title="Ajouter à Calendrier"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M12 13v5M9.5 15.5h5"/></svg></button>`:"";
@@ -2058,7 +2063,7 @@ function renderWeek(){
     const op=tileOpen(dIso,isToday), did="det-"+d.i;
     const pillC= d.def>15?`<span class="pill def">Déficit ${fmt0(shown)}</span>`:d.def<-15?`<span class="pill sur">Surplus ${fmt0(-d.def)}</span>`:`<span class="pill eq">Équilibre</span>`;
     const kl=`<div class="kl"><span class="kc">${fmt0(d.kcal)} <small>kcal</small></span>${pillC}<button class="vm" type="button" data-vm="${d.i}" aria-expanded="${op}" aria-controls="${did}">${op?"Voir moins":"Voir plus"}</button></div>`;
-    const fuelDet=`<div class="fuel">${macros}${whyTxt?`<div class="why">${whyTxt.charAt(0).toUpperCase()+whyTxt.slice(1)}</div>`:""}${d.ex>20?`<div class="why">Dépense du jour ≈ ${fmt0(Math.round(d.maint/10)*10)} kcal : base ${fmt0(Math.round(E.base/10)*10)}${d.ex-d.exRf>20?" + "+exLab14(d)+" "+fmt0(Math.round((d.ex-d.exRf)/10)*10):""}${d.exRf?" + renfo "+fmt0(Math.round(d.exRf/10)*10):""}</div>`:""}${raceNote}</div><p class="tip">${tip}</p>`;
+    const fuelDet=`<div class="fuel">${macros}${whyTxt?`<div class="why">${whyTxt.charAt(0).toUpperCase()+whyTxt.slice(1)}</div>`:""}${dep}${raceNote}</div><p class="tip">${tip}</p>`;
     return `<article class="${cls}${op?"":" cmp"}" data-day="${d.i}" data-iso="${dIso}"${isToday?' id="todayCard"':''}>${head}<div class="chips">${chips}</div>${body}${sum?`<p class="sum">${sum}</p>`:""}${d.run?aibaHtml(wk.w,d):""}${d.run&&d.run.ev?evBox(wk.w,d,dIso):""}${acts}${kl}<div class="det" id="${did}"><div class="det-i">${det}${fuelDet}</div></div></article>`;
   }).join("");
   // équilibre : mêmes couleurs que les puces (facile, seuil, intense)
