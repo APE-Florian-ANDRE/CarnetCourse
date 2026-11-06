@@ -6,6 +6,7 @@ struct DashboardView: View {
     @Environment(AppStore.self) private var store
     @Binding var tab: Int
     @State private var selected: PlanDay?
+    @State private var showChange = false
 
     var body: some View {
         NavigationStack {
@@ -15,6 +16,7 @@ struct DashboardView: View {
                     if let msg = store.engineError {
                         Card { Text("Le plan n'a pas pu être calculé : \(msg)").foregroundStyle(Theme.coral) }
                     }
+                    readinessCard
                     todayCard
                     if let wk = store.currentWeek { weekCard(wk) }
                     if let plan = store.plan, plan.weeks.count > 1 { volumeCard(plan) }
@@ -26,6 +28,53 @@ struct DashboardView: View {
             .background(Theme.bg)
             .scrollContentBackground(.hidden)
             .sheet(item: $selected) { SessionDetailView(day: $0) }
+            .sheet(isPresented: $showChange) { if let wk = store.currentWeek { WeekChangeSheet(week: wk) } }
+            .refreshable { if store.doc.health != nil { await store.syncHealth() } }
+            // relevé automatique à l'ouverture, au plus une fois par heure (tirer vers le bas pour forcer)
+            .task { if let h = store.doc.health, Date().timeIntervalSince1970 * 1000 - h.at > 3_600_000 { await store.syncHealth() } }
+        }
+    }
+
+    // MARK: forme du jour
+
+    private var readinessCard: some View {
+        let r = store.readiness
+        let c: Color = switch r.level {
+        case .go: Theme.race
+        case .easy: Theme.long
+        case .rest, .medical: Theme.coral
+        }
+        let icon = switch r.level {
+        case .go: "bolt.heart.fill"
+        case .easy: "tortoise.fill"
+        case .rest: "bed.double.fill"
+        case .medical: "heart.text.square.fill"
+        }
+        return Card {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    Image(systemName: icon).font(.title2).foregroundStyle(c)
+                        .frame(width: 44, height: 44).background(c.opacity(0.14), in: Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("FORME DU JOUR").font(.display(13, weight: .bold)).tracking(1.1).foregroundStyle(Theme.muted)
+                        Text(r.title).font(.display(24)).foregroundStyle(c)
+                    }
+                    Spacer()
+                    if store.healthBusy { ProgressView() }
+                }
+                Text(r.advice).foregroundStyle(Theme.fg)
+                ForEach(r.reasons, id: \.self) { Label($0, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(Theme.fg2) }
+                ForEach(r.positives, id: \.self) { Label($0, systemImage: "checkmark.circle").font(.subheadline).foregroundStyle(Theme.muted) }
+                if store.doc.health == nil {
+                    Button { Task { await store.syncHealth() } } label: {
+                        Label("Connecter Apple Santé et l'Apple Watch", systemImage: "applewatch")
+                    }
+                    .buttonStyle(GhostButtonStyle())
+                    Text("Sommeil, FC au repos, variabilité cardiaque, ECG et séances de la montre : lus sur ton iPhone, jamais envoyés.")
+                        .font(.caption).foregroundStyle(Theme.muted)
+                }
+                if let e = store.healthError { Text(e).font(.caption).foregroundStyle(Theme.coral) }
+            }
         }
     }
 
@@ -109,6 +158,10 @@ struct DashboardView: View {
                 HStack(spacing: 6) {
                     ForEach(wk.days) { d in dayPill(d) }
                 }
+                Button { showChange = true } label: {
+                    Label(wk.change.map { "Semaine ajustée : \($0.label.lowercased())" } ?? "Ma semaine change", systemImage: wk.change?.icon ?? "arrow.triangle.2.circlepath")
+                }
+                .buttonStyle(GhostButtonStyle())
             }
         }
     }
@@ -189,6 +242,41 @@ struct DashboardView: View {
             Text(v).font(.display(22, weight: .bold)).foregroundStyle(Theme.fg)
             Text(k).font(.caption).foregroundStyle(Theme.muted)
         }
+    }
+}
+
+// « Une mauvaise semaine, un voyage, une gêne ? » : la semaine s'ajuste, réversible à tout moment.
+struct WeekChangeSheet: View {
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    let week: PlanWeek
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Ta semaine \(week.w) ne se passe pas comme prévu ? Le plan s'ajuste pour cette semaine seulement, sans rattrapage ensuite.")
+                        .foregroundStyle(Theme.fg2)
+                    ForEach(WeekChange.allCases) { c in
+                        OptionCard(label: c.label, detail: c.detail, icon: c.icon, on: week.change == c) {
+                            store.setWeekChange(week, week.change == c ? nil : c)
+                            dismiss()
+                        }
+                    }
+                    if week.change != nil {
+                        Button("Revenir à la semaine prévue") { store.setWeekChange(week, nil); dismiss() }
+                            .buttonStyle(GhostButtonStyle()).padding(.top, 6)
+                    }
+                }
+                .padding(16)
+            }
+            .background(Theme.bg)
+            .navigationTitle("Ma semaine change")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Fermer") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationBackground(Theme.bg)
     }
 }
 

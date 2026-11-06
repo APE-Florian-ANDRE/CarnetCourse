@@ -247,6 +247,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = PaceRun.entitlements;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Pace'Run lit tes séances, ton sommeil, ta fréquence cardiaque et tes ECG de l'Apple Watch pour adapter tes conseils d'entraînement. Rien ne quitte ton iPhone.";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -279,6 +281,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = PaceRun.entitlements;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Pace'Run lit tes séances, ton sommeil, ta fréquence cardiaque et tes ECG de l'Apple Watch pour adapter tes conseils d'entraînement. Rien ne quitte ton iPhone.";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;

@@ -105,6 +105,20 @@ struct SessionDetailView: View {
                             if let d = day.run?.dplus { Chip(text: "D+ \(Int(d)) m", color: Theme.long) }
                         }
                     }
+                    if let a = day.adapted { Card { Label(a, systemImage: "arrow.triangle.2.circlepath").foregroundStyle(Theme.long) } }
+                    if let date = day.date, let w = store.doc.watch[date] {
+                        Card {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Label("Faite avec ta montre", systemImage: "applewatch").font(.headline).foregroundStyle(Theme.race)
+                                HStack(spacing: 18) {
+                                    if w.km > 0 { Text("\(fmt(w.km)) km") }
+                                    Text(durText(Int(w.min.rounded())))
+                                    if let hr = w.avgHR { Text("FC moy. \(Int(hr.rounded()))") }
+                                }
+                                .foregroundStyle(Theme.fg)
+                            }
+                        }
+                    }
                     if let run = day.run {
                         Card {
                             VStack(alignment: .leading, spacing: 0) {

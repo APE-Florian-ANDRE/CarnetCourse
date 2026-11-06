@@ -24,6 +24,7 @@ struct PlanWeek: Decodable, Equatable, Identifiable {
     let deload: Bool
     let km: Double
     let days: [PlanDay]
+    var change: WeekChange? = nil   // « Ma semaine change » appliqué (jamais fourni par le moteur)
     var id: Int { w }
 
     var sessions: [PlanDay] { days.filter(\.hasSession) }
@@ -38,6 +39,7 @@ struct PlanDay: Decodable, Equatable, Identifiable {
     let kcal: Int
     let run: Session?
     let renfo: Renfo?
+    var adapted: String? = nil      // raison de l'ajustement (Ma semaine change)
     var id: String { date ?? "d\(i)" }
 
     var hasSession: Bool { run != nil || renfo != nil }

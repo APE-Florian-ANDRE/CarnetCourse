@@ -98,6 +98,36 @@ struct ProfileView: View {
                 }
 
                 Section {
+                    Button(store.doc.health == nil ? "Connecter Apple Santé" : "Mettre à jour depuis Apple Santé") { Task { await store.syncHealth() } }
+                    if let h = store.doc.health {
+                        if h.ecgs.isEmpty {
+                            Text("Aucun ECG sur les 30 derniers jours. Fais-en un avec l'app ECG de l'Apple Watch si tu as un doute.")
+                                .font(.caption).foregroundStyle(Theme.muted)
+                        }
+                        ForEach(h.ecgs.prefix(5)) { e in
+                            LabeledContent("ECG \(Day.label(e.date, style: "d MMM"))",
+                                           value: Readiness.ecgLabel(e.classification) + (e.avgHR.map { " · \(Int($0.rounded())) bpm" } ?? ""))
+                        }
+                        LabeledContent("Séances de la montre", value: "\(h.workouts.count) sur 60 jours")
+                    }
+                } header: { Text("Apple Santé et Apple Watch") } footer: {
+                    Text("Lecture seule, sur ton iPhone. L'ECG sert à te conseiller de lever le pied ou de consulter : Pace'Run ne pose aucun diagnostic.")
+                }
+                .listRowBackground(Theme.surface)
+
+                Section("Rappels") {
+                    Toggle("Rappel le jour de chaque séance", isOn: Binding(
+                        get: { store.doc.remindHour != nil },
+                        set: { store.setReminder(hour: $0 ? 7 : nil) }))
+                    if let h = store.doc.remindHour {
+                        Picker("Heure", selection: Binding(get: { h }, set: { store.setReminder(hour: $0) })) {
+                            ForEach(5..<22, id: \.self) { Text("\($0) h").tag($0) }
+                        }
+                    }
+                }
+                .listRowBackground(Theme.surface)
+
+                Section {
                     Button("Revoir le tuto") { showTuto = true }
                     Button("Tout effacer", role: .destructive) { confirmReset = true }
                 } footer: {
