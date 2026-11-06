@@ -6,7 +6,9 @@
     "test": "node tests/run-all.js",
     "test:fast": "node tests/run-all.js static-checks vercel-coach vercel-plan n8n import-pure plan-progression audit-plan",
     "coverage": "node tests/coverage.js",
-    "build:api": "node integrations/vercel/build-api.js && node integrations/n8n/build-workflow.js"
+    "build:api": "node integrations/vercel/build-api.js && node integrations/n8n/build-workflow.js",
+    "build:ios-engine": "node ios/tools/build-engine.js",
+    "check:ios-engine": "node ios/tools/build-engine.js --check"
   },
   "devDependencies": {
     "monocart-coverage-reports": "^2.12.6",
