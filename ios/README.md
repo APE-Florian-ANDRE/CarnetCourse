@@ -44,10 +44,26 @@ Le projet utilise des dossiers synchronisés (Xcode 16+) : un fichier ajouté da
 Tout reste sur l'iPhone (`Application Support/pacerun-doc.json`, chiffré par la protection de fichiers iOS).
 Le format est celui de `user_data.doc` du site : la synchro Supabase pourra le réutiliser tel quel.
 
+## Apple Santé et Apple Watch
+
+Lecture seule (`Health/HealthService.swift`, capacité HealthKit dans `PaceRun.entitlements`) :
+
+- **ECG de l'Apple Watch** (30 derniers jours) : signes de fibrillation atriale ou symptômes notés → « Avis médical d'abord » ;
+  non concluant à fréquence élevée → « Lève le pied » ; rythme sinusal → affiché en positif. Aucun diagnostic.
+- **FC au repos, VFC, sommeil** : comparés à ta référence sur 30 jours → « Forme du jour » (`Coach/Readiness.swift`), avec le ressenti noté (mêmes seuils que le site).
+- **Séances de la montre** : cochent toutes seules la séance prévue du même jour et du même sport, avec km, durée et FC moyenne.
+
+Sur simulateur, il n'y a pas de données Santé : la logique est couverte par les tests (`PaceRunTests`).
+
+## Logique « coach » (inspirée des apps de coaching running)
+
+- **Forme du jour** : pousser ou lever le pied selon la récupération.
+- **Ma semaine change** (mauvaise semaine, voyage, gêne) : la semaine affichée s'ajuste, sans rattrapage, réversible (`WeekChange`).
+- **Rappels** : une notification le matin de chaque séance (`Coach/Reminders.swift`).
+
 ## Pas encore fait
 
 - Connexion au compte et synchro Supabase
 - Coach IA et ajustement du plan par l'IA
-- Import de séances (Apple Santé / montre cardio)
 - Déplacement des séances dans la semaine, calories détaillées
-- Widgets, notifications de rappel
+- Widgets
