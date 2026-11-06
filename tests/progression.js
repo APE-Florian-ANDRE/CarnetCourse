@@ -13,7 +13,7 @@ const SRC=process.env.APP||path.join(L.ROOT,"app.js");
 let MAIN=process.env.MAIN||"ref:a45501c", MAIN_HTML=null; if(MAIN==="none") MAIN="";
 if(MAIN==="git"||MAIN.startsWith("ref:")){ const os=require("os"), rev=MAIN==="git"?"main":MAIN.slice(4); if(!/^[\w.\/-]{1,80}$/.test(rev)) throw new Error("référence invalide : "+rev);
   const show=f=>require("child_process").execFileSync("git",["show",rev+":public/"+f],{cwd:__dirname,maxBuffer:64<<20});
-  MAIN=path.join(os.tmpdir(),"pacebook-ref-"+rev.replace(/\W/g,"_")+"-app.js"); fs.writeFileSync(MAIN,show("app.js"));
+  MAIN=path.join(os.tmpdir(),"pacerun-ref-"+rev.replace(/\W/g,"_")+"-app.js"); fs.writeFileSync(MAIN,show("app.js"));
   // page de la même version (un app.js ancien sur la page actuelle peut ne pas démarrer)
   MAIN_HTML=show("index.html").toString(); }
 const inject=src=>fs.readFileSync(src,"utf8").replace(/initAccount\(\);\n\}\)\(\);\s*$/,"initAccount();\nwindow.__T={buildPlan,profileNums,sessionKm,vmaOf,planSig,zoneMins,qOpts,qPool:typeof qPool===\"function\"?qPool:null,setAip(v){state.aip=v;}};\n})();\n");

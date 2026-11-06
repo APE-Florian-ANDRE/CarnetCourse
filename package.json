@@ -1,7 +1,7 @@
 {
-  "name": "pacebook",
+  "name": "pacerun",
   "private": true,
-  "description": "Pacebook : plan de course à pied (site statique public/, fonctions Vercel api/). Aucun build : ce fichier ne sert qu'aux tests.",
+  "description": "Pace'Run : plan de course à pied (site statique public/, fonctions Vercel api/). Aucun build : ce fichier ne sert qu'aux tests.",
   "scripts": {
     "test": "node tests/run-all.js",
     "test:fast": "node tests/run-all.js static-checks vercel-coach vercel-plan n8n import-pure plan-progression audit-plan",

@@ -13,5 +13,5 @@ const c=document.getElementById("phCount");
 if(c&&todo) c.textContent=todo+" champ"+(todo>1?"s":"")+" à compléter dans config.js (surlignés en jaune).";
 const m=document.getElementById("mailLink"), e=typeof L.EDITEUR_EMAIL==="string"? L.EDITEUR_EMAIL.trim() : "";
 const mailOk=/^[^\s@<>"'()]+@[^\s@<>"'()]+\.[^\s@<>"'()]+$/.test(e), href="mailto:"+encodeURIComponent(e).replace(/%40/g,"@");
-for(const x of [m,...document.querySelectorAll("[data-mail]")]){ if(!x) continue; if(mailOk) x.href=href+(x.hasAttribute("data-mail")?"?subject="+encodeURIComponent("Pacebook"):""); else x.removeAttribute("href"); }
+for(const x of [m,...document.querySelectorAll("[data-mail]")]){ if(!x) continue; if(mailOk) x.href=href+(x.hasAttribute("data-mail")?"?subject="+encodeURIComponent("Pace'Run"):""); else x.removeAttribute("href"); }
 })();

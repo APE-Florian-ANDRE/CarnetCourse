@@ -30,7 +30,7 @@ let fails=0; const ok=(c,m,x)=>{ if(!c) fails++; console.log((c?"OK   ":"FAIL ")
    ok(/^\d+/.test(g("Série").v),"P2 série affichée",g("Série"));
    ok(g("Suivi").v.startsWith("2")&&!/kg/.test(JSON.stringify(t)),"P2 suivi : semaines notées, aucune variation de poids dans les stats",t);
    ok(await p.evaluate(()=>!!document.querySelector("#meStats svg[role=img]")&&/Semaine \d+ : [\d,]+ km faits sur/.test(document.querySelector("#meStats ul.sr-only").textContent)),"P2 graphique du volume par semaine, avec ses valeurs en texte");
-   ok(await p.evaluate(()=>document.title==="Mon profil · Pacebook"),"P2 titre du document");
+   ok(await p.evaluate(()=>document.title==="Mon profil · Pace'Run"),"P2 titre du document");
    ok(await p.evaluate(()=>/Semaine \d+ sur \d+|Plan terminé/.test(document.querySelector("#meId").textContent)),"P2 progression du plan dans l'en-tête");
 
    // P3 infos : affichage puis modification avec contrôles

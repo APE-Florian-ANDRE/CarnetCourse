@@ -24,7 +24,7 @@ const run = spawnSync(process.execPath, [path.join(__dirname, "run-all.js"), ...
   const files = fs.existsSync(V8DIR) ? fs.readdirSync(V8DIR).filter(f => f.endsWith(".json")) : [];
   if (!files.length) { console.error("\nAucune donnée de couverture collectée (le hook navigateur n'a rien écrit)."); process.exit(1); }
   const mcr = new CoverageReport({
-    name: "Pacebook — couverture du code navigateur (public/)",
+    name: "Pace'Run — couverture du code navigateur (public/)",
     outputDir: COV,
     reports: [["v8"], ["lcovonly"], ["json-summary"], ["console-details", { metrics: ["lines", "functions", "branches"] }]],
     entryFilter: (e) => SCOPE.test(e.url),

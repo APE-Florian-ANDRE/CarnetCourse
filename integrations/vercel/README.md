@@ -25,7 +25,7 @@ Choisis **l'un ou l'autre**, ce guide ou le workflow n8n (`integrations/n8n/READ
 
    Le dossier `api/` est détecté tout seul. `vercel.json` fixe la durée maximale de la fonction à 30 s.
 3. **Branche le site** : dans `public/config.js` :
-   - `CHAT_WEBHOOK_URL: "https://carnetcourse.vercel.app/api/coach"` (l'adresse **exacte** de ton site) ;
+   - `CHAT_WEBHOOK_URL: "https://pacerun-app.vercel.app/api/coach"` (l'adresse **exacte** de ton site) ;
    - `CHAT_PROVIDER_NAME: "Google Gemini, États-Unis"`.
 
    Lance ensuite `node tools/set-csp.js` puis `node tests/static-checks.js`, et pousse (`git push`).

@@ -19,7 +19,7 @@ const URL_OK=hookUrl();
 const PROVIDER=(typeof CFG.CHAT_PROVIDER_NAME==="string"&&CFG.CHAT_PROVIDER_NAME.replace(/[\u0000-\u001f<>]/g,"").trim().slice(0,60))||"un fournisseur d'IA";
 const hookHost=()=>{ try{ return new URL(URL_OK, location.origin).host; }catch(e){ return ""; } };   // chemin relatif => hôte du site
 // destinataire nommé dans la feuille d'accord : la fonction du site quand le coach est servi par le site lui-même, sinon le serveur relais configuré
-const hookWho=()=>hookHost()===location.host? "au serveur de Pacebook (fonction du site, hébergée par Vercel dans l'Union européenne)" : "à un serveur relais choisi par l'éditeur ("+hookHost()+")";
+const hookWho=()=>hookHost()===location.host? "au serveur de Pace'Run (fonction du site, hébergée par Vercel dans l'Union européenne)" : "à un serveur relais choisi par l'éditeur ("+hookHost()+")";
 
 /* ---- filet de sécurité : ces messages ne sont JAMAIS envoyés au serveur, une réponse fixe de prudence s'affiche ---- */
 // texte normalisé : minuscules, sans accents, sans ponctuation ni caractères invisibles (l'apostrophe, le tiret, les points ne contournent rien)

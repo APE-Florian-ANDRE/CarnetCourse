@@ -1,9 +1,9 @@
--- Pacebook : schéma Supabase (Postgres). À exécuter une fois dans « SQL Editor ».
+-- Pace'Run : schéma Supabase (Postgres). À exécuter une fois dans « SQL Editor ».
 -- Une ligne par utilisateur ; chacun ne voit et n'écrit que la sienne (Row Level Security).
 
 create table if not exists public.user_data (
   user_id    uuid primary key references auth.users (id) on delete cascade,   -- compte supprimé => données supprimées
-  doc        jsonb not null default '{}'::jsonb,                              -- Pacebook (profil, suivi, coches...) : données de santé
+  doc        jsonb not null default '{}'::jsonb,                              -- Pace'Run (profil, suivi, coches...) : données de santé
   consent    jsonb,                                                           -- accord horodaté : {cgu, privacy, health, age15, at}
   updated_at timestamptz not null default now(),
   constraint doc_is_object   check (jsonb_typeof(doc) = 'object'),
@@ -23,7 +23,7 @@ create table if not exists public.user_data (
 );
 
 -- NB : les anciens comptes de test créés avant la colonne « terms » doivent être supprimés ou mis à jour.
-comment on table public.user_data is 'Pacebook : une ligne par utilisateur, protégée par RLS. Contient des données de santé (art. 9 RGPD).';
+comment on table public.user_data is 'Pace''Run : une ligne par utilisateur, protégée par RLS. Contient des données de santé (art. 9 RGPD).';
 
 -- Réapplique les contraintes sur une base DÉJÀ existante (« create table if not exists » ne les met pas à jour) : rejouer ce fichier durcit alors le consentement et la taille.
 alter table public.user_data drop constraint if exists consent_shape;

@@ -33,7 +33,7 @@ Fichiers de ce dossier :
 - Les infos Supabase du projet (déjà dans `public/config.js`) :
   - `SUPABASE_URL` : `https://yunidhwvpusrsgxqdzpb.supabase.co`
   - `SUPABASE_ANON_KEY` : la clé **anon** (publique). N'utilise **jamais** la clé `service_role`.
-- L'adresse du site : `https://carnetcourse.vercel.app` (ou ton domaine).
+- L'adresse du site : `https://pacerun-app.vercel.app` (ou ton domaine).
 
 ## 2. Créer le credential Gemini dans n8n
 
@@ -51,7 +51,7 @@ n8n > *Credentials* > *Create credential* > **Header Auth** :
 
 | Nœud | Champ | Valeur |
 |---|---|---|
-| **Webhook** | *Options* > *Allowed Origins (CORS)* | `https://carnetcourse.vercel.app` (adresse exacte, sans `/` final, jamais `*`). Plusieurs domaines : séparés par une virgule |
+| **Webhook** | *Options* > *Allowed Origins (CORS)* | `https://pacerun-app.vercel.app` (adresse exacte, sans `/` final, jamais `*`). Plusieurs domaines : séparés par une virgule |
 | **Vérifier le jeton Supabase** | *URL* | `https://yunidhwvpusrsgxqdzpb.supabase.co/auth/v1/user` |
 | **Vérifier le jeton Supabase** | en-tête `apikey` | la clé **anon** de `public/config.js` |
 | **Gemini** | *Credential* (Header Auth) | « Gemini API key » (étape 2) |
